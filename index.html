@@ -1,0 +1,1384 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>אות באות ✨</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+
+      body {
+        font-family: "Heebo", Arial, sans-serif;
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow-x: hidden;
+      }
+
+      .screen {
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        width: 100%;
+        max-width: 700px;
+        padding: 20px;
+        min-height: 100vh;
+        justify-content: center;
+      }
+      .screen.active { display: flex; }
+
+      /* ===== START SCREEN ===== */
+      .game-title {
+        font-size: 3.5rem;
+        font-weight: 900;
+        color: #fff;
+        text-shadow: 0 0 40px rgba(255,255,255,0.4);
+        margin-bottom: 0.4rem;
+        text-align: center;
+      }
+      .game-subtitle {
+        font-size: 1.2rem;
+        color: #a0c4ff;
+        margin-bottom: 2rem;
+        text-align: center;
+      }
+
+      /* Name entry */
+      .name-section { width: 100%; max-width: 340px; margin-bottom: 2rem; }
+      .name-label {
+        display: block; color: #a0c4ff; font-size: 1rem;
+        font-weight: 700; margin-bottom: 8px; text-align: center;
+      }
+      .name-input {
+        width: 100%; padding: 14px 20px; font-size: 1.2rem;
+        font-family: "Heebo", Arial, sans-serif; font-weight: 700;
+        text-align: center; background: rgba(255,255,255,0.1);
+        border: 2px solid rgba(255,255,255,0.25); border-radius: 50px;
+        color: #fff; outline: none; transition: border-color 0.2s, background 0.2s;
+      }
+      .name-input::placeholder { color: rgba(255,255,255,0.35); font-weight: 400; }
+      .name-input:focus { border-color: #a0c4ff; background: rgba(255,255,255,0.15); }
+      .name-input.error { border-color: #ff6b6b; animation: shake 0.4s ease; }
+      .name-error { color: #ff6b6b; font-size: 0.85rem; text-align: center; margin-top: 6px; min-height: 1.2em; }
+      .prev-names { display: none; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 10px; }
+      .prev-names.visible { display: flex; }
+      .prev-label { width: 100%; text-align: center; color: rgba(255,255,255,0.45); font-size: 0.78rem; margin-bottom: 2px; }
+      .name-chip {
+        padding: 6px 16px; border-radius: 18px; border: 2px solid rgba(160,196,255,0.4);
+        background: rgba(160,196,255,0.1); color: #a0c4ff; font-size: 0.9rem;
+        font-family: "Heebo", Arial, sans-serif; font-weight: 700; cursor: pointer;
+        transition: background 0.2s, border-color 0.2s;
+        display: flex; flex-direction: column; align-items: center; gap: 1px;
+      }
+      .name-chip:hover { background: rgba(160,196,255,0.25); border-color: #a0c4ff; }
+      .name-chip-stats { font-size: 0.7rem; font-weight: 400; opacity: 0.8; }
+
+      /* Level cards */
+      .level-cards { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
+      .level-card {
+        background: rgba(255,255,255,0.08); backdrop-filter: blur(10px);
+        border: 2px solid rgba(255,255,255,0.15); border-radius: 24px;
+        padding: 28px 22px; cursor: pointer; transition: all 0.3s ease;
+        text-align: center; min-width: 160px; color: #fff; user-select: none;
+      }
+      .level-card:hover { transform: translateY(-8px) scale(1.05); box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
+      .level-card .level-emoji { font-size: 2.8rem; margin-bottom: 10px; display: block; }
+      .level-card .level-name  { font-size: 1.5rem; font-weight: 900; }
+      .level-card .level-desc  { font-size: 0.85rem; color: rgba(255,255,255,0.6); margin-top: 5px; }
+      .level-card.easy { border-color: #6bcb77; }
+      .level-card.easy:hover { background: rgba(107,203,119,0.15); }
+      .level-card.mid  { border-color: #ffd93d; }
+      .level-card.mid:hover  { background: rgba(255,217,61,0.15); }
+      .level-card.hard { border-color: #ff6b6b; }
+      .level-card.hard:hover { background: rgba(255,107,107,0.15); }
+
+      /* Start screen action buttons */
+      .start-actions {
+        display: flex; gap: 14px; margin-top: 28px; flex-wrap: wrap; justify-content: center;
+      }
+      .ghost-btn {
+        background: rgba(255,255,255,0.08); border: 2px solid rgba(255,255,255,0.2);
+        color: rgba(255,255,255,0.75); font-size: 1rem; font-weight: 700;
+        font-family: "Heebo", Arial, sans-serif; padding: 12px 24px;
+        border-radius: 50px; cursor: pointer; transition: all 0.25s;
+      }
+      .ghost-btn:hover { background: rgba(255,217,61,0.15); border-color: #ffd93d; color: #ffd93d; }
+      .ghost-btn.shop-ghost:hover { background: rgba(162,155,254,0.15); border-color: #a29bfe; color: #a29bfe; }
+
+      /* ===== GAME SCREEN ===== */
+      .game-header {
+        display: flex; justify-content: space-between;
+        align-items: center; width: 100%; margin-bottom: 15px;
+      }
+      .back-btn {
+        background: rgba(255,255,255,0.1); border: none; color: #fff;
+        font-size: 1rem; font-family: "Heebo", Arial, sans-serif;
+        padding: 10px 18px; border-radius: 50px; cursor: pointer; transition: background 0.2s;
+      }
+      .back-btn:hover { background: rgba(255,255,255,0.2); }
+
+      .header-center { text-align: center; }
+      .level-badge {
+        background: rgba(255,255,255,0.1); border-radius: 50px;
+        padding: 5px 14px; color: #a0c4ff; font-size: 0.9rem; font-weight: 700;
+      }
+      .progress-text { color: rgba(255,255,255,0.4); font-size: 0.75rem; margin-top: 3px; }
+      .player-name-badge { color: rgba(255,255,255,0.7); font-size: 0.8rem; margin-top: 2px; }
+
+      .header-stats { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+      .score-display { color: #ffd93d; font-size: 1.1rem; font-weight: 700; }
+      .coins-display { color: #a29bfe; font-size: 1rem; font-weight: 700; }
+      .streak-display { color: rgba(255,255,255,0.4); font-size: 0.9rem; font-weight: 700; transition: color 0.3s; }
+      .streak-display.streak-active { color: rgba(255,160,80,0.8); }
+      .streak-display.streak-hot { color: #ff6b6b; animation: urgentPulse 0.6s ease infinite alternate; }
+
+      .emoji-display {
+        font-size: 110px; margin: 10px 0;
+        filter: drop-shadow(0 10px 20px rgba(0,0,0,0.3));
+        animation: float 3s ease-in-out infinite; line-height: 1.2; text-align: center;
+      }
+      @keyframes float {
+        0%,100% { transform: translateY(0); }
+        50%      { transform: translateY(-10px); }
+      }
+
+      /* Blanks */
+      .blanks-row {
+        display: flex; gap: 8px; justify-content: center;
+        margin: 18px 0; flex-wrap: wrap;
+      }
+      .blank-box {
+        width: 56px; height: 66px; background: rgba(255,255,255,0.08);
+        border-radius: 14px; border: 3px solid rgba(255,255,255,0.25);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 2rem; font-weight: 900; color: #fff;
+        transition: border-color 0.2s, background 0.2s;
+      }
+      .blank-box.filled     { background: rgba(107,203,119,0.25); border-color: #6bcb77; }
+      .blank-box.hint-filled{ background: rgba(255,217,61,0.25);  border-color: #ffd93d; }
+
+      @keyframes popIn {
+        0%   { transform: scale(0.4); opacity: 0; }
+        70%  { transform: scale(1.2); }
+        100% { transform: scale(1);   opacity: 1; }
+      }
+      @keyframes shake {
+        0%,100% { transform: translateX(0); }
+        15% { transform: translateX(-8px); } 30% { transform: translateX(8px); }
+        45% { transform: translateX(-8px); } 60% { transform: translateX(8px); }
+        75% { transform: translateX(-4px); } 90% { transform: translateX(4px); }
+      }
+      .blank-box.pop { animation: popIn 0.3s ease forwards; }
+      .blank-box.err { animation: shake 0.5s ease; border-color: #ff6b6b; background: rgba(255,107,107,0.2); }
+
+      /* Action row */
+      .action-row { display: flex; gap: 12px; margin-bottom: 18px; align-items: center; }
+      .hint-btn {
+        background: rgba(255,217,61,0.15); border: 2px solid #ffd93d; color: #ffd93d;
+        font-size: 1rem; font-family: "Heebo", Arial, sans-serif; padding: 10px 20px;
+        border-radius: 50px; cursor: pointer; transition: all 0.2s; font-weight: 700;
+      }
+      .hint-btn:hover:not(:disabled) { background: rgba(255,217,61,0.35); }
+      .hint-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+      .delete-btn {
+        background: rgba(255,107,107,0.15); border: 2px solid #ff6b6b; color: #ff6b6b;
+        font-size: 1.2rem; padding: 10px 18px; border-radius: 50px; cursor: pointer;
+        font-family: "Heebo", Arial, sans-serif; transition: all 0.2s; font-weight: 700;
+      }
+      .delete-btn:hover { background: rgba(255,107,107,0.35); }
+
+      /* Tiles */
+      .tiles-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; max-width: 540px; }
+      .letter-tile {
+        width: 56px; height: 56px; border-radius: 14px; border: none;
+        font-size: 1.8rem; font-weight: 900; color: #fff; cursor: pointer;
+        transition: all 0.2s; box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+        font-family: "Heebo", Arial, sans-serif; user-select: none;
+      }
+      .letter-tile:hover:not(:disabled) { transform: translateY(-5px) scale(1.12); box-shadow: 0 10px 22px rgba(0,0,0,0.45); }
+      .letter-tile:active:not(:disabled) { transform: scale(0.93); }
+      .letter-tile:disabled { opacity: 0.25; cursor: default; transform: none !important; }
+
+      /* ===== WIN SCREEN ===== */
+      #screen-win { justify-content: flex-start; padding-top: 30px; padding-bottom: 40px; overflow-y: auto; }
+      .win-top { text-align: center; margin-bottom: 24px; }
+      .win-emoji {
+        font-size: 90px; display: block; margin-bottom: 8px;
+        animation: bounce 0.5s ease infinite alternate;
+      }
+      @keyframes bounce {
+        from { transform: translateY(0) scale(1); }
+        to   { transform: translateY(-16px) scale(1.05); }
+      }
+      .win-title { font-size: 2.4rem; font-weight: 900; color: #ffd93d; margin-bottom: 6px; }
+      .win-word  { font-size: 2rem; color: #fff; font-weight: 700; margin-bottom: 4px; }
+      .win-score { font-size: 1.1rem; color: #6bcb77; margin-bottom: 4px; }
+      .win-coins { font-size: 1.1rem; color: #a29bfe; margin-bottom: 20px; }
+      .next-btn {
+        background: linear-gradient(135deg, #6bcb77, #4caf50); border: none;
+        color: #fff; font-size: 1.2rem; font-weight: 700;
+        font-family: "Heebo", Arial, sans-serif; padding: 14px 40px;
+        border-radius: 50px; cursor: pointer;
+        box-shadow: 0 8px 24px rgba(76,175,80,0.45); transition: all 0.3s;
+      }
+      .next-btn:hover { transform: translateY(-3px); box-shadow: 0 14px 32px rgba(76,175,80,0.55); }
+
+      /* ===== LEADERBOARD (shared styles) ===== */
+      .leaderboard {
+        width: 100%; max-width: 500px; background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.12); border-radius: 20px;
+        padding: 20px; margin-top: 8px;
+      }
+      .leaderboard-title {
+        color: #ffd93d; font-size: 1.2rem; font-weight: 900; text-align: center;
+        margin-bottom: 14px; display: flex; align-items: center; justify-content: center; gap: 8px;
+      }
+      .score-table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+      .score-table thead tr { border-bottom: 2px solid rgba(255,255,255,0.15); }
+      .score-table th { color: rgba(255,255,255,0.5); font-weight: 700; padding: 6px 10px; text-align: right; }
+      .score-table td { padding: 9px 10px; color: #fff; border-bottom: 1px solid rgba(255,255,255,0.07); vertical-align: middle; }
+      .score-table tr:last-child td { border-bottom: none; }
+      .rank-1 { color: #ffd700; font-size: 1.1rem; }
+      .rank-2 { color: #c0c0c0; font-size: 1.1rem; }
+      .rank-3 { color: #cd7f32; font-size: 1.1rem; }
+      .score-table tr.highlight td { background: rgba(107,203,119,0.15); color: #6bcb77; font-weight: 700; }
+      .score-table tr.highlight td:first-child { border-radius: 8px 0 0 8px; }
+      .score-table tr.highlight td:last-child  { border-radius: 0 8px 8px 0; }
+      .level-pill {
+        display: inline-block; font-size: 0.75rem; padding: 2px 10px;
+        border-radius: 50px; font-weight: 700;
+      }
+      .level-pill.easy { background: rgba(107,203,119,0.25); color: #6bcb77; }
+      .level-pill.mid  { background: rgba(255,217,61,0.25);  color: #ffd93d; }
+      .level-pill.hard { background: rgba(255,107,107,0.25); color: #ff6b6b; }
+      .no-scores { color: rgba(255,255,255,0.4); text-align: center; padding: 16px 0; font-size: 0.95rem; }
+
+      /* ===== LEADERBOARD SCREEN ===== */
+      #screen-leaderboard { justify-content: flex-start; padding-top: 36px; padding-bottom: 40px; overflow-y: auto; }
+      .lb-screen-title { font-size: 2rem; font-weight: 900; color: #ffd93d; margin-bottom: 6px; text-align: center; }
+      .lb-screen-sub { color: rgba(255,255,255,0.4); font-size: 0.9rem; margin-bottom: 24px; text-align: center; }
+      .lb-back-row { width: 100%; max-width: 500px; margin-top: 24px; display: flex; justify-content: center; gap: 14px; }
+      .lb-clear-btn {
+        background: rgba(255,107,107,0.12); border: 2px solid rgba(255,107,107,0.4);
+        color: rgba(255,107,107,0.7); font-size: 0.85rem; font-weight: 700;
+        font-family: "Heebo", Arial, sans-serif; padding: 10px 20px;
+        border-radius: 50px; cursor: pointer; transition: all 0.2s;
+      }
+      .lb-clear-btn:hover { background: rgba(255,107,107,0.25); border-color: #ff6b6b; color: #ff6b6b; }
+
+      /* ===== SHOP SCREEN ===== */
+      #screen-shop { justify-content: flex-start; padding-top: 30px; padding-bottom: 40px; overflow-y: auto; }
+      .shop-header { width: 100%; max-width: 540px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+      .shop-title { font-size: 2rem; font-weight: 900; color: #a29bfe; }
+      .shop-balance {
+        background: rgba(162,155,254,0.15); border: 2px solid rgba(162,155,254,0.4);
+        border-radius: 50px; padding: 8px 18px;
+        color: #a29bfe; font-size: 1.1rem; font-weight: 900;
+      }
+
+      .shop-section-title {
+        width: 100%; max-width: 540px;
+        color: rgba(255,255,255,0.5); font-size: 0.8rem; font-weight: 700;
+        text-transform: uppercase; letter-spacing: 0.1em;
+        margin: 18px 0 10px; padding-right: 4px;
+      }
+
+      .shop-grid {
+        display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+        gap: 14px; width: 100%; max-width: 540px;
+      }
+      .shop-item {
+        background: rgba(255,255,255,0.07); border: 2px solid rgba(255,255,255,0.12);
+        border-radius: 20px; padding: 18px 14px; text-align: center;
+        display: flex; flex-direction: column; align-items: center; gap: 8px;
+        transition: all 0.25s;
+      }
+      .shop-item:not(.locked):not(.owned):hover {
+        background: rgba(162,155,254,0.12); border-color: rgba(162,155,254,0.5);
+        transform: translateY(-4px); box-shadow: 0 10px 24px rgba(0,0,0,0.35);
+      }
+      .shop-item.owned { border-color: #6bcb77; background: rgba(107,203,119,0.1); }
+      .shop-item.locked { opacity: 0.45; }
+
+      .shop-item-emoji { font-size: 2.6rem; line-height: 1; }
+      .shop-item-name  { font-size: 0.95rem; font-weight: 700; color: #fff; }
+      .shop-item-desc  { font-size: 0.78rem; color: rgba(255,255,255,0.5); line-height: 1.4; }
+      .shop-item-cost  {
+        font-size: 0.9rem; font-weight: 900; color: #a29bfe;
+        background: rgba(162,155,254,0.15); border-radius: 50px;
+        padding: 3px 12px; margin-top: 4px;
+      }
+      .shop-item.owned .shop-item-cost { color: #6bcb77; background: rgba(107,203,119,0.2); }
+
+      .buy-btn {
+        background: linear-gradient(135deg, #a29bfe, #6c5ce7); border: none;
+        color: #fff; font-size: 0.85rem; font-weight: 700;
+        font-family: "Heebo", Arial, sans-serif; padding: 8px 18px;
+        border-radius: 50px; cursor: pointer; transition: all 0.2s;
+        box-shadow: 0 4px 12px rgba(108,92,231,0.4);
+        margin-top: 2px;
+      }
+      .buy-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 18px rgba(108,92,231,0.5); }
+      .buy-btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+      .owned-badge {
+        color: #6bcb77; font-size: 0.85rem; font-weight: 700; margin-top: 2px;
+      }
+      .coming-soon-badge {
+        color: rgba(255,255,255,0.35); font-size: 0.8rem; margin-top: 2px;
+      }
+
+      .shop-notice {
+        width: 100%; max-width: 540px; margin-top: 24px;
+        background: rgba(162,155,254,0.08); border: 1px solid rgba(162,155,254,0.2);
+        border-radius: 14px; padding: 14px 18px;
+        color: rgba(255,255,255,0.45); font-size: 0.85rem; text-align: center; line-height: 1.6;
+      }
+
+      /* Confetti */
+      .confetti-piece {
+        position: fixed; top: -20px; border-radius: 3px;
+        animation: confettiFall linear forwards; pointer-events: none; z-index: 999;
+      }
+      @keyframes confettiFall {
+        0%   { transform: translateY(0) rotate(0deg);       opacity: 1; }
+        100% { transform: translateY(105vh) rotate(720deg); opacity: 0; }
+      }
+
+      /* Toast notification */
+      .toast {
+        position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+        background: rgba(30,30,60,0.95); border: 1px solid rgba(255,255,255,0.15);
+        color: #fff; padding: 12px 24px; border-radius: 50px;
+        font-size: 0.95rem; font-weight: 700; z-index: 1000;
+        animation: toastIn 0.3s ease, toastOut 0.4s ease 1.8s forwards;
+        white-space: nowrap;
+      }
+      @keyframes toastIn  { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+      @keyframes toastOut { from { opacity: 1; } to { opacity: 0; } }
+
+      /* ===== BONUS ROUND ===== */
+      .bonus-banner {
+        display: none;
+        width: 100%; max-width: 540px;
+        background: linear-gradient(135deg, #f9ca24 0%, #f0932b 100%);
+        border-radius: 18px; padding: 12px 20px; text-align: center;
+        margin-bottom: 8px; box-shadow: 0 0 30px rgba(249,202,36,0.4);
+        animation: bonusPulse 1.5s ease infinite alternate;
+      }
+      .bonus-banner.active { display: block; }
+      @keyframes bonusPulse {
+        from { box-shadow: 0 0 20px rgba(249,202,36,0.3); }
+        to   { box-shadow: 0 0 50px rgba(249,202,36,0.7); }
+      }
+      .bonus-label { font-size: 1.3rem; font-weight: 900; color: #fff; letter-spacing: 0.05em; }
+      .bonus-sublabel { font-size: 0.8rem; color: rgba(255,255,255,0.85); margin-top: 2px; }
+
+      .timer-row {
+        display: none; align-items: center; justify-content: center;
+        gap: 14px; margin-bottom: 6px; width: 100%; max-width: 400px;
+      }
+      .timer-row.active { display: flex; }
+      .timer-number {
+        font-size: 2.8rem; font-weight: 900; color: #f9ca24;
+        min-width: 3.5rem; text-align: center; transition: color 0.3s;
+        text-shadow: 0 0 20px rgba(249,202,36,0.5);
+      }
+      .timer-number.urgent {
+        color: #ff6b6b;
+        text-shadow: 0 0 20px rgba(255,107,107,0.6);
+        animation: urgentPulse 0.4s ease infinite alternate;
+      }
+      @keyframes urgentPulse {
+        from { transform: scale(1); }
+        to   { transform: scale(1.15); }
+      }
+      .timer-track {
+        flex: 1; height: 10px; background: rgba(255,255,255,0.12);
+        border-radius: 50px; overflow: hidden;
+      }
+      .timer-fill {
+        height: 100%; width: 100%; border-radius: 50px;
+        background: linear-gradient(90deg, #ff6b6b 0%, #f9ca24 50%, #6bcb77 100%);
+        background-size: 300% 100%; background-position: right center;
+        transition: width 1s linear, background-position 1s linear;
+      }
+
+      /* Flash overlay on timeout */
+      .timeout-overlay {
+        display: none; position: fixed; inset: 0;
+        background: rgba(255,50,50,0.25); z-index: 500;
+        align-items: center; justify-content: center;
+        font-size: 2rem; font-weight: 900; color: #fff;
+        text-shadow: 0 0 20px rgba(0,0,0,0.8);
+        animation: fadeIn 0.2s ease;
+      }
+      .timeout-overlay.active { display: flex; }
+      @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+      /* Bonus mode tints blanks gold */
+      #screen-game.bonus-mode .blank-box        { border-color: rgba(249,202,36,0.35); }
+      #screen-game.bonus-mode .blank-box.filled { background: rgba(249,202,36,0.2); border-color: #f9ca24; }
+
+      /* Responsive */
+      @media (max-width: 480px) {
+        .game-title  { font-size: 2.5rem; }
+        .emoji-display { font-size: 85px; }
+        .blank-box   { width: 44px; height: 54px; font-size: 1.5rem; }
+        .letter-tile { width: 48px; height: 48px; font-size: 1.5rem; }
+        .blanks-row  { gap: 5px; }
+        .score-table { font-size: 0.85rem; }
+        .shop-grid   { grid-template-columns: repeat(2, 1fr); }
+      }
+    </style>
+  </head>
+  <body>
+
+    <!-- Timeout flash overlay (bonus round) -->
+    <div class="timeout-overlay" id="timeout-overlay">⏰ פג הזמן!</div>
+
+    <!-- ===== START SCREEN ===== -->
+    <div id="screen-start" class="screen active">
+      <div class="game-title">✨אותיות וגמדות ✨</div>
+      <div class="game-subtitle">משחק האיות של ליבי ואגם</div>
+
+      <div class="name-section">
+        <label class="name-label" for="player-name">👋 מה השם שלך?</label>
+        <input
+          id="player-name" class="name-input" type="text"
+          placeholder="כתוב את שמך כאן..." maxlength="20" autocomplete="off"
+          onkeydown="if(event.key==='Enter') validateName()"
+        />
+        <div class="name-error" id="name-error"></div>
+        <div class="prev-names" id="prev-names">
+          <div class="prev-label">או בחר שחקן קיים:</div>
+        </div>
+      </div>
+
+      <div class="level-cards">
+        <div class="level-card easy" onclick="startLevel('easy')">
+          <span class="level-emoji">🌱</span>
+          <div class="level-name">קל</div>
+          <div class="level-desc">3–4 אותיות</div>
+        </div>
+        <div class="level-card mid" onclick="startLevel('mid')">
+          <span class="level-emoji">⭐</span>
+          <div class="level-name">בינוני</div>
+          <div class="level-desc">5–6 אותיות</div>
+        </div>
+        <div class="level-card hard" onclick="startLevel('hard')">
+          <span class="level-emoji">🔥</span>
+          <div class="level-name">קשה</div>
+          <div class="level-desc">7+ אותיות</div>
+        </div>
+      </div>
+
+      <div class="start-actions">
+        <button class="ghost-btn shop-ghost" onclick="showShop()">🛍️ חנות</button>
+        <button class="ghost-btn" onclick="showLeaderboard()">🏆 טבלת שיאים</button>
+      </div>
+    </div>
+
+    <!-- ===== LEADERBOARD SCREEN ===== -->
+    <div id="screen-leaderboard" class="screen">
+      <div class="lb-screen-title">🏆 טבלת השיאים</div>
+      <div class="lb-screen-sub">10 השחקנים הטובים ביותר</div>
+      <div class="leaderboard" style="margin-top:0">
+        <div id="leaderboard-full-body"></div>
+      </div>
+      <div class="lb-back-row">
+        <button class="back-btn" onclick="goHome()">← חזרה</button>
+        <button class="lb-clear-btn" onclick="clearScores()">🗑️ נקה שיאים</button>
+      </div>
+    </div>
+
+    <!-- ===== SHOP SCREEN ===== -->
+    <div id="screen-shop" class="screen">
+      <div class="shop-header">
+        <div class="shop-title">🛍️ חנות</div>
+        <div class="shop-balance" id="shop-balance">🪙 0</div>
+      </div>
+
+      <div class="shop-section-title" id="shop-section-tools">🔧 כלי עזר</div>
+      <div class="shop-grid" id="shop-grid-tools"></div>
+
+      <div class="shop-section-title" id="shop-section-cosmetics">🎨 עיצובים</div>
+      <div class="shop-grid" id="shop-grid-cosmetics"></div>
+
+      <div class="shop-section-title" id="shop-section-coming">🔒 בקרוב</div>
+      <div class="shop-grid" id="shop-grid-coming"></div>
+
+      <div class="shop-notice">
+        💡 רעיונות לחנות מגיעים בקרוב!<br>
+        כל מילה נכונה = 🪙 10 מטבעות לקנייה
+      </div>
+
+      <div class="lb-back-row">
+        <button class="back-btn" onclick="goHome()">← חזרה</button>
+      </div>
+    </div>
+
+    <!-- ===== GAME SCREEN ===== -->
+    <div id="screen-game" class="screen">
+      <div class="game-header">
+        <button class="back-btn" onclick="goHome()">← חזרה</button>
+        <div class="header-center">
+          <div class="level-badge" id="level-badge"></div>
+          <div class="progress-text" id="progress-text"></div>
+          <div class="player-name-badge" id="player-name-badge"></div>
+        </div>
+        <div class="header-stats">
+          <div class="score-display">⭐ <span id="score-text">0</span></div>
+          <div class="coins-display">🪙 <span id="coins-text">0</span></div>
+          <div class="streak-display" id="streak-display">🔥 0/3</div>
+        </div>
+      </div>
+
+      <!-- Bonus banner (hidden when not in bonus round) -->
+      <div class="bonus-banner" id="bonus-banner">
+        <div class="bonus-label">⚡ סיבוב בונוס! ⚡</div>
+        <div class="bonus-sublabel">פתור תוך 20 שניות וקבל פי 2 מטבעות!</div>
+      </div>
+
+      <!-- Countdown timer (hidden when not in bonus round) -->
+      <div class="timer-row" id="timer-row">
+        <div class="timer-number" id="timer-number">20</div>
+        <div class="timer-track"><div class="timer-fill" id="timer-fill"></div></div>
+      </div>
+
+      <div class="emoji-display" id="word-emoji"></div>
+      <div class="blanks-row" id="blanks-row"></div>
+
+      <div class="action-row">
+        <button class="hint-btn" id="hint-btn" onclick="useHint()">
+          💡 רמז (<span id="hints-left">3</span>)
+        </button>
+        <button class="delete-btn" onclick="deleteLast()">⌫ מחק</button>
+      </div>
+
+      <div class="tiles-row" id="tiles-row"></div>
+    </div>
+
+    <!-- ===== WIN SCREEN ===== -->
+    <div id="screen-win" class="screen">
+      <div class="win-top">
+        <span class="win-emoji" id="win-emoji"></span>
+        <div class="win-title">כל הכבוד! 🎉</div>
+        <div class="win-word" id="win-word"></div>
+        <div class="win-score">ניקוד: <span id="win-score-text">0</span> ⭐</div>
+        <div class="win-coins">יתרת מטבעות: <span id="win-coins-text">0</span> 🪙</div>
+        <div id="win-bonus-tag" style="display:none;color:#f9ca24;font-size:1.1rem;font-weight:900;margin-bottom:8px;"></div>
+        <div id="win-streak-tag" style="display:none;color:#ff6b6b;font-size:1.1rem;font-weight:900;margin-bottom:8px;"></div>
+        <button class="next-btn" onclick="nextWord()">מילה הבאה ←</button>
+      </div>
+      <div class="leaderboard">
+        <div class="leaderboard-title">🏆 טבלת השיאים</div>
+        <div id="leaderboard-body"></div>
+      </div>
+    </div>
+
+    <script>
+    /* ══════════════════════════════════════════════════
+       CONSTANTS
+    ══════════════════════════════════════════════════ */
+    const TILE_COLORS = [
+      "#e84393","#FF6B6B","#FF9F43","#FFD93D",
+      "#6BCB77","#4D96FF","#A29BFE","#00CEC9",
+      "#fd7272","#badc58","#f9ca24","#6ab04c",
+    ];
+
+    const WORDS = {
+      easy: [
+        // ── original ──
+        {word:"כלב",  emoji:"🐶"}, {word:"שמש",  emoji:"☀️"},
+        {word:"ירח",  emoji:"🌙"}, {word:"ספר",  emoji:"📚"},
+        {word:"פרח",  emoji:"🌸"}, {word:"לחם",  emoji:"🍞"},
+        {word:"בית",  emoji:"🏠"}, {word:"דוב",  emoji:"🐻"},
+        {word:"קוף",  emoji:"🐒"}, {word:"נחש",  emoji:"🐍"},
+        {word:"גשם",  emoji:"🌧️"}, {word:"גזר",  emoji:"🥕"},
+        {word:"תות",  emoji:"🍓"}, {word:"חתול", emoji:"🐱"},
+        {word:"אריה", emoji:"🦁"}, {word:"ארנב", emoji:"🐰"},
+        {word:"כוכב", emoji:"⭐"}, {word:"כדור", emoji:"⚽"},
+        {word:"ביצה", emoji:"🥚"}, {word:"מטוס", emoji:"✈️"},
+        {word:"תפוח", emoji:"🍎"}, {word:"עוגה", emoji:"🎂"},
+        {word:"כיסא", emoji:"🪑"}, {word:"שועל", emoji:"🦊"},
+        {word:"פרפר", emoji:"🦋"}, {word:"כבשה", emoji:"🐑"},
+        {word:"רכבת", emoji:"🚂"}, {word:"חלב",  emoji:"🥛"},
+        // ── new (3-4 letters) ──
+        {word:"פיל",  emoji:"🐘"}, {word:"סוס",  emoji:"🐴"},
+        {word:"זאב",  emoji:"🐺"}, {word:"פרה",  emoji:"🐄"},
+        {word:"גמל",  emoji:"🐪"}, {word:"שור",  emoji:"🐂"},
+        {word:"ורד",  emoji:"🌹"}, {word:"שלג",  emoji:"❄️"},
+        {word:"ענן",  emoji:"☁️"}, {word:"כוס",  emoji:"☕"},
+        {word:"אגס",  emoji:"🍐"}, {word:"זית",  emoji:"🫒"},
+        {word:"מים",  emoji:"💧"}, {word:"דבש",  emoji:"🍯"},
+        {word:"ילד",  emoji:"👦"}, {word:"שיר",  emoji:"🎵"},
+        {word:"חול",  emoji:"🏖️"}, {word:"זהב",  emoji:"🏅"},
+        {word:"כרם",  emoji:"🍇"}, {word:"ספה",  emoji:"🛋️"},
+        {word:"חזיר", emoji:"🐷"}, {word:"עכבר", emoji:"🐭"},
+        {word:"חמור", emoji:"🫏"}, {word:"שעון", emoji:"⏰"},
+        {word:"בלון", emoji:"🎈"}, {word:"פלפל", emoji:"🌶️"},
+        {word:"אדום", emoji:"🔴"}, {word:"כחול", emoji:"🔵"},
+        {word:"ירוק", emoji:"🟢"}, {word:"צהוב", emoji:"🟡"},
+        {word:"צבע",  emoji:"🎨"}, {word:"צלחת", emoji:"🍽️"},
+        {word:"אפון", emoji:"🫛"}, {word:"כנף",  emoji:"🪶"},
+      ],
+      mid: [
+        // ── original ──
+        {word:"ארנבת",  emoji:"🐰"}, {word:"ברווז",  emoji:"🦆"},
+        {word:"צפרדע",  emoji:"🐸"}, {word:"קיפוד",  emoji:"🦔"},
+        {word:"ינשוף",  emoji:"🦉"}, {word:"תמנון",  emoji:"🐙"},
+        {word:"ברבור",  emoji:"🦢"}, {word:"ציפור",  emoji:"🐦"},
+        {word:"כלבלב",  emoji:"🐶"}, {word:"גלידה",  emoji:"🍦"},
+        {word:"לימון",  emoji:"🍋"}, {word:"אבטיח",  emoji:"🍉"},
+        {word:"דולפין", emoji:"🐬"}, {word:"קנגורו", emoji:"🦘"},
+        {word:"מכונית", emoji:"🚗"}, {word:"עוגייה", emoji:"🍪"},
+        {word:"תרנגול", emoji:"🐓"}, {word:"כדורגל", emoji:"⚽"},
+        {word:"שוקולד", emoji:"🍫"}, {word:"מלפפון", emoji:"🥒"},
+        {word:"חמנייה", emoji:"🌻"}, {word:"טלפון",  emoji:"📱"},
+        {word:"ספינה",  emoji:"🚢"}, {word:"מטריה",  emoji:"☂️"},
+        // ── new (5-6 letters) ──
+        {word:"ריקוד",  emoji:"💃"}, {word:"שולחן",  emoji:"🪑"},
+        {word:"שמיים",  emoji:"🌤️"}, {word:"ירקות",  emoji:"🥗"},
+        {word:"פירות",  emoji:"🍓"}, {word:"בגדים",  emoji:"👕"},
+        {word:"ספרים",  emoji:"📖"}, {word:"ילדים",  emoji:"👧"},
+        {word:"ביצים",  emoji:"🥚"}, {word:"נגינה",  emoji:"🎶"},
+        {word:"ארמון",  emoji:"🏰"}, {word:"זיקית",  emoji:"🦎"},
+        {word:"בקבוק",  emoji:"🍶"}, {word:"שחייה",  emoji:"🏊"},
+        {word:"גשמים",  emoji:"🌧️"}, {word:"ורדים",  emoji:"🌹"},
+        {word:"בננות",  emoji:"🍌"}, {word:"עכביש",  emoji:"🕷️"},
+        {word:"נמרים",  emoji:"🐆"}, {word:"פילים",  emoji:"🐘"},
+        {word:"כרובית", emoji:"🥦"}, {word:"חצילים", emoji:"🍆"},
+        {word:"תפוזים", emoji:"🍊"}, {word:"כוכבים", emoji:"⭐"},
+        {word:"מוסיקה", emoji:"🎵"}, {word:"ממתקים", emoji:"🍬"},
+        {word:"בלונים", emoji:"🎈"}, {word:"גרביים", emoji:"🧦"},
+        {word:"מסוקים", emoji:"🚁"}, {word:"כרישים", emoji:"🦈"},
+      ],
+      hard: [
+        // ── original ──
+        {word:"אוטובוס",  emoji:"🚌"}, {word:"פנגווין",  emoji:"🐧"},
+        {word:"עגבנייה",  emoji:"🍅"}, {word:"אופניים",  emoji:"🚲"},
+        {word:"אמבולנס",  emoji:"🚑"}, {word:"מכנסיים",  emoji:"👖"},
+        {word:"משקפיים",  emoji:"👓"}, {word:"טלוויזיה",  emoji:"📺"},
+        {word:"תמנונים",  emoji:"🐙"}, {word:"מיקרוגל",  emoji:"📡"},
+        // ── new (7+ letters) ──
+        {word:"ציפורים",  emoji:"🐦"}, {word:"מכוניות",  emoji:"🚗"},
+        {word:"תרנגולת",  emoji:"🐔"}, {word:"עכבישים",  emoji:"🕷️"},
+        {word:"ינשופים",  emoji:"🦉"}, {word:"ברווזים",  emoji:"🦆"},
+        {word:"כלבלבים",  emoji:"🐶"}, {word:"חנוכייה",  emoji:"🕎"},
+        {word:"תמרורים",  emoji:"🚦"}, {word:"מיקרופון",  emoji:"🎤"},
+        {word:"צבעונים",  emoji:"🖍️"}, {word:"לחמנייה",  emoji:"🥖"},
+        {word:"שולחנות",  emoji:"🪑"}, {word:"חיפושית",  emoji:"🐞"},
+        {word:"תמנונות",  emoji:"🐙"}, {word:"דינוזאור",  emoji:"🦕"},
+        {word:"אוקיינוס", emoji:"🌊"}, {word:"מחשבונים", emoji:"🖩"},
+        {word:"היפופוטם", emoji:"🦛"}, {word:"פסנתרים",  emoji:"🎹"},
+        {word:"מנגינות",  emoji:"🎶"}, {word:"תלמידים",  emoji:"📖"},
+      ],
+    };
+
+    /* ══════════════════════════════════════════════════
+       SHOP CATALOGUE
+       category: 'tools' | 'cosmetics' | 'coming'
+       type: determines what happens when used (hook for future logic)
+    ══════════════════════════════════════════════════ */
+    const SHOP_ITEMS = [
+      // ── Tools ──
+      {
+        id: "extra_hints",
+        emoji: "💡", name: "רמזים נוספים", category: "tools",
+        cost: 30, desc: "+3 רמזים לשלב הבא",
+        type: "powerup", consumable: true,
+      },
+      {
+        id: "skip_word",
+        emoji: "⏭️", name: "דלג מילה", category: "tools",
+        cost: 20, desc: "דלג על מילה אחת ב-10 מטבעות",
+        type: "powerup", consumable: true,
+      },
+      {
+        id: "double_coins",
+        emoji: "💰", name: "מטבעות כפולים", category: "tools",
+        cost: 50, desc: "X2 מטבעות למשחק אחד",
+        type: "powerup", consumable: true,
+      },
+
+      // ── Cosmetics ──
+      {
+        id: "theme_space",
+        emoji: "🚀", name: "ערכת חלל", category: "cosmetics",
+        cost: 150, desc: "עיצוב חלל כהה",
+        type: "theme",
+      },
+      {
+        id: "theme_jungle",
+        emoji: "🌴", name: "ערכת ג׳ונגל", category: "cosmetics",
+        cost: 150, desc: "עיצוב ג׳ונגל ירוק",
+        type: "theme",
+      },
+      {
+        id: "avatar_star",
+        emoji: "⭐", name: "אווטאר כוכב", category: "cosmetics",
+        cost: 80, desc: "אווטאר כוכבי מיוחד",
+        type: "avatar",
+      },
+
+      // ── Coming soon ──
+      {id:"coming_1", emoji:"🎭", name:"???", category:"coming", cost:999, desc:"בקרוב...", type:"tbd"},
+      {id:"coming_2", emoji:"🦄", name:"???", category:"coming", cost:999, desc:"בקרוב...", type:"tbd"},
+      {id:"coming_3", emoji:"🌈", name:"???", category:"coming", cost:999, desc:"בקרוב...", type:"tbd"},
+    ];
+
+    /* ══════════════════════════════════════════════════
+       LOCALSTORAGE — keys
+    ══════════════════════════════════════════════════ */
+    const KEY_SCORES    = "aot_baot_scores";
+    const KEY_COINS     = "aot_baot_coins";       // { playerName: balance }
+    const KEY_PURCHASES = "aot_baot_purchases";   // { playerName: [itemId, ...] }
+
+    /* ── Scores ── */
+    function getScores() {
+      try { return JSON.parse(localStorage.getItem(KEY_SCORES)) || []; } catch { return []; }
+    }
+    function saveScore(name, score, level) {
+      const scores = getScores();
+      scores.push({ name, score, level, ts: Date.now() });
+      if (scores.length > 200) scores.splice(0, scores.length - 200);
+      localStorage.setItem(KEY_SCORES, JSON.stringify(scores));
+    }
+    function topScores() {
+      const best = {};
+      getScores().forEach(e => {
+        if (!best[e.name] || e.score > best[e.name].score) best[e.name] = e;
+      });
+      return Object.values(best).sort((a,b) => b.score - a.score).slice(0, 10);
+    }
+
+    /* ── Coins (persistent currency) ── */
+    function getAllCoins() {
+      try { return JSON.parse(localStorage.getItem(KEY_COINS)) || {}; } catch { return {}; }
+    }
+    function getCoins(name) { return getAllCoins()[name] || 0; }
+    function addCoins(name, amount) {
+      const all = getAllCoins();
+      all[name] = (all[name] || 0) + amount;
+      localStorage.setItem(KEY_COINS, JSON.stringify(all));
+    }
+    function spendCoins(name, amount) {
+      const all = getAllCoins();
+      if ((all[name] || 0) < amount) return false;
+      all[name] -= amount;
+      localStorage.setItem(KEY_COINS, JSON.stringify(all));
+      return true;
+    }
+
+    /* ── Purchases ── */
+    function getAllPurchases() {
+      try { return JSON.parse(localStorage.getItem(KEY_PURCHASES)) || {}; } catch { return {}; }
+    }
+    function getPurchases(name) { return getAllPurchases()[name] || []; }
+    function hasItem(name, itemId) { return getPurchases(name).includes(itemId); }
+    function addPurchase(name, itemId) {
+      const all = getAllPurchases();
+      if (!all[name]) all[name] = [];
+      if (!all[name].includes(itemId)) all[name].push(itemId);
+      localStorage.setItem(KEY_PURCHASES, JSON.stringify(all));
+    }
+
+    /* ══════════════════════════════════════════════════
+       GAME STATE
+    ══════════════════════════════════════════════════ */
+    let state = {
+      playerName: "",
+      level: "",
+      wordList: [],
+      wordIndex: 0,
+      currentWord: "",
+      currentEmoji: "",
+      letters: [],
+      placed: [],
+      tileEls: [],
+      hints: 3,
+      score: 0,            // session score (for leaderboard)
+      wordsCompleted: 0,   // total words solved this session
+      isBonus: false,      // true while in a bonus round
+      bonusInterval: null, // setInterval reference
+      bonusTimeLeft: 20,   // seconds remaining in bonus
+      streak: 0,           // consecutive correct answers (resets on wrong)
+    };
+
+    /* ══════════════════════════════════════════════════
+       HELPERS
+    ══════════════════════════════════════════════════ */
+    function shuffle(arr) {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    /* Shuffle and guarantee result ≠ original order */
+    function shuffleDistinct(arr) {
+      if (arr.length <= 1) return [...arr];
+      const orig = arr.join("");
+      let result, attempts = 0;
+      do { result = shuffle(arr); attempts++; }
+      while (result.join("") === orig && attempts < 20);
+      return result;
+    }
+
+    function getPreviousNames() {
+      const names = [...new Set(getScores().map(e => e.name))];
+      // Also include anyone who has coins but no score entries
+      const coinNames = Object.keys(getAllCoins());
+      coinNames.forEach(n => { if (!names.includes(n)) names.push(n); });
+      return names;
+    }
+
+    function renderNameChips() {
+      const container = document.getElementById("prev-names");
+      const names = getPreviousNames();
+      container.querySelectorAll(".name-chip").forEach(c => c.remove());
+      if (names.length === 0) {
+        container.classList.remove("visible");
+        return;
+      }
+      // Build best-score lookup
+      const bestScore = {};
+      getScores().forEach(e => {
+        if (!bestScore[e.name] || e.score > bestScore[e.name]) bestScore[e.name] = e.score;
+      });
+      container.classList.add("visible");
+      names.forEach(name => {
+        const btn = document.createElement("button");
+        btn.className = "name-chip";
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = name;
+        const statsSpan = document.createElement("span");
+        statsSpan.className = "name-chip-stats";
+        statsSpan.textContent = `⭐ ${bestScore[name] || 0}  🪙 ${getCoins(name)}`;
+        btn.appendChild(nameSpan);
+        btn.appendChild(statsSpan);
+        btn.addEventListener("click", () => {
+          document.getElementById("player-name").value = name;
+          document.getElementById("name-error").textContent = "";
+        });
+        container.appendChild(btn);
+      });
+    }
+
+    function showScreen(id) {
+      document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+      document.getElementById(id).classList.add("active");
+    }
+
+    function escHtml(str) {
+      return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    }
+
+    function showToast(msg) {
+      document.querySelectorAll(".toast").forEach(t => t.remove());
+      const t = document.createElement("div");
+      t.className = "toast";
+      t.textContent = msg;
+      document.body.appendChild(t);
+      t.addEventListener("animationend", e => { if (e.animationName === "toastOut") t.remove(); });
+    }
+
+    /* ══════════════════════════════════════════════════
+       NAME VALIDATION
+    ══════════════════════════════════════════════════ */
+    function validateName() {
+      const input = document.getElementById("player-name");
+      const errEl = document.getElementById("name-error");
+      const name  = input.value.trim();
+      if (!name) {
+        errEl.textContent = "⚠️ אנא הכנס את שמך לפני שמתחילים!";
+        input.classList.add("error");
+        input.addEventListener("animationend", () => input.classList.remove("error"), { once: true });
+        input.focus();
+        return false;
+      }
+      errEl.textContent = "";
+      return name;
+    }
+
+    /* ══════════════════════════════════════════════════
+       START / LOAD WORD
+    ══════════════════════════════════════════════════ */
+    function startLevel(level) {
+      const name = validateName();
+      if (!name) return;
+
+      state.playerName     = name;
+      state.level          = level;
+      state.wordList       = shuffle([...WORDS[level]]).slice(0, 20);
+      state.wordIndex      = 0;
+      state.score          = 0;
+      state.hints          = 3;
+      state.wordsCompleted = 0;
+      state.isBonus        = false;
+      state.streak         = 0;
+      clearBonusTimer();
+
+      const labels = { easy:"🌱 קל", mid:"⭐ בינוני", hard:"🔥 קשה" };
+      document.getElementById("level-badge").textContent    = labels[level];
+      document.getElementById("player-name-badge").textContent = `👤 ${name}`;
+
+      loadWord();
+      showScreen("screen-game");
+    }
+
+    function loadWord() {
+      const obj = state.wordList[state.wordIndex % state.wordList.length];
+      state.currentWord  = obj.word;
+      state.currentEmoji = obj.emoji;
+      state.letters      = [...obj.word];
+      state.placed       = [];
+
+      document.getElementById("word-emoji").textContent    = obj.emoji;
+      document.getElementById("score-text").textContent    = state.score;
+      document.getElementById("coins-text").textContent    = getCoins(state.playerName);
+      document.getElementById("hints-left").textContent    = state.hints;
+      document.getElementById("hint-btn").disabled         = (state.hints <= 0);
+      updateStreakUI();
+      document.getElementById("progress-text").textContent =
+        `מילה ${state.wordIndex + 1} מתוך ${state.wordList.length}`;
+
+      // Activate / deactivate bonus UI
+      const gameEl = document.getElementById("screen-game");
+      if (state.isBonus) {
+        document.getElementById("bonus-banner").classList.add("active");
+        document.getElementById("timer-row").classList.add("active");
+        gameEl.classList.add("bonus-mode");
+        startBonusTimer();
+      } else {
+        clearBonusTimer();
+      }
+
+      renderBlanks();
+      renderTiles();
+    }
+
+    function renderBlanks() {
+      const row = document.getElementById("blanks-row");
+      row.innerHTML = "";
+      for (let i = 0; i < state.letters.length; i++) {
+        const box = document.createElement("div");
+        box.className = "blank-box";
+        box.id = "blank-" + i;
+        row.appendChild(box);
+      }
+    }
+
+    function renderTiles() {
+      const row = document.getElementById("tiles-row");
+      row.innerHTML = "";
+      state.tileEls = [];
+      // shuffleDistinct ensures tiles never appear in the word's original order
+      shuffleDistinct([...state.letters]).forEach((letter, idx) => {
+        const btn = document.createElement("button");
+        btn.className        = "letter-tile";
+        btn.textContent      = letter;
+        btn.style.background = TILE_COLORS[idx % TILE_COLORS.length];
+        btn.addEventListener("click", () => placeLetter(btn));
+        row.appendChild(btn);
+        state.tileEls.push(btn);
+      });
+    }
+
+    /* ══════════════════════════════════════════════════
+       GAME ACTIONS
+    ══════════════════════════════════════════════════ */
+    function placeLetter(tile) {
+      if (tile.disabled) return;
+      const idx = state.placed.length;
+      if (idx >= state.letters.length) return;
+
+      tile.disabled = true;
+      state.placed.push(tile.textContent);
+
+      const box = document.getElementById("blank-" + idx);
+      box.textContent = tile.textContent;
+      box.classList.remove("err");
+      box.classList.add("filled", "pop");
+      box.addEventListener("animationend", () => box.classList.remove("pop"), { once: true });
+
+      if (state.placed.length === state.letters.length) setTimeout(checkWord, 380);
+    }
+
+    function deleteLast() {
+      if (state.placed.length === 0) return;
+      const lastIdx = state.placed.length - 1;
+      const box = document.getElementById("blank-" + lastIdx);
+      if (box.classList.contains("hint-filled")) return;
+
+      const removed = state.placed.pop();
+      box.textContent = "";
+      box.classList.remove("filled");
+
+      for (let i = state.tileEls.length - 1; i >= 0; i--) {
+        const t = state.tileEls[i];
+        if (t.disabled && !t.dataset.hint && t.textContent === removed) {
+          t.disabled = false; break;
+        }
+      }
+    }
+
+    function useHint() {
+      if (state.hints <= 0) return;
+      const idx = state.placed.length;
+      if (idx >= state.letters.length) return;
+
+      const correct = state.letters[idx];
+      for (let i = 0; i < state.tileEls.length; i++) {
+        const t = state.tileEls[i];
+        if (!t.disabled && t.textContent === correct) {
+          t.disabled = true; t.dataset.hint = "1"; break;
+        }
+      }
+
+      state.placed.push(correct);
+      state.hints--;
+      document.getElementById("hints-left").textContent = state.hints;
+      document.getElementById("hint-btn").disabled = (state.hints <= 0);
+
+      const box = document.getElementById("blank-" + idx);
+      box.textContent = correct;
+      box.classList.add("filled", "hint-filled", "pop");
+      box.addEventListener("animationend", () => box.classList.remove("pop"), { once: true });
+
+      if (state.placed.length === state.letters.length) setTimeout(checkWord, 380);
+    }
+
+    function checkWord() {
+      if (state.placed.join("") === state.currentWord) {
+        const reward = state.isBonus ? 20 : 10;
+        state.score += reward;
+        addCoins(state.playerName, reward);
+        saveScore(state.playerName, state.score, state.level);
+        state.wordsCompleted++;
+
+        if (state.isBonus) clearBonusTimer();
+
+        // Streak logic
+        state.streak++;
+        let streakBonus = 0;
+        if (state.streak >= 3) {
+          streakBonus = 15;
+          addCoins(state.playerName, streakBonus);
+          state.streak = 0;
+        }
+        updateStreakUI();
+
+        launchConfetti();
+        setTimeout(() => {
+          document.getElementById("win-emoji").textContent      = state.currentEmoji;
+          document.getElementById("win-word").textContent       = state.currentWord;
+          document.getElementById("win-score-text").textContent = state.score;
+          document.getElementById("win-coins-text").textContent = getCoins(state.playerName);
+          // Show bonus reward label on win screen
+          const bonusTag = document.getElementById("win-bonus-tag");
+          if (state.isBonus) {
+            bonusTag.textContent = "⚡ בונוס! קיבלת פי 2 — 🪙 20";
+            bonusTag.style.display = "block";
+          } else {
+            bonusTag.style.display = "none";
+          }
+          // Show streak prize label on win screen
+          const streakTag = document.getElementById("win-streak-tag");
+          if (streakBonus > 0) {
+            streakTag.textContent = `🔥 רצף של 3! בונוס — 🪙 ${streakBonus}`;
+            streakTag.style.display = "block";
+          } else {
+            streakTag.style.display = "none";
+          }
+          renderLeaderboardInto("leaderboard-body");
+          showScreen("screen-win");
+        }, 700);
+
+      } else {
+        state.streak = 0;
+        updateStreakUI();
+        document.querySelectorAll(".blank-box").forEach(b => {
+          b.classList.remove("pop");
+          b.classList.add("err");
+          b.addEventListener("animationend", () => b.classList.remove("err"), { once: true });
+        });
+        setTimeout(() => {
+          state.placed = [];
+          state.tileEls.forEach(t => { if (!t.dataset.hint) t.disabled = false; });
+          for (let i = 0; i < state.letters.length; i++) {
+            const box = document.getElementById("blank-" + i);
+            if (!box.classList.contains("hint-filled")) {
+              box.textContent = ""; box.classList.remove("filled");
+            } else {
+              state.placed.push(state.letters[i]);
+            }
+          }
+        }, 650);
+      }
+    }
+
+    /* ══════════════════════════════════════════════════
+       LEADERBOARD
+    ══════════════════════════════════════════════════ */
+    function renderLeaderboardInto(containerId) {
+      const top  = topScores();
+      const body = document.getElementById(containerId);
+      if (top.length === 0) {
+        body.innerHTML = '<div class="no-scores">אין ניקודים עדיין — היו הראשונים! 🌟</div>';
+        return;
+      }
+      const levelLabel = { easy:"קל", mid:"בינוני", hard:"קשה" };
+      const rankIcon   = ["🥇","🥈","🥉"];
+      let html = `<table class="score-table">
+        <thead><tr><th>#</th><th>שם</th><th>ניקוד</th><th>רמה</th></tr></thead><tbody>`;
+      top.forEach((entry, i) => {
+        const isMe = entry.name === state.playerName && entry.score === state.score;
+        const rank = i < 3 ? `<span class="rank-${i+1}">${rankIcon[i]}</span>` : `${i+1}`;
+        const lvl  = entry.level || "easy";
+        const pill = `<span class="level-pill ${lvl}">${levelLabel[lvl]||lvl}</span>`;
+        html += `<tr class="${isMe?"highlight":""}">
+          <td>${rank}</td><td>${escHtml(entry.name)}</td>
+          <td>${entry.score} ⭐</td><td>${pill}</td></tr>`;
+      });
+      html += "</tbody></table>";
+      body.innerHTML = html;
+    }
+
+    function showLeaderboard() {
+      renderLeaderboardInto("leaderboard-full-body");
+      showScreen("screen-leaderboard");
+    }
+
+    function clearScores() {
+      if (!confirm("למחוק את כל השיאים?")) return;
+      localStorage.removeItem(KEY_SCORES);
+      renderLeaderboardInto("leaderboard-full-body");
+      renderNameChips();
+    }
+
+    /* ══════════════════════════════════════════════════
+       SHOP
+    ══════════════════════════════════════════════════ */
+    function showShop() {
+      const name = state.playerName;
+      document.getElementById("shop-balance").textContent = `🪙 ${getCoins(name)}`;
+      renderShopGrid("tools");
+      renderShopGrid("cosmetics");
+      renderShopGrid("coming");
+      showScreen("screen-shop");
+    }
+
+    function renderShopGrid(category) {
+      const name  = state.playerName;
+      const items = SHOP_ITEMS.filter(it => it.category === category);
+      const grid  = document.getElementById("shop-grid-" + category);
+      grid.innerHTML = "";
+
+      items.forEach(item => {
+        const owned   = hasItem(name, item.id);
+        const locked  = item.category === "coming";
+        const canAfford = getCoins(name) >= item.cost;
+
+        const card = document.createElement("div");
+        card.className = "shop-item" + (owned ? " owned" : "") + (locked ? " locked" : "");
+
+        let actionHtml = "";
+        if (locked) {
+          actionHtml = `<span class="coming-soon-badge">🔒 בקרוב</span>`;
+        } else if (owned && !item.consumable) {
+          actionHtml = `<span class="owned-badge">✅ נרכש</span>`;
+        } else {
+          actionHtml = `
+            <div class="shop-item-cost">🪙 ${item.cost}</div>
+            <button class="buy-btn" ${(!canAfford && !owned) ? "disabled" : ""}
+              onclick="buyItem('${item.id}')">
+              ${owned && item.consumable ? "קנה שוב" : "קנה"}
+            </button>`;
+        }
+
+        card.innerHTML = `
+          <div class="shop-item-emoji">${item.emoji}</div>
+          <div class="shop-item-name">${item.name}</div>
+          <div class="shop-item-desc">${item.desc}</div>
+          ${actionHtml}`;
+        grid.appendChild(card);
+      });
+    }
+
+    function buyItem(itemId) {
+      const name = state.playerName;
+      if (!name) { showToast("⚠️ יש להכנס לשם לפני הקנייה"); return; }
+
+      const item = SHOP_ITEMS.find(it => it.id === itemId);
+      if (!item) return;
+
+      if (!spendCoins(name, item.cost)) {
+        showToast(`❌ אין מספיק מטבעות (דרוש: 🪙 ${item.cost})`);
+        return;
+      }
+
+      if (!item.consumable) addPurchase(name, itemId);
+
+      // Update balance display
+      document.getElementById("shop-balance").textContent = `🪙 ${getCoins(name)}`;
+
+      // Apply item effect (hook — extend here as items are defined)
+      applyItemEffect(item);
+
+      showToast(`✅ ${item.name} נרכש!`);
+
+      // Re-render the relevant grid
+      renderShopGrid(item.category);
+    }
+
+    /* Hook: called after a successful purchase — add logic per item.type / item.id */
+    function applyItemEffect(item) {
+      switch (item.id) {
+        case "extra_hints":
+          state.hints += 3;
+          document.getElementById("hints-left").textContent = state.hints;
+          if (document.getElementById("hint-btn"))
+            document.getElementById("hint-btn").disabled = false;
+          break;
+        case "skip_word":
+          // Will be handled on next word load — store in state for now
+          state._skipPending = true;
+          break;
+        case "double_coins":
+          state._doubleCoins = true;
+          break;
+        // Themes, avatars: store in purchases — UI theming added later
+        default:
+          break;
+      }
+    }
+
+    /* ══════════════════════════════════════════════════
+       NAVIGATION
+    ══════════════════════════════════════════════════ */
+    function nextWord() {
+      if (state._skipPending) {
+        state._skipPending = false;
+        state.wordIndex++;
+      }
+
+      state.wordIndex++;
+      if (state.wordIndex >= state.wordList.length) {
+        state.wordList  = shuffle([...WORDS[state.level]]).slice(0, 20);
+        state.wordIndex = 0;
+      }
+      state.hints  = 3;
+      // Every 3 completed words → next round is a bonus
+      state.isBonus = state.wordsCompleted > 0 && state.wordsCompleted % 3 === 0;
+
+      showScreen("screen-game");
+      loadWord();
+    }
+
+    function goHome() {
+      clearBonusTimer();
+      document.getElementById("player-name").value      = state.playerName;
+      document.getElementById("name-error").textContent = "";
+      renderNameChips();
+      showScreen("screen-start");
+    }
+
+    /* ══════════════════════════════════════════════════
+       BONUS TIMER
+    ══════════════════════════════════════════════════ */
+    function startBonusTimer() {
+      state.bonusTimeLeft = 20;
+      updateTimerUI(20);
+
+      state.bonusInterval = setInterval(() => {
+        state.bonusTimeLeft--;
+        updateTimerUI(state.bonusTimeLeft);
+
+        if (state.bonusTimeLeft <= 0) {
+          clearBonusTimer();
+          handleBonusTimeout();
+        }
+      }, 1000);
+    }
+
+    function clearBonusTimer() {
+      if (state.bonusInterval) {
+        clearInterval(state.bonusInterval);
+        state.bonusInterval = null;
+      }
+      // Hide bonus UI
+      document.getElementById("bonus-banner").classList.remove("active");
+      document.getElementById("timer-row").classList.remove("active");
+      document.getElementById("screen-game").classList.remove("bonus-mode");
+    }
+
+    function updateStreakUI() {
+      const el = document.getElementById("streak-display");
+      if (!el) return;
+      const s = state.streak;
+      el.textContent = `🔥 ${s}/3`;
+      el.classList.toggle("streak-hot", s >= 2);
+      el.classList.toggle("streak-active", s >= 1);
+    }
+
+    function updateTimerUI(seconds) {
+      const numEl  = document.getElementById("timer-number");
+      const fillEl = document.getElementById("timer-fill");
+      numEl.textContent = seconds;
+      numEl.classList.toggle("urgent", seconds <= 5);
+      // Shrink bar; shift gradient so left (red) shows when low
+      const pct = (seconds / 20) * 100;
+      fillEl.style.width = pct + "%";
+      // background-position shifts: 100% = green side, 0% = red side
+      fillEl.style.backgroundPosition = pct + "% center";
+    }
+
+    function handleBonusTimeout() {
+      // Flash red overlay
+      const overlay = document.getElementById("timeout-overlay");
+      overlay.classList.add("active");
+      setTimeout(() => {
+        overlay.classList.remove("active");
+        state.wordsCompleted++;   // count the bonus as done (no reward)
+        state.isBonus = false;
+        state.streak = 0;
+        updateStreakUI();
+        nextWord();
+      }, 1500);
+    }
+
+    /* ══════════════════════════════════════════════════
+       CONFETTI
+    ══════════════════════════════════════════════════ */
+    function launchConfetti() {
+      const colors = ["#FF6B6B","#FFD93D","#6BCB77","#4D96FF","#A29BFE","#FD79A8","#FF9F43"];
+      for (let i = 0; i < 70; i++) {
+        setTimeout(() => {
+          const el = document.createElement("div");
+          el.className = "confetti-piece";
+          el.style.left              = Math.random() * 100 + "vw";
+          el.style.width             = Math.random() * 10 + 5 + "px";
+          el.style.height            = Math.random() * 10 + 5 + "px";
+          el.style.background        = colors[Math.floor(Math.random() * colors.length)];
+          el.style.borderRadius      = Math.random() > 0.5 ? "50%" : "3px";
+          el.style.animationDuration = Math.random() * 2 + 1.2 + "s";
+          document.body.appendChild(el);
+          el.addEventListener("animationend", () => el.remove());
+        }, i * 25);
+      }
+    }
+
+    // Populate previous-player chips on first load
+    renderNameChips();
+    </script>
+  </body>
+</html>
