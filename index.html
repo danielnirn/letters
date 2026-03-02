@@ -9,7 +9,7 @@
       rel="stylesheet"
     />
     <style>
-      * { box-sizing: border-box; margin: 0; padding: 0; }
+      * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
       body {
         font-family: "Heebo", Arial, sans-serif;
@@ -19,6 +19,7 @@
         align-items: center;
         justify-content: center;
         overflow-x: hidden;
+        overflow-y: auto;
       }
 
       .screen {
@@ -28,10 +29,14 @@
         width: 100%;
         max-width: 700px;
         padding: 20px;
+        padding-bottom: max(20px, env(safe-area-inset-bottom, 20px));
         min-height: 100vh;
         justify-content: center;
       }
       .screen.active { display: flex; }
+
+      /* Touch-action on all interactive elements */
+      button, .level-card, .name-chip { touch-action: manipulation; }
 
       /* ===== START SCREEN ===== */
       .game-title {
@@ -154,10 +159,14 @@
         margin: 18px 0; flex-wrap: wrap;
       }
       .blank-box {
-        width: 56px; height: 66px; background: rgba(255,255,255,0.08);
+        /* Width/height shrink automatically on small screens via --word-len */
+        width: clamp(34px, calc((min(100vw, 660px) - 80px) / var(--word-len, 5)), 56px);
+        height: clamp(42px, calc(1.2 * (min(100vw, 660px) - 80px) / var(--word-len, 5)), 66px);
+        background: rgba(255,255,255,0.08);
         border-radius: 14px; border: 3px solid rgba(255,255,255,0.25);
         display: flex; align-items: center; justify-content: center;
-        font-size: 2rem; font-weight: 900; color: #fff;
+        font-size: clamp(1.1rem, 5vw, 2rem);
+        font-weight: 900; color: #fff;
         transition: border-color 0.2s, background 0.2s;
       }
       .blank-box.filled     { background: rgba(107,203,119,0.25); border-color: #6bcb77; }
@@ -200,6 +209,7 @@
         font-size: 1.8rem; font-weight: 900; color: #fff; cursor: pointer;
         transition: all 0.2s; box-shadow: 0 4px 12px rgba(0,0,0,0.35);
         font-family: "Heebo", Arial, sans-serif; user-select: none;
+        touch-action: manipulation;
       }
       .letter-tile:hover:not(:disabled) { transform: translateY(-5px) scale(1.12); box-shadow: 0 10px 22px rgba(0,0,0,0.45); }
       .letter-tile:active:not(:disabled) { transform: scale(0.93); }
@@ -425,15 +435,55 @@
       #screen-game.bonus-mode .blank-box        { border-color: rgba(249,202,36,0.35); }
       #screen-game.bonus-mode .blank-box.filled { background: rgba(249,202,36,0.2); border-color: #f9ca24; }
 
-      /* Responsive */
-      @media (max-width: 480px) {
-        .game-title  { font-size: 2.5rem; }
-        .emoji-display { font-size: 85px; }
-        .blank-box   { width: 44px; height: 54px; font-size: 1.5rem; }
-        .letter-tile { width: 48px; height: 48px; font-size: 1.5rem; }
-        .blanks-row  { gap: 5px; }
-        .score-table { font-size: 0.85rem; }
-        .shop-grid   { grid-template-columns: repeat(2, 1fr); }
+      /* ===== RESPONSIVE — tablet (≤ 600px) ===== */
+      @media (max-width: 600px) {
+        body { align-items: flex-start; }
+        .screen { justify-content: flex-start; padding-top: 18px; min-height: 100svh; }
+
+        /* Start screen */
+        .game-title    { font-size: 2.4rem; }
+        .game-subtitle { font-size: 1rem; margin-bottom: 1.4rem; }
+        .name-section  { max-width: 100%; }
+        .level-cards   { gap: 12px; }
+        .level-card    { min-width: 110px; padding: 20px 14px; }
+        .level-card .level-emoji { font-size: 2.4rem; }
+        .level-card .level-name  { font-size: 1.3rem; }
+        .start-actions { margin-top: 20px; }
+
+        /* Game screen */
+        .emoji-display  { font-size: 90px; margin: 8px 0; }
+        .blanks-row     { gap: 5px; margin: 10px 0; }
+        .tiles-row      { gap: 8px; }
+        .letter-tile    { width: 52px; height: 52px; font-size: 1.6rem; }
+        .action-row     { gap: 8px; margin-bottom: 14px; }
+        .hint-btn       { padding: 10px 16px; font-size: 0.92rem; }
+        .delete-btn     { padding: 10px 14px; font-size: 1.1rem; }
+        .back-btn       { padding: 8px 14px; font-size: 0.88rem; }
+        .score-display  { font-size: 1rem; }
+        .coins-display  { font-size: 0.88rem; }
+        .streak-display { font-size: 0.8rem; }
+        .timer-number   { font-size: 2.4rem; min-width: 3rem; }
+        .bonus-label    { font-size: 1.1rem; }
+
+        /* Win / leaderboard / shop */
+        .win-title      { font-size: 2rem; }
+        .win-word       { font-size: 1.7rem; }
+        .win-emoji      { font-size: 75px; }
+        .score-table    { font-size: 0.85rem; }
+        .shop-grid      { grid-template-columns: repeat(2, 1fr); }
+      }
+
+      /* ===== RESPONSIVE — small phone (≤ 400px) ===== */
+      @media (max-width: 400px) {
+        .game-title    { font-size: 2rem; }
+        .emoji-display { font-size: 75px; }
+        .letter-tile   { width: 46px; height: 46px; font-size: 1.45rem; }
+        .level-card    { min-width: 90px; padding: 14px 10px; }
+        .level-card .level-emoji { font-size: 2rem; }
+        .level-card .level-name  { font-size: 1.1rem; }
+        .game-title    { font-size: 1.9rem; }
+        .hint-btn      { padding: 9px 12px; font-size: 0.85rem; }
+        .game-header   { margin-bottom: 8px; }
       }
     </style>
   </head>
@@ -969,6 +1019,7 @@
     function renderBlanks() {
       const row = document.getElementById("blanks-row");
       row.innerHTML = "";
+      row.style.setProperty("--word-len", state.letters.length);
       for (let i = 0; i < state.letters.length; i++) {
         const box = document.createElement("div");
         box.className = "blank-box";
