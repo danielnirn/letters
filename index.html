@@ -435,6 +435,36 @@
       #screen-game.bonus-mode .blank-box        { border-color: rgba(249,202,36,0.35); }
       #screen-game.bonus-mode .blank-box.filled { background: rgba(249,202,36,0.2); border-color: #f9ca24; }
 
+      /* ===== CHOICE MODE ===== */
+      .choice-options {
+        display: none; flex-direction: column; gap: 12px;
+        width: 100%; max-width: 380px; margin: 8px 0 16px;
+      }
+      #screen-game.choice-mode .choice-options { display: flex; }
+      #screen-game.choice-mode .blanks-row,
+      #screen-game.choice-mode .action-row,
+      #screen-game.choice-mode .tiles-row { display: none !important; }
+      .choice-prompt {
+        color: rgba(255,255,255,0.55); font-size: 0.9rem; font-weight: 700;
+        text-align: center; margin-bottom: 4px; letter-spacing: 0.03em;
+      }
+      .choice-btn {
+        background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.25);
+        color: #fff; font-size: 1.5rem; font-weight: 900;
+        font-family: "Heebo", Arial, sans-serif; padding: 16px 24px;
+        border-radius: 18px; cursor: pointer; transition: all 0.2s;
+        text-align: center; touch-action: manipulation; user-select: none;
+        width: 100%;
+      }
+      .choice-btn:hover:not(:disabled):not(.correct):not(.wrong) {
+        background: rgba(255,255,255,0.2); transform: translateY(-2px);
+        box-shadow: 0 6px 18px rgba(0,0,0,0.3);
+      }
+      .choice-btn:active:not(:disabled) { transform: scale(0.97); }
+      .choice-btn:disabled { cursor: default; }
+      .choice-btn.correct { background: rgba(107,203,119,0.35); border-color: #6bcb77; color: #6bcb77; }
+      .choice-btn.wrong   { animation: shake 0.4s ease; border-color: #ff6b6b; background: rgba(255,107,107,0.2); opacity: 0.45; }
+
       /* ===== RESPONSIVE — tablet (≤ 600px) ===== */
       @media (max-width: 600px) {
         body { align-items: flex-start; }
@@ -603,6 +633,9 @@
 
       <div class="emoji-display" id="word-emoji"></div>
       <div class="blanks-row" id="blanks-row"></div>
+
+      <!-- Multiple-choice options (hidden in spell mode) -->
+      <div class="choice-options" id="choice-options"></div>
 
       <div class="action-row">
         <button class="hint-btn" id="hint-btn" onclick="useHint()">
@@ -859,6 +892,7 @@
       bonusInterval: null, // setInterval reference
       bonusTimeLeft: 20,   // seconds remaining in bonus
       streak: 0,           // consecutive correct answers (resets on wrong)
+      questionType: "spell", // "spell" | "choice"
     };
 
     /* ══════════════════════════════════════════════════
@@ -975,7 +1009,9 @@
       state.wordsCompleted = 0;
       state.isBonus        = false;
       state.streak         = 0;
+      state.questionType   = "spell";
       clearBonusTimer();
+      document.getElementById("screen-game").classList.remove("choice-mode");
 
       const labels = { easy:"🌱 קל", mid:"⭐ בינוני", hard:"🔥 קשה" };
       document.getElementById("level-badge").textContent    = labels[level];
@@ -1012,8 +1048,16 @@
         clearBonusTimer();
       }
 
-      renderBlanks();
-      renderTiles();
+      // Bonus rounds always use spell mode; otherwise 50/50 between modes
+      state.questionType = (!state.isBonus && Math.random() < 0.5) ? "choice" : "spell";
+      if (state.questionType === "choice") {
+        gameEl.classList.add("choice-mode");
+        renderChoiceOptions();
+      } else {
+        gameEl.classList.remove("choice-mode");
+        renderBlanks();
+        renderTiles();
+      }
     }
 
     function renderBlanks() {
@@ -1108,52 +1152,53 @@
       if (state.placed.length === state.letters.length) setTimeout(checkWord, 380);
     }
 
+    /* Shared win logic — used by both spell mode and choice mode */
+    function handleCorrectAnswer() {
+      const reward = state.isBonus ? 20 : 10;
+      state.score += reward;
+      addCoins(state.playerName, reward);
+      saveScore(state.playerName, state.score, state.level);
+      state.wordsCompleted++;
+
+      if (state.isBonus) clearBonusTimer();
+
+      state.streak++;
+      let streakBonus = 0;
+      if (state.streak >= 3) {
+        streakBonus = 15;
+        addCoins(state.playerName, streakBonus);
+        state.streak = 0;
+      }
+      updateStreakUI();
+
+      launchConfetti();
+      setTimeout(() => {
+        document.getElementById("win-emoji").textContent      = state.currentEmoji;
+        document.getElementById("win-word").textContent       = state.currentWord;
+        document.getElementById("win-score-text").textContent = state.score;
+        document.getElementById("win-coins-text").textContent = getCoins(state.playerName);
+        const bonusTag = document.getElementById("win-bonus-tag");
+        if (state.isBonus) {
+          bonusTag.textContent = "⚡ בונוס! קיבלת פי 2 — 🪙 20";
+          bonusTag.style.display = "block";
+        } else {
+          bonusTag.style.display = "none";
+        }
+        const streakTag = document.getElementById("win-streak-tag");
+        if (streakBonus > 0) {
+          streakTag.textContent = `🔥 רצף של 3! בונוס — 🪙 ${streakBonus}`;
+          streakTag.style.display = "block";
+        } else {
+          streakTag.style.display = "none";
+        }
+        renderLeaderboardInto("leaderboard-body");
+        showScreen("screen-win");
+      }, 600);
+    }
+
     function checkWord() {
       if (state.placed.join("") === state.currentWord) {
-        const reward = state.isBonus ? 20 : 10;
-        state.score += reward;
-        addCoins(state.playerName, reward);
-        saveScore(state.playerName, state.score, state.level);
-        state.wordsCompleted++;
-
-        if (state.isBonus) clearBonusTimer();
-
-        // Streak logic
-        state.streak++;
-        let streakBonus = 0;
-        if (state.streak >= 3) {
-          streakBonus = 15;
-          addCoins(state.playerName, streakBonus);
-          state.streak = 0;
-        }
-        updateStreakUI();
-
-        launchConfetti();
-        setTimeout(() => {
-          document.getElementById("win-emoji").textContent      = state.currentEmoji;
-          document.getElementById("win-word").textContent       = state.currentWord;
-          document.getElementById("win-score-text").textContent = state.score;
-          document.getElementById("win-coins-text").textContent = getCoins(state.playerName);
-          // Show bonus reward label on win screen
-          const bonusTag = document.getElementById("win-bonus-tag");
-          if (state.isBonus) {
-            bonusTag.textContent = "⚡ בונוס! קיבלת פי 2 — 🪙 20";
-            bonusTag.style.display = "block";
-          } else {
-            bonusTag.style.display = "none";
-          }
-          // Show streak prize label on win screen
-          const streakTag = document.getElementById("win-streak-tag");
-          if (streakBonus > 0) {
-            streakTag.textContent = `🔥 רצף של 3! בונוס — 🪙 ${streakBonus}`;
-            streakTag.style.display = "block";
-          } else {
-            streakTag.style.display = "none";
-          }
-          renderLeaderboardInto("leaderboard-body");
-          showScreen("screen-win");
-        }, 700);
-
+        handleCorrectAnswer();
       } else {
         state.streak = 0;
         updateStreakUI();
@@ -1174,6 +1219,37 @@
             }
           }
         }, 650);
+      }
+    }
+
+    /* ══════════════════════════════════════════════════
+       CHOICE MODE
+    ══════════════════════════════════════════════════ */
+    function renderChoiceOptions() {
+      const container = document.getElementById("choice-options");
+      container.innerHTML = '<div class="choice-prompt">❓ מה זה?</div>';
+      const pool  = WORDS[state.level].filter(w => w.word !== state.currentWord);
+      const wrong = shuffle(pool).slice(0, 2).map(w => w.word);
+      shuffle([state.currentWord, ...wrong]).forEach(word => {
+        const btn = document.createElement("button");
+        btn.className = "choice-btn";
+        btn.textContent = word;
+        btn.addEventListener("click", () => handleChoiceAnswer(btn, word));
+        container.appendChild(btn);
+      });
+    }
+
+    function handleChoiceAnswer(btn, word) {
+      if (btn.disabled) return;
+      if (word === state.currentWord) {
+        btn.classList.add("correct");
+        handleCorrectAnswer();
+      } else {
+        state.streak = 0;
+        updateStreakUI();
+        btn.classList.add("wrong");
+        btn.disabled = true;
+        btn.addEventListener("animationend", () => btn.classList.remove("wrong"), { once: true });
       }
     }
 
