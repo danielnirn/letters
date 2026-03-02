@@ -435,6 +435,46 @@
       #screen-game.bonus-mode .blank-box        { border-color: rgba(249,202,36,0.35); }
       #screen-game.bonus-mode .blank-box.filled { background: rgba(249,202,36,0.2); border-color: #f9ca24; }
 
+      /* ===== INVENTORY (shop screen) ===== */
+      .inv-grid { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 540px; }
+      .inv-item {
+        background: rgba(255,255,255,0.07); border: 2px solid rgba(255,255,255,0.1);
+        border-radius: 16px; padding: 13px 16px;
+        display: flex; align-items: center; gap: 14px;
+      }
+      .inv-emoji { font-size: 2rem; line-height: 1; flex-shrink: 0; }
+      .inv-details { flex: 1; }
+      .inv-name { font-size: 0.95rem; font-weight: 900; color: #fff; }
+      .inv-sub  { font-size: 0.75rem; color: rgba(255,255,255,0.4); margin-top: 2px; }
+      .inv-count {
+        font-size: 1.2rem; font-weight: 900; color: #a29bfe;
+        background: rgba(162,155,254,0.18); border-radius: 12px;
+        padding: 4px 14px; flex-shrink: 0;
+      }
+      .no-inventory {
+        color: rgba(255,255,255,0.38); text-align: center;
+        padding: 16px 0; font-size: 0.9rem; line-height: 1.8;
+      }
+
+      /* ===== IN-GAME ITEMS TOOLBAR ===== */
+      .game-items-row {
+        display: none; gap: 10px; flex-wrap: wrap;
+        justify-content: center; margin-bottom: 10px;
+      }
+      .game-items-row.has-items { display: flex; }
+      .game-item-btn {
+        background: rgba(162,155,254,0.12); border: 2px solid rgba(162,155,254,0.35);
+        color: #a29bfe; font-size: 0.88rem; font-weight: 700;
+        font-family: "Heebo", Arial, sans-serif; padding: 8px 16px;
+        border-radius: 50px; cursor: pointer; transition: all 0.2s;
+        touch-action: manipulation; display: flex; align-items: center; gap: 6px;
+      }
+      .game-item-btn:hover { background: rgba(162,155,254,0.28); border-color: #a29bfe; }
+      .game-item-badge {
+        background: rgba(162,155,254,0.3); border-radius: 10px;
+        padding: 1px 7px; font-size: 0.75rem; font-weight: 900;
+      }
+
       /* ===== CHOICE MODE ===== */
       .choice-options {
         display: none; flex-direction: column; gap: 12px;
@@ -593,6 +633,9 @@
       <div class="shop-section-title" id="shop-section-coming">🔒 בקרוב</div>
       <div class="shop-grid" id="shop-grid-coming"></div>
 
+      <div class="shop-section-title">🎒 הציוד שלי</div>
+      <div class="inv-grid" id="inv-grid"></div>
+
       <div class="shop-notice">
         💡 רעיונות לחנות מגיעים בקרוב!<br>
         כל מילה נכונה = 🪙 10 מטבעות לקנייה
@@ -643,6 +686,9 @@
         </button>
         <button class="delete-btn" onclick="deleteLast()">⌫ מחק</button>
       </div>
+
+      <!-- Usable inventory items toolbar (shown only when player owns consumables) -->
+      <div class="game-items-row" id="game-items-row"></div>
 
       <div class="tiles-row" id="tiles-row"></div>
     </div>
@@ -822,6 +868,7 @@
     const KEY_SCORES    = "aot_baot_scores";
     const KEY_COINS     = "aot_baot_coins";       // { playerName: balance }
     const KEY_PURCHASES = "aot_baot_purchases";   // { playerName: [itemId, ...] }
+    const KEY_INVENTORY = "aot_baot_inventory";   // { playerName: { itemId: count } }
 
     /* ── Scores ── */
     function getScores() {
@@ -870,6 +917,26 @@
       if (!all[name]) all[name] = [];
       if (!all[name].includes(itemId)) all[name].push(itemId);
       localStorage.setItem(KEY_PURCHASES, JSON.stringify(all));
+    }
+
+    /* ── Inventory (consumable item counts per player) ── */
+    function getInventoryAll() {
+      try { return JSON.parse(localStorage.getItem(KEY_INVENTORY)) || {}; } catch { return {}; }
+    }
+    function getInventory(name) { return getInventoryAll()[name] || {}; }
+    function getItemCount(name, itemId) { return getInventory(name)[itemId] || 0; }
+    function addToInventory(name, itemId, qty = 1) {
+      const all = getInventoryAll();
+      if (!all[name]) all[name] = {};
+      all[name][itemId] = (all[name][itemId] || 0) + qty;
+      localStorage.setItem(KEY_INVENTORY, JSON.stringify(all));
+    }
+    function useFromInventory(name, itemId) {
+      const all = getInventoryAll();
+      if (!all[name] || !all[name][itemId] || all[name][itemId] <= 0) return false;
+      all[name][itemId]--;
+      localStorage.setItem(KEY_INVENTORY, JSON.stringify(all));
+      return true;
     }
 
     /* ══════════════════════════════════════════════════
@@ -1058,6 +1125,8 @@
         renderBlanks();
         renderTiles();
       }
+
+      renderGameItemsRow();
     }
 
     function renderBlanks() {
@@ -1301,6 +1370,7 @@
       renderShopGrid("tools");
       renderShopGrid("cosmetics");
       renderShopGrid("coming");
+      renderInventoryGrid();
       showScreen("screen-shop");
     }
 
@@ -1353,51 +1423,110 @@
         return;
       }
 
-      if (!item.consumable) addPurchase(name, itemId);
+      if (item.consumable) {
+        addToInventory(name, item.id);
+        showToast(`✅ ${item.name} נוסף לתיק!`);
+      } else {
+        addPurchase(name, item.id);
+        showToast(`✅ ${item.name} נרכש!`);
+      }
 
-      // Update balance display
       document.getElementById("shop-balance").textContent = `🪙 ${getCoins(name)}`;
-
-      // Apply item effect (hook — extend here as items are defined)
-      applyItemEffect(item);
-
-      showToast(`✅ ${item.name} נרכש!`);
-
-      // Re-render the relevant grid
       renderShopGrid(item.category);
+      renderInventoryGrid();
     }
 
-    /* Hook: called after a successful purchase — add logic per item.type / item.id */
-    function applyItemEffect(item) {
-      switch (item.id) {
+    /* ══════════════════════════════════════════════════
+       INVENTORY UI + ITEM USE
+    ══════════════════════════════════════════════════ */
+
+    /* Render the "🎒 הציוד שלי" section inside the shop screen */
+    function renderInventoryGrid() {
+      const name = state.playerName;
+      const grid = document.getElementById("inv-grid");
+      if (!grid) return;
+      grid.innerHTML = "";
+      const consumables = SHOP_ITEMS.filter(it => it.consumable);
+      let hasAny = false;
+      consumables.forEach(item => {
+        const count = getItemCount(name, item.id);
+        if (count === 0) return;
+        hasAny = true;
+        const div = document.createElement("div");
+        div.className = "inv-item";
+        div.innerHTML = `
+          <div class="inv-emoji">${item.emoji}</div>
+          <div class="inv-details">
+            <div class="inv-name">${item.name}</div>
+            <div class="inv-sub">${item.desc} · לשימוש במשחק</div>
+          </div>
+          <div class="inv-count">×${count}</div>`;
+        grid.appendChild(div);
+      });
+      if (!hasAny) {
+        grid.innerHTML = '<div class="no-inventory">אין פריטים בתיק עדיין 🎒<br>קנה פריטים מהחנות!</div>';
+      }
+    }
+
+    /* Render the in-game usable items toolbar */
+    function renderGameItemsRow() {
+      const row = document.getElementById("game-items-row");
+      if (!row) return;
+      const name = state.playerName;
+      const consumables = SHOP_ITEMS.filter(it => it.consumable);
+      const available = consumables.filter(it => getItemCount(name, it.id) > 0);
+      row.innerHTML = "";
+      if (available.length === 0) {
+        row.classList.remove("has-items");
+        return;
+      }
+      row.classList.add("has-items");
+      available.forEach(item => {
+        const count = getItemCount(name, item.id);
+        const btn = document.createElement("button");
+        btn.className = "game-item-btn";
+        btn.innerHTML = `${item.emoji} ${item.name} <span class="game-item-badge">×${count}</span>`;
+        btn.addEventListener("click", () => useItemInGame(item.id));
+        row.appendChild(btn);
+      });
+    }
+
+    /* Apply a consumable item from inventory during an active game */
+    function useItemInGame(itemId) {
+      const name = state.playerName;
+      if (!useFromInventory(name, itemId)) return;
+
+      switch (itemId) {
         case "extra_hints":
           state.hints += 3;
           document.getElementById("hints-left").textContent = state.hints;
-          if (document.getElementById("hint-btn"))
-            document.getElementById("hint-btn").disabled = false;
+          document.getElementById("hint-btn").disabled = false;
+          showToast("💡 +3 רמזים נוספו!");
           break;
+
         case "skip_word":
-          // Will be handled on next word load — store in state for now
-          state._skipPending = true;
-          break;
-        case "double_coins":
-          state._doubleCoins = true;
-          break;
-        // Themes, avatars: store in purchases — UI theming added later
-        default:
-          break;
+          showToast("⏭️ דילגנו על המילה!");
+          clearBonusTimer();
+          state.isBonus = false;
+          state.streak = 0;
+          updateStreakUI();
+          state.wordIndex++;
+          if (state.wordIndex >= state.wordList.length) {
+            state.wordList  = shuffle([...WORDS[state.level]]).slice(0, 20);
+            state.wordIndex = 0;
+          }
+          state.hints = 3;
+          loadWord();
+          return; // loadWord() already calls renderGameItemsRow
       }
+
+      renderGameItemsRow();
     }
 
     /* ══════════════════════════════════════════════════
        NAVIGATION
     ══════════════════════════════════════════════════ */
     function nextWord() {
-      if (state._skipPending) {
-        state._skipPending = false;
-        state.wordIndex++;
-      }
-
       state.wordIndex++;
       if (state.wordIndex >= state.wordList.length) {
         state.wordList  = shuffle([...WORDS[state.level]]).slice(0, 20);
