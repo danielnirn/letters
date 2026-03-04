@@ -11,15 +11,76 @@
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
+      /* ===== THEME VARIABLES (default = dark-space base) ===== */
+      :root {
+        --bg:          linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+        --accent:      #a0c4ff;
+        --accent2:     #a29bfe;
+        --title-color: #fff;
+        --subtitle-color: #a0c4ff;
+        --tile-bg:     #6bcb77;
+        --tile-color:  #fff;
+        --win-title:   #ffd93d;
+        --coin-color:  #a29bfe;
+        --score-color: #ffd93d;
+        --filled-bg:   rgba(107,203,119,0.25);
+        --filled-border: #6bcb77;
+        --toast-bg:    rgba(30,30,60,0.95);
+        --card-bg:     rgba(255,255,255,0.08);
+      }
+
+      /* ── Space theme ── */
+      body[data-theme="theme_space"] {
+        --bg:          linear-gradient(135deg, #0d0d1a 0%, #0a0a2e 50%, #050520 100%);
+        --accent:      #7ecfff;
+        --accent2:     #bd93f9;
+        --subtitle-color: #7ecfff;
+        --tile-bg:     #bd93f9;
+        --score-color: #f1fa8c;
+        --coin-color:  #bd93f9;
+        --toast-bg:    rgba(10,10,40,0.97);
+      }
+
+      /* ── Jungle theme ── */
+      body[data-theme="theme_jungle"] {
+        --bg:          linear-gradient(135deg, #0a2e0a 0%, #1a4a1a 50%, #0d3d1a 100%);
+        --accent:      #a8e063;
+        --accent2:     #56ab2f;
+        --subtitle-color: #a8e063;
+        --tile-bg:     #56ab2f;
+        --score-color: #ffd93d;
+        --coin-color:  #a8e063;
+        --toast-bg:    rgba(10,30,10,0.97);
+      }
+
+      /* ── Unicorn theme ── */
+      body[data-theme="theme_unicorn"] {
+        --bg:          linear-gradient(135deg, #2d1b4e 0%, #4a1e5e 40%, #6b2d6b 100%);
+        --accent:      #f9a8d4;
+        --accent2:     #e879f9;
+        --title-color: #fdf4ff;
+        --subtitle-color: #f9a8d4;
+        --tile-bg:     linear-gradient(135deg, #f472b6, #a855f7);
+        --tile-color:  #fff;
+        --win-title:   #f9a8d4;
+        --coin-color:  #e879f9;
+        --score-color: #fde68a;
+        --filled-bg:   rgba(233,121,249,0.25);
+        --filled-border: #e879f9;
+        --toast-bg:    rgba(45,27,78,0.97);
+        --card-bg:     rgba(249,168,212,0.08);
+      }
+
       body {
         font-family: "Heebo", Arial, sans-serif;
-        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+        background: var(--bg);
         min-height: 100vh;
         display: flex;
         align-items: center;
         justify-content: center;
         overflow-x: hidden;
         overflow-y: auto;
+        transition: background 0.6s ease;
       }
 
       .screen {
@@ -42,14 +103,14 @@
       .game-title {
         font-size: 3.5rem;
         font-weight: 900;
-        color: #fff;
+        color: var(--title-color, #fff);
         text-shadow: 0 0 40px rgba(255,255,255,0.4);
         margin-bottom: 0.4rem;
         text-align: center;
       }
       .game-subtitle {
         font-size: 1.2rem;
-        color: #a0c4ff;
+        color: var(--subtitle-color, #a0c4ff);
         margin-bottom: 2rem;
         text-align: center;
       }
@@ -57,7 +118,7 @@
       /* Name entry */
       .name-section { width: 100%; max-width: 340px; margin-bottom: 2rem; }
       .name-label {
-        display: block; color: #a0c4ff; font-size: 1rem;
+        display: block; color: var(--accent, #a0c4ff); font-size: 1rem;
         font-weight: 700; margin-bottom: 8px; text-align: center;
       }
       .name-input {
@@ -68,7 +129,7 @@
         color: #fff; outline: none; transition: border-color 0.2s, background 0.2s;
       }
       .name-input::placeholder { color: rgba(255,255,255,0.35); font-weight: 400; }
-      .name-input:focus { border-color: #a0c4ff; background: rgba(255,255,255,0.15); }
+      .name-input:focus { border-color: var(--accent, #a0c4ff); background: rgba(255,255,255,0.15); }
       .name-input.error { border-color: #ff6b6b; animation: shake 0.4s ease; }
       .name-error { color: #ff6b6b; font-size: 0.85rem; text-align: center; margin-top: 6px; min-height: 1.2em; }
       .prev-names { display: none; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 10px; }
@@ -76,18 +137,18 @@
       .prev-label { width: 100%; text-align: center; color: rgba(255,255,255,0.45); font-size: 0.78rem; margin-bottom: 2px; }
       .name-chip {
         padding: 6px 16px; border-radius: 18px; border: 2px solid rgba(160,196,255,0.4);
-        background: rgba(160,196,255,0.1); color: #a0c4ff; font-size: 0.9rem;
+        background: rgba(160,196,255,0.1); color: var(--accent, #a0c4ff); font-size: 0.9rem;
         font-family: "Heebo", Arial, sans-serif; font-weight: 700; cursor: pointer;
         transition: background 0.2s, border-color 0.2s;
         display: flex; flex-direction: column; align-items: center; gap: 1px;
       }
-      .name-chip:hover { background: rgba(160,196,255,0.25); border-color: #a0c4ff; }
+      .name-chip:hover { background: rgba(160,196,255,0.25); border-color: var(--accent, #a0c4ff); }
       .name-chip-stats { font-size: 0.7rem; font-weight: 400; opacity: 0.8; }
 
       /* Level cards */
       .level-cards { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
       .level-card {
-        background: rgba(255,255,255,0.08); backdrop-filter: blur(10px);
+        background: var(--card-bg, rgba(255,255,255,0.08)); backdrop-filter: blur(10px);
         border: 2px solid rgba(255,255,255,0.15); border-radius: 24px;
         padding: 28px 22px; cursor: pointer; transition: all 0.3s ease;
         text-align: center; min-width: 160px; color: #fff; user-select: none;
@@ -137,8 +198,8 @@
       .player-name-badge { color: rgba(255,255,255,0.7); font-size: 0.8rem; margin-top: 2px; }
 
       .header-stats { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
-      .score-display { color: #ffd93d; font-size: 1.1rem; font-weight: 700; }
-      .coins-display { color: #a29bfe; font-size: 1rem; font-weight: 700; }
+      .score-display { color: var(--score-color, #ffd93d); font-size: 1.1rem; font-weight: 700; }
+      .coins-display { color: var(--coin-color, #a29bfe); font-size: 1rem; font-weight: 700; }
       .streak-display { color: rgba(255,255,255,0.4); font-size: 0.9rem; font-weight: 700; transition: color 0.3s; }
       .streak-display.streak-active { color: rgba(255,160,80,0.8); }
       .streak-display.streak-hot { color: #ff6b6b; animation: urgentPulse 0.6s ease infinite alternate; }
@@ -171,7 +232,7 @@
         font-weight: 900; color: #fff;
         transition: border-color 0.2s, background 0.2s;
       }
-      .blank-box.filled     { background: rgba(107,203,119,0.25); border-color: #6bcb77; }
+      .blank-box.filled     { background: var(--filled-bg, rgba(107,203,119,0.25)); border-color: var(--filled-border, #6bcb77); }
       .blank-box.hint-filled{ background: rgba(255,217,61,0.25);  border-color: #ffd93d; }
 
       @keyframes popIn {
@@ -228,10 +289,10 @@
         from { transform: translateY(0) scale(1); }
         to   { transform: translateY(-16px) scale(1.05); }
       }
-      .win-title { font-size: 2.4rem; font-weight: 900; color: #ffd93d; margin-bottom: 6px; }
+      .win-title { font-size: 2.4rem; font-weight: 900; color: var(--win-title, #ffd93d); margin-bottom: 6px; }
       .win-word  { font-size: 2rem; color: #fff; font-weight: 700; margin-bottom: 4px; }
       .win-score { font-size: 1.1rem; color: #6bcb77; margin-bottom: 4px; }
-      .win-coins { font-size: 1.1rem; color: #a29bfe; margin-bottom: 20px; }
+      .win-coins { font-size: 1.1rem; color: var(--coin-color, #a29bfe); margin-bottom: 20px; }
       .next-btn {
         background: linear-gradient(135deg, #6bcb77, #4caf50); border: none;
         color: #fff; font-size: 1.2rem; font-weight: 700;
@@ -317,6 +378,7 @@
       }
       .shop-item.owned { border-color: #6bcb77; background: rgba(107,203,119,0.1); }
       .shop-item.locked { opacity: 0.45; }
+      .shop-item.theme-active { border-color: #e879f9; background: rgba(232,121,249,0.12); box-shadow: 0 0 18px rgba(232,121,249,0.25); }
 
       .shop-item-emoji { font-size: 2.6rem; line-height: 1; }
       .shop-item-name  { font-size: 0.95rem; font-weight: 700; color: #fff; }
@@ -365,7 +427,7 @@
       /* Toast notification */
       .toast {
         position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
-        background: rgba(30,30,60,0.95); border: 1px solid rgba(255,255,255,0.15);
+        background: var(--toast-bg, rgba(30,30,60,0.95)); border: 1px solid rgba(255,255,255,0.15);
         color: #fff; padding: 12px 24px; border-radius: 50px;
         font-size: 0.95rem; font-weight: 700; z-index: 1000;
         animation: toastIn 0.3s ease, toastOut 0.4s ease 1.8s forwards;
@@ -613,6 +675,60 @@
         .game-title    { font-size: 1.9rem; }
         .hint-btn      { padding: 9px 12px; font-size: 0.85rem; }
         .game-header   { margin-bottom: 8px; }
+      }
+
+      /* ===== THEME-SPECIFIC OVERRIDES ===== */
+
+      /* Space: starfield shimmer on title */
+      body[data-theme="theme_space"] .game-title {
+        text-shadow: 0 0 60px rgba(126,207,255,0.6), 0 0 20px rgba(189,147,249,0.4);
+      }
+      body[data-theme="theme_space"] .letter-tile {
+        box-shadow: 0 4px 16px rgba(189,147,249,0.5);
+      }
+      body[data-theme="theme_space"] .blank-box {
+        border-color: rgba(126,207,255,0.3);
+      }
+
+      /* Jungle: earthy warm tones */
+      body[data-theme="theme_jungle"] .game-title {
+        text-shadow: 0 0 40px rgba(168,224,99,0.5);
+      }
+      body[data-theme="theme_jungle"] .letter-tile {
+        box-shadow: 0 4px 14px rgba(86,171,47,0.5);
+      }
+      body[data-theme="theme_jungle"] .blank-box {
+        border-color: rgba(168,224,99,0.3);
+      }
+
+      /* Unicorn: pastel rainbow everywhere */
+      @keyframes unicornShimmer {
+        0%   { background-position: 0% 50%; }
+        50%  { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+      }
+      body[data-theme="theme_unicorn"] .game-title {
+        background: linear-gradient(90deg, #f9a8d4, #e879f9, #a855f7, #f9a8d4);
+        background-size: 300% auto;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        animation: unicornShimmer 3s ease infinite;
+      }
+      body[data-theme="theme_unicorn"] .letter-tile {
+        background: linear-gradient(135deg, #f472b6, #a855f7) !important;
+        box-shadow: 0 4px 16px rgba(232,121,249,0.55);
+      }
+      body[data-theme="theme_unicorn"] .blank-box {
+        border-color: rgba(232,121,249,0.35);
+      }
+      body[data-theme="theme_unicorn"] .next-btn {
+        background: linear-gradient(135deg, #f472b6, #a855f7);
+        box-shadow: 0 8px 24px rgba(168,85,247,0.45);
+      }
+      body[data-theme="theme_unicorn"] .level-badge {
+        background: rgba(232,121,249,0.15);
+        color: #f9a8d4;
       }
     </style>
   </head>
@@ -945,7 +1061,7 @@
       {
         id: "theme_space",
         emoji: "🚀", name: "ערכת חלל", category: "cosmetics",
-        cost: 150, desc: "עיצוב חלל כהה",
+        cost: 150, desc: "עיצוב חלל כהה עם כוכבים",
         type: "theme",
       },
       {
@@ -954,11 +1070,16 @@
         cost: 150, desc: "עיצוב ג׳ונגל ירוק",
         type: "theme",
       },
+      {
+        id: "theme_unicorn",
+        emoji: "🦄", name: "ערכת חד-קרן", category: "cosmetics",
+        cost: 200, desc: "עיצוב קשת ורוד-סגול נוצץ",
+        type: "theme",
+      },
 
       // ── Coming soon ──
       {id:"coming_1", emoji:"🎭", name:"???", category:"coming", cost:999, desc:"בקרוב...", type:"tbd"},
-      {id:"coming_2", emoji:"🦄", name:"???", category:"coming", cost:999, desc:"בקרוב...", type:"tbd"},
-      {id:"coming_3", emoji:"🌈", name:"???", category:"coming", cost:999, desc:"בקרוב...", type:"tbd"},
+      {id:"coming_2", emoji:"🌈", name:"???", category:"coming", cost:999, desc:"בקרוב...", type:"tbd"},
     ];
 
     /* ══════════════════════════════════════════════════
@@ -1038,6 +1159,34 @@
       all[name][itemId]--;
       localStorage.setItem(KEY_INVENTORY, JSON.stringify(all));
       return true;
+    }
+
+    /* ══════════════════════════════════════════════════
+       THEMES
+    ══════════════════════════════════════════════════ */
+    const KEY_THEME = "aot_baot_theme"; // { playerName: themeId }
+    const THEME_IDS = ["theme_space", "theme_jungle", "theme_unicorn"];
+
+    function getAllThemes() {
+      try { return JSON.parse(localStorage.getItem(KEY_THEME)) || {}; } catch { return {}; }
+    }
+    function getActiveTheme(name) { return getAllThemes()[name] || null; }
+    function setActiveTheme(name, themeId) {
+      const all = getAllThemes();
+      all[name] = themeId;
+      localStorage.setItem(KEY_THEME, JSON.stringify(all));
+    }
+
+    function applyTheme(themeId) {
+      if (themeId && THEME_IDS.includes(themeId)) {
+        document.body.setAttribute("data-theme", themeId);
+      } else {
+        document.body.removeAttribute("data-theme");
+      }
+    }
+
+    function loadTheme(name) {
+      applyTheme(name ? getActiveTheme(name) : null);
     }
 
     /* ══════════════════════════════════════════════════
@@ -1503,16 +1652,25 @@
       grid.innerHTML = "";
 
       items.forEach(item => {
-        const owned   = hasItem(name, item.id);
-        const locked  = item.category === "coming";
-        const canAfford = getCoins(name) >= item.cost;
+        const owned         = hasItem(name, item.id);
+        const locked        = item.category === "coming";
+        const canAfford     = getCoins(name) >= item.cost;
+        const isActiveTheme = item.type === "theme" && getActiveTheme(name) === item.id;
 
         const card = document.createElement("div");
-        card.className = "shop-item" + (owned ? " owned" : "") + (locked ? " locked" : "");
+        card.className = "shop-item" + (owned ? " owned" : "") + (locked ? " locked" : "") + (isActiveTheme ? " theme-active" : "");
 
         let actionHtml = "";
         if (locked) {
           actionHtml = `<span class="coming-soon-badge">🔒 בקרוב</span>`;
+        } else if (owned && item.type === "theme") {
+          if (isActiveTheme) {
+            actionHtml = `<span class="owned-badge">✨ פעיל</span>`;
+          } else {
+            actionHtml = `
+              <span class="owned-badge">✅ נרכש</span>
+              <button class="buy-btn" onclick="activateTheme('${item.id}')">הפעל</button>`;
+          }
         } else if (owned && !item.consumable) {
           actionHtml = `<span class="owned-badge">✅ נרכש</span>`;
         } else {
@@ -1550,12 +1708,28 @@
         showToast(`✅ ${item.name} נוסף לתיק!`);
       } else {
         addPurchase(name, item.id);
-        showToast(`✅ ${item.name} נרכש!`);
+        if (item.type === "theme") {
+          setActiveTheme(name, item.id);
+          applyTheme(item.id);
+          showToast(`🎨 ${item.name} פעיל עכשיו!`);
+        } else {
+          showToast(`✅ ${item.name} נרכש!`);
+        }
       }
 
       document.getElementById("shop-balance").textContent = `🪙 ${getCoins(name)}`;
       renderShopGrid(item.category);
       renderInventoryGrid();
+    }
+
+    function activateTheme(themeId) {
+      const name = state.playerName;
+      if (!name) return;
+      setActiveTheme(name, themeId);
+      applyTheme(themeId);
+      const item = SHOP_ITEMS.find(it => it.id === themeId);
+      showToast(`🎨 ${item ? item.name : themeId} פעיל עכשיו!`);
+      renderShopGrid("cosmetics");
     }
 
     /* ══════════════════════════════════════════════════
@@ -1641,6 +1815,7 @@
       state.playerName = name; // keep state in sync so shop/inventory read the right player
       coinsEl.textContent = `🪙 ${getCoins(name)}`;
       bar.classList.add("visible");
+      loadTheme(name);
     }
 
     /* Render the in-game usable items toolbar */
