@@ -528,6 +528,7 @@
         touch-action: manipulation; display: flex; align-items: center; gap: 6px;
       }
       .game-item-btn:hover { background: rgba(162,155,254,0.28); border-color: #a29bfe; }
+      .game-item-btn.item-active { background: rgba(253,203,110,0.15); border-color: rgba(253,203,110,0.5); color: #fdcb6e; opacity: 0.75; cursor: default; }
       .game-item-badge {
         background: rgba(162,155,254,0.3); border-radius: 10px;
         padding: 1px 7px; font-size: 0.75rem; font-weight: 900;
@@ -953,12 +954,6 @@
         cost: 150, desc: "עיצוב ג׳ונגל ירוק",
         type: "theme",
       },
-      {
-        id: "avatar_star",
-        emoji: "⭐", name: "אווטאר כוכב", category: "cosmetics",
-        cost: 80, desc: "אווטאר כוכבי מיוחד",
-        type: "avatar",
-      },
 
       // ── Coming soon ──
       {id:"coming_1", emoji:"🎭", name:"???", category:"coming", cost:999, desc:"בקרוב...", type:"tbd"},
@@ -1067,6 +1062,7 @@
       streak: 0,           // consecutive correct answers (resets on wrong)
       questionType: "spell", // "spell" | "choice"
       lives: 3,            // hearts remaining; 0 triggers game over
+      _doubleCoins: false, // true while double-coins powerup is active this round
     };
 
     /* ══════════════════════════════════════════════════
@@ -1185,6 +1181,7 @@
       state.isBonus        = false;
       state.streak         = 0;
       state.lives          = 3;
+      state._doubleCoins   = false;
       state.questionType   = "spell";
       clearBonusTimer();
       document.getElementById("screen-game").classList.remove("choice-mode");
@@ -1333,7 +1330,8 @@
 
     /* Shared win logic — used by both spell mode and choice mode */
     function handleCorrectAnswer() {
-      const reward = state.isBonus ? 20 : 10;
+      const base   = state.isBonus ? 20 : 10;
+      const reward = state._doubleCoins ? base * 2 : base;
       state.score += reward;
       addCoins(state.playerName, reward);
       saveScore(state.playerName, state.score, state.level);
@@ -1357,8 +1355,11 @@
         document.getElementById("win-score-text").textContent = state.score;
         document.getElementById("win-coins-text").textContent = getCoins(state.playerName);
         const bonusTag = document.getElementById("win-bonus-tag");
-        if (state.isBonus) {
-          bonusTag.textContent = "⚡ בונוס! קיבלת פי 2 — 🪙 20";
+        if (state.isBonus || state._doubleCoins) {
+          const parts = [];
+          if (state.isBonus)     parts.push("⚡ בונוס");
+          if (state._doubleCoins) parts.push("💰 מטבעות כפולים");
+          bonusTag.textContent = parts.join(" · ") + ` — 🪙 ${reward}`;
           bonusTag.style.display = "block";
         } else {
           bonusTag.style.display = "none";
@@ -1657,9 +1658,13 @@
       row.classList.add("has-items");
       available.forEach(item => {
         const count = getItemCount(name, item.id);
+        const isActive = item.id === "double_coins" && state._doubleCoins;
         const btn = document.createElement("button");
-        btn.className = "game-item-btn";
-        btn.innerHTML = `${item.emoji} ${item.name} <span class="game-item-badge">×${count}</span>`;
+        btn.className = "game-item-btn" + (isActive ? " item-active" : "");
+        btn.disabled = isActive;
+        btn.innerHTML = isActive
+          ? `${item.emoji} ${item.name} <span class="game-item-badge">פעיל ✓</span>`
+          : `${item.emoji} ${item.name} <span class="game-item-badge">×${count}</span>`;
         btn.addEventListener("click", () => useItemInGame(item.id));
         row.appendChild(btn);
       });
@@ -1668,6 +1673,11 @@
     /* Apply a consumable item from inventory during an active game */
     function useItemInGame(itemId) {
       const name = state.playerName;
+      // Prevent activating double_coins twice in the same round
+      if (itemId === "double_coins" && state._doubleCoins) {
+        showToast("💰 מטבעות כפולים כבר פעיל!");
+        return;
+      }
       if (!useFromInventory(name, itemId)) return;
 
       switch (itemId) {
@@ -1692,6 +1702,11 @@
           state.hints = 3;
           loadWord();
           return; // loadWord() already calls renderGameItemsRow
+
+        case "double_coins":
+          state._doubleCoins = true;
+          showToast("💰 מטבעות כפולים פעיל עד סוף הסיבוב!");
+          break;
       }
 
       renderGameItemsRow();
