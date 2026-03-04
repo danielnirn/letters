@@ -142,6 +142,8 @@
       .streak-display { color: rgba(255,255,255,0.4); font-size: 0.9rem; font-weight: 700; transition: color 0.3s; }
       .streak-display.streak-active { color: rgba(255,160,80,0.8); }
       .streak-display.streak-hot { color: #ff6b6b; animation: urgentPulse 0.6s ease infinite alternate; }
+      .lives-display { font-size: 1rem; letter-spacing: 1px; }
+      .lives-display.danger { animation: urgentPulse 0.5s ease infinite alternate; }
 
       .emoji-display {
         font-size: 110px; margin: 10px 0;
@@ -435,6 +437,36 @@
       #screen-game.bonus-mode .blank-box        { border-color: rgba(249,202,36,0.35); }
       #screen-game.bonus-mode .blank-box.filled { background: rgba(249,202,36,0.2); border-color: #f9ca24; }
 
+      /* ===== GAME OVER SCREEN ===== */
+      #screen-gameover { justify-content: flex-start; padding-top: 30px; padding-bottom: 40px; overflow-y: auto; }
+      .gameover-top { text-align: center; margin-bottom: 20px; }
+      .gameover-emoji { font-size: 80px; margin-bottom: 8px; display: block; animation: shake 0.6s ease; }
+      .gameover-title { font-size: 2.4rem; font-weight: 900; color: #ff6b6b; margin-bottom: 6px; }
+      .gameover-word  { font-size: 1rem; color: rgba(255,255,255,0.55); margin-bottom: 4px; }
+      .gameover-word span { color: #fff; font-weight: 900; font-size: 1.2rem; }
+      .gameover-stats {
+        display: flex; gap: 20px; justify-content: center;
+        font-size: 1rem; color: #ffd93d; font-weight: 700; margin-top: 10px;
+      }
+      .gameover-buy-section {
+        background: rgba(162,155,254,0.08); border: 2px solid rgba(162,155,254,0.25);
+        border-radius: 20px; padding: 20px 24px; text-align: center;
+        width: 100%; max-width: 380px; margin-bottom: 20px;
+      }
+      .gameover-buy-title { font-size: 1.2rem; font-weight: 900; color: #fff; margin-bottom: 4px; }
+      .gameover-buy-sub   { font-size: 0.82rem; color: rgba(255,255,255,0.45); margin-bottom: 10px; }
+      .gameover-buy-balance { font-size: 0.9rem; color: #a29bfe; font-weight: 700; margin-bottom: 12px; }
+      .buy-life-btn {
+        background: linear-gradient(135deg, #a29bfe, #6c5ce7); border: none;
+        color: #fff; font-size: 1rem; font-weight: 700;
+        font-family: "Heebo", Arial, sans-serif; padding: 13px 30px;
+        border-radius: 50px; cursor: pointer; transition: all 0.2s;
+        box-shadow: 0 6px 18px rgba(108,92,231,0.4);
+      }
+      .buy-life-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(108,92,231,0.5); }
+      .buy-life-btn:disabled { opacity: 0.3; cursor: not-allowed; transform: none; }
+      .gameover-home-btn { margin-bottom: 20px; }
+
       /* ===== INVENTORY (shop screen) ===== */
       .inv-grid { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 540px; }
       .inv-item {
@@ -659,6 +691,7 @@
           <div class="score-display">⭐ <span id="score-text">0</span></div>
           <div class="coins-display">🪙 <span id="coins-text">0</span></div>
           <div class="streak-display" id="streak-display">🔥 0/3</div>
+          <div class="lives-display" id="lives-display">❤️❤️❤️</div>
         </div>
       </div>
 
@@ -708,6 +741,33 @@
       <div class="leaderboard">
         <div class="leaderboard-title">🏆 טבלת השיאים</div>
         <div id="leaderboard-body"></div>
+      </div>
+    </div>
+
+    <!-- ===== GAME OVER SCREEN ===== -->
+    <div id="screen-gameover" class="screen">
+      <div class="gameover-top">
+        <span class="gameover-emoji">💔</span>
+        <div class="gameover-title">נגמרו החיים!</div>
+        <div class="gameover-word">המילה הייתה: <span id="gameover-word-text"></span></div>
+        <div class="gameover-stats">
+          <span>⭐ <span id="gameover-score">0</span></span>
+          <span>📝 <span id="gameover-words">0</span> מילים</span>
+        </div>
+      </div>
+
+      <div class="gameover-buy-section">
+        <div class="gameover-buy-title">רוצה להמשיך?</div>
+        <div class="gameover-buy-sub">קנה חיים וחזור לאותה המילה</div>
+        <div class="gameover-buy-balance">יתרה: <span id="gameover-balance">0</span> 🪙</div>
+        <button class="buy-life-btn" id="buy-life-btn" onclick="buyExtraLife()">❤️ קנה חיים — 🪙 15</button>
+      </div>
+
+      <button class="ghost-btn gameover-home-btn" onclick="goHome()">← חזרה לבית</button>
+
+      <div class="leaderboard">
+        <div class="leaderboard-title">🏆 טבלת השיאים</div>
+        <div id="gameover-leaderboard-body"></div>
       </div>
     </div>
 
@@ -865,6 +925,8 @@
     /* ══════════════════════════════════════════════════
        LOCALSTORAGE — keys
     ══════════════════════════════════════════════════ */
+    const LIFE_COST = 15;  // coins to buy 1 extra life at game over
+
     const KEY_SCORES    = "aot_baot_scores";
     const KEY_COINS     = "aot_baot_coins";       // { playerName: balance }
     const KEY_PURCHASES = "aot_baot_purchases";   // { playerName: [itemId, ...] }
@@ -960,6 +1022,7 @@
       bonusTimeLeft: 20,   // seconds remaining in bonus
       streak: 0,           // consecutive correct answers (resets on wrong)
       questionType: "spell", // "spell" | "choice"
+      lives: 3,            // hearts remaining; 0 triggers game over
     };
 
     /* ══════════════════════════════════════════════════
@@ -1076,6 +1139,7 @@
       state.wordsCompleted = 0;
       state.isBonus        = false;
       state.streak         = 0;
+      state.lives          = 3;
       state.questionType   = "spell";
       clearBonusTimer();
       document.getElementById("screen-game").classList.remove("choice-mode");
@@ -1101,6 +1165,7 @@
       document.getElementById("hints-left").textContent    = state.hints;
       document.getElementById("hint-btn").disabled         = (state.hints <= 0);
       updateStreakUI();
+      updateLivesUI();
       document.getElementById("progress-text").textContent =
         `מילה ${state.wordIndex + 1} מתוך ${state.wordList.length}`;
 
@@ -1271,23 +1336,29 @@
       } else {
         state.streak = 0;
         updateStreakUI();
+        state.lives--;
+        updateLivesUI();
         document.querySelectorAll(".blank-box").forEach(b => {
           b.classList.remove("pop");
           b.classList.add("err");
           b.addEventListener("animationend", () => b.classList.remove("err"), { once: true });
         });
-        setTimeout(() => {
-          state.placed = [];
-          state.tileEls.forEach(t => { if (!t.dataset.hint) t.disabled = false; });
-          for (let i = 0; i < state.letters.length; i++) {
-            const box = document.getElementById("blank-" + i);
-            if (!box.classList.contains("hint-filled")) {
-              box.textContent = ""; box.classList.remove("filled");
-            } else {
-              state.placed.push(state.letters[i]);
+        if (state.lives <= 0) {
+          setTimeout(() => triggerGameOver(), 800);
+        } else {
+          setTimeout(() => {
+            state.placed = [];
+            state.tileEls.forEach(t => { if (!t.dataset.hint) t.disabled = false; });
+            for (let i = 0; i < state.letters.length; i++) {
+              const box = document.getElementById("blank-" + i);
+              if (!box.classList.contains("hint-filled")) {
+                box.textContent = ""; box.classList.remove("filled");
+              } else {
+                state.placed.push(state.letters[i]);
+              }
             }
-          }
-        }, 650);
+          }, 650);
+        }
       }
     }
 
@@ -1316,9 +1387,14 @@
       } else {
         state.streak = 0;
         updateStreakUI();
+        state.lives--;
+        updateLivesUI();
         btn.classList.add("wrong");
         btn.disabled = true;
         btn.addEventListener("animationend", () => btn.classList.remove("wrong"), { once: true });
+        if (state.lives <= 0) {
+          setTimeout(() => triggerGameOver(), 700);
+        }
       }
     }
 
@@ -1434,6 +1510,34 @@
       document.getElementById("shop-balance").textContent = `🪙 ${getCoins(name)}`;
       renderShopGrid(item.category);
       renderInventoryGrid();
+    }
+
+    /* ══════════════════════════════════════════════════
+       GAME OVER
+    ══════════════════════════════════════════════════ */
+    function triggerGameOver() {
+      clearBonusTimer();
+      const balance = getCoins(state.playerName);
+      document.getElementById("gameover-word-text").textContent = state.currentWord;
+      document.getElementById("gameover-score").textContent     = state.score;
+      document.getElementById("gameover-words").textContent     = state.wordsCompleted;
+      document.getElementById("gameover-balance").textContent   = balance;
+      document.getElementById("buy-life-btn").disabled          = (balance < LIFE_COST);
+      renderLeaderboardInto("gameover-leaderboard-body");
+      showScreen("screen-gameover");
+    }
+
+    function buyExtraLife() {
+      if (!spendCoins(state.playerName, LIFE_COST)) {
+        showToast(`❌ אין מספיק מטבעות (דרוש: 🪙 ${LIFE_COST})`);
+        return;
+      }
+      state.lives = 1;
+      updateLivesUI();
+      document.getElementById("gameover-balance").textContent = getCoins(state.playerName);
+      document.getElementById("buy-life-btn").disabled = true;
+      showScreen("screen-game");
+      loadWord(); // reload the same word (wordIndex unchanged)
     }
 
     /* ══════════════════════════════════════════════════
@@ -1584,6 +1688,15 @@
       el.textContent = `🔥 ${s}/3`;
       el.classList.toggle("streak-hot", s >= 2);
       el.classList.toggle("streak-active", s >= 1);
+    }
+
+    function updateLivesUI() {
+      const el = document.getElementById("lives-display");
+      if (!el) return;
+      const hearts = [];
+      for (let i = 0; i < 3; i++) hearts.push(i < state.lives ? "❤️" : "🖤");
+      el.textContent = hearts.join("");
+      el.classList.toggle("danger", state.lives === 1);
     }
 
     function updateTimerUI(seconds) {
