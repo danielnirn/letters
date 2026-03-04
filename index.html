@@ -407,6 +407,15 @@
         color: rgba(255,255,255,0.35); font-size: 0.8rem; margin-top: 2px;
       }
 
+      .reset-theme-btn {
+        width: 100%; max-width: 540px; margin-top: 10px;
+        background: rgba(255,255,255,0.06); border: 2px solid rgba(255,255,255,0.15);
+        color: rgba(255,255,255,0.5); font-size: 0.85rem; font-weight: 700;
+        font-family: "Heebo", Arial, sans-serif; padding: 10px 20px;
+        border-radius: 50px; cursor: pointer; transition: all 0.2s;
+      }
+      .reset-theme-btn:hover { background: rgba(255,107,107,0.1); border-color: rgba(255,107,107,0.4); color: #ff6b6b; }
+
       .shop-notice {
         width: 100%; max-width: 540px; margin-top: 24px;
         background: rgba(162,155,254,0.08); border: 1px solid rgba(162,155,254,0.2);
@@ -810,6 +819,7 @@
 
       <div class="shop-section-title" id="shop-section-cosmetics">🎨 עיצובים</div>
       <div class="shop-grid" id="shop-grid-cosmetics"></div>
+      <button class="reset-theme-btn" id="reset-theme-btn" style="display:none" onclick="resetTheme()">↩️ חזור לעיצוב ברירת מחדל</button>
 
       <div class="shop-section-title" id="shop-section-coming">🔒 בקרוב</div>
       <div class="shop-grid" id="shop-grid-coming"></div>
@@ -1061,19 +1071,19 @@
       {
         id: "theme_space",
         emoji: "🚀", name: "ערכת חלל", category: "cosmetics",
-        cost: 150, desc: "עיצוב חלל כהה עם כוכבים",
+        cost: 350, desc: "עיצוב חלל כהה עם כוכבים",
         type: "theme",
       },
       {
         id: "theme_jungle",
         emoji: "🌴", name: "ערכת ג׳ונגל", category: "cosmetics",
-        cost: 150, desc: "עיצוב ג׳ונגל ירוק",
+        cost: 350, desc: "עיצוב ג׳ונגל ירוק",
         type: "theme",
       },
       {
         id: "theme_unicorn",
         emoji: "🦄", name: "ערכת חד-קרן", category: "cosmetics",
-        cost: 200, desc: "עיצוב קשת ורוד-סגול נוצץ",
+        cost: 350, desc: "עיצוב קשת ורוד-סגול נוצץ",
         type: "theme",
       },
 
@@ -1689,6 +1699,12 @@
           ${actionHtml}`;
         grid.appendChild(card);
       });
+
+      // Show "restore default" button only in cosmetics when a theme is active
+      if (category === "cosmetics") {
+        const resetBtn = document.getElementById("reset-theme-btn");
+        if (resetBtn) resetBtn.style.display = getActiveTheme(name) ? "block" : "none";
+      }
     }
 
     function buyItem(itemId) {
@@ -1729,6 +1745,15 @@
       applyTheme(themeId);
       const item = SHOP_ITEMS.find(it => it.id === themeId);
       showToast(`🎨 ${item ? item.name : themeId} פעיל עכשיו!`);
+      renderShopGrid("cosmetics");
+    }
+
+    function resetTheme() {
+      const name = state.playerName;
+      if (!name) return;
+      setActiveTheme(name, null);
+      applyTheme(null);
+      showToast("↩️ חזרת לעיצוב ברירת המחדל");
       renderShopGrid("cosmetics");
     }
 
