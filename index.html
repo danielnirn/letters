@@ -1637,6 +1637,7 @@
       const coinsEl = document.getElementById("start-coins");
       if (!bar || !coinsEl) return;
       if (!name) { bar.classList.remove("visible"); return; }
+      state.playerName = name; // keep state in sync so shop/inventory read the right player
       coinsEl.textContent = `🪙 ${getCoins(name)}`;
       bar.classList.add("visible");
     }
