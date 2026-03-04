@@ -437,6 +437,32 @@
       #screen-game.bonus-mode .blank-box        { border-color: rgba(249,202,36,0.35); }
       #screen-game.bonus-mode .blank-box.filled { background: rgba(249,202,36,0.2); border-color: #f9ca24; }
 
+      /* ===== PLAYER INFO BAR (start screen) ===== */
+      .player-info-bar {
+        display: none; align-items: center; justify-content: center;
+        gap: 12px; margin-top: 12px; flex-wrap: wrap;
+      }
+      .player-info-bar.visible { display: flex; }
+      .start-coins {
+        background: rgba(162,155,254,0.12); border: 2px solid rgba(162,155,254,0.3);
+        border-radius: 50px; padding: 7px 18px;
+        color: #a29bfe; font-size: 1rem; font-weight: 900;
+      }
+      .inv-open-btn {
+        background: rgba(255,255,255,0.08); border: 2px solid rgba(255,255,255,0.2);
+        color: rgba(255,255,255,0.8); font-size: 0.95rem; font-weight: 700;
+        font-family: "Heebo", Arial, sans-serif; padding: 7px 18px;
+        border-radius: 50px; cursor: pointer; transition: all 0.2s;
+        touch-action: manipulation;
+      }
+      .inv-open-btn:hover { background: rgba(162,155,254,0.15); border-color: #a29bfe; color: #a29bfe; }
+
+      /* ===== INVENTORY SCREEN ===== */
+      #screen-inventory { justify-content: flex-start; padding-top: 36px; padding-bottom: 40px; overflow-y: auto; }
+      .inv-screen-header { text-align: center; margin-bottom: 20px; }
+      .inv-screen-title  { font-size: 2rem; font-weight: 900; color: #a29bfe; margin-bottom: 4px; }
+      .inv-screen-coins  { color: rgba(255,255,255,0.55); font-size: 1rem; }
+
       /* ===== GAME OVER SCREEN ===== */
       #screen-gameover { justify-content: flex-start; padding-top: 30px; padding-bottom: 40px; overflow-y: auto; }
       .gameover-top { text-align: center; margin-bottom: 20px; }
@@ -604,11 +630,17 @@
         <input
           id="player-name" class="name-input" type="text"
           placeholder="כתוב את שמך כאן..." maxlength="20" autocomplete="off"
+          oninput="updatePlayerInfoBar(this.value.trim())"
           onkeydown="if(event.key==='Enter') validateName()"
         />
         <div class="name-error" id="name-error"></div>
         <div class="prev-names" id="prev-names">
           <div class="prev-label">או בחר שחקן קיים:</div>
+        </div>
+        <!-- Shown once a player name is entered/selected -->
+        <div class="player-info-bar" id="player-info-bar">
+          <span class="start-coins" id="start-coins">🪙 0</span>
+          <button class="inv-open-btn" onclick="showPlayerInventory()">🎒 ציוד שלי</button>
         </div>
       </div>
 
@@ -741,6 +773,18 @@
       <div class="leaderboard">
         <div class="leaderboard-title">🏆 טבלת השיאים</div>
         <div id="leaderboard-body"></div>
+      </div>
+    </div>
+
+    <!-- ===== INVENTORY SCREEN ===== -->
+    <div id="screen-inventory" class="screen">
+      <div class="inv-screen-header">
+        <div class="inv-screen-title" id="inv-screen-title">🎒 הציוד שלי</div>
+        <div class="inv-screen-coins" id="inv-screen-coins">🪙 0 מטבעות</div>
+      </div>
+      <div class="inv-grid" id="inv-screen-grid"></div>
+      <div class="lb-back-row" style="margin-top: 24px;">
+        <button class="back-btn" onclick="goHome()">← חזרה</button>
       </div>
     </div>
 
@@ -1082,6 +1126,7 @@
         btn.addEventListener("click", () => {
           document.getElementById("player-name").value = name;
           document.getElementById("name-error").textContent = "";
+          updatePlayerInfoBar(name);
         });
         container.appendChild(btn);
       });
@@ -1544,10 +1589,9 @@
        INVENTORY UI + ITEM USE
     ══════════════════════════════════════════════════ */
 
-    /* Render the "🎒 הציוד שלי" section inside the shop screen */
-    function renderInventoryGrid() {
-      const name = state.playerName;
-      const grid = document.getElementById("inv-grid");
+    /* Shared: render a player's consumable inventory into any container */
+    function renderInventoryInto(containerId, name) {
+      const grid = document.getElementById(containerId);
       if (!grid) return;
       grid.innerHTML = "";
       const consumables = SHOP_ITEMS.filter(it => it.consumable);
@@ -1570,6 +1614,31 @@
       if (!hasAny) {
         grid.innerHTML = '<div class="no-inventory">אין פריטים בתיק עדיין 🎒<br>קנה פריטים מהחנות!</div>';
       }
+    }
+
+    /* Render the "🎒 הציוד שלי" section inside the shop screen */
+    function renderInventoryGrid() {
+      renderInventoryInto("inv-grid", state.playerName);
+    }
+
+    /* Show the standalone inventory screen for the given player */
+    function showPlayerInventory() {
+      const name = document.getElementById("player-name").value.trim() || state.playerName;
+      if (!name) return;
+      document.getElementById("inv-screen-title").textContent = `🎒 הציוד של ${name}`;
+      document.getElementById("inv-screen-coins").textContent = `🪙 ${getCoins(name)} מטבעות`;
+      renderInventoryInto("inv-screen-grid", name);
+      showScreen("screen-inventory");
+    }
+
+    /* Update the coin balance bar on the start screen */
+    function updatePlayerInfoBar(name) {
+      const bar = document.getElementById("player-info-bar");
+      const coinsEl = document.getElementById("start-coins");
+      if (!bar || !coinsEl) return;
+      if (!name) { bar.classList.remove("visible"); return; }
+      coinsEl.textContent = `🪙 ${getCoins(name)}`;
+      bar.classList.add("visible");
     }
 
     /* Render the in-game usable items toolbar */
@@ -1649,6 +1718,7 @@
       document.getElementById("player-name").value      = state.playerName;
       document.getElementById("name-error").textContent = "";
       renderNameChips();
+      updatePlayerInfoBar(state.playerName);
       showScreen("screen-start");
     }
 
