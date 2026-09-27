@@ -11,7 +11,7 @@ import { GhostButton, LeaderboardTable } from "../src/components/LeaderboardTabl
 import { PrimaryButton } from "../src/components/PrimaryButton";
 import { useToast } from "../src/components/Toast";
 import { useProgress } from "../src/context/ProgressContext";
-import { CONFIG, type Category, type Difficulty } from "../src/game/config";
+import { CONFIG, parseCategory, type Category, type Difficulty } from "../src/game/config";
 import {
   afterTimeout,
   answerChoice,
@@ -40,8 +40,7 @@ const LEVEL_LABEL: Record<Difficulty, string> = {
 
 export default function GameScreen() {
   const { level, category } = useLocalSearchParams<{ level: Difficulty; category: Category }>();
-  const cat: Category =
-    category === "math" || category === "english" ? category : "language";
+  const cat = parseCategory(category);
   const router = useRouter();
   const progress = useProgress();
   const addCoinsRef = useRef(progress.addCoins);
@@ -132,14 +131,12 @@ export default function GameScreen() {
     return (
       <Screen>
         {node}
-        <Text style={styles.bigEmoji}>{state.category === "math" ? "🔢" : state.currentEmoji}</Text>
+        <Text style={styles.bigEmoji}>{winEmoji(state)}</Text>
         <Text style={[styles.winTitle, { color: c.score }]}>{he.wellDone}</Text>
         <Text
-          style={[styles.winWord, state.category === "english" && styles.ltr]}
+          style={[styles.winWord, usesLtr(state) && styles.ltr]}
         >
-          {state.category === "math"
-            ? `${state.currentEmoji} = ${state.currentWord}`
-            : state.currentWord}
+          {answerLine(state)}
         </Text>
         {state.currentHint ? <Text style={styles.hintHe}>{state.currentHint}</Text> : null}
         <Text style={styles.meta}>
@@ -152,7 +149,7 @@ export default function GameScreen() {
           <Text style={styles.streak}>{he.streakTag(CONFIG.streakEvery, state.lastStreakBonus)}</Text>
         ) : null}
         <PrimaryButton
-          label={state.category === "math" ? he.nextQuestion : he.nextWord}
+          label={isQuiz(state.category) ? he.nextQuestion : he.nextWord}
           onPress={() => setState((s) => nextWord(s))}
         />
         <Text style={styles.lbTitle}>{he.leaderboard}</Text>
@@ -174,8 +171,7 @@ export default function GameScreen() {
         <Text style={styles.bigEmoji}>💔</Text>
         <Text style={styles.winTitle}>{he.gameOverTitle}</Text>
         <Text style={styles.meta}>
-          {(state.category === "math" ? he.theAnswerWas : he.theWordWas)}:{" "}
-          {state.category === "math" ? `${state.currentEmoji} = ${state.currentWord}` : state.currentWord}
+          {(isQuiz(state.category) ? he.theAnswerWas : he.theWordWas)}: {answerLine(state)}
         </Text>
         <Text style={styles.meta}>
           ⭐ {state.score}   📝 {state.wordsCompleted}
@@ -209,12 +205,7 @@ export default function GameScreen() {
         <GhostButton label={he.back} onPress={() => router.replace("/")} />
         <View style={{ alignItems: "center", flex: 1 }}>
           <Text style={[styles.badge, { color: c.accent }]}>
-            {state.category === "math"
-              ? he.categoryMath
-              : state.category === "english"
-                ? he.categoryEnglish
-                : he.categoryLanguage}{" "}
-            · {LEVEL_LABEL[state.level]}
+            {categoryTitle(state.category)} · {LEVEL_LABEL[state.level]}
           </Text>
           <Text style={styles.progress}>
             {he.questionProgress(state.wordIndex + 1, state.wordList.length)}
@@ -244,26 +235,26 @@ export default function GameScreen() {
         </View>
       ) : null}
 
-      <Text style={state.category === "math" ? styles.mathPrompt : styles.emoji}>
+      <Text
+        style={
+          state.category === "math" || state.category === "logic"
+            ? styles.mathPrompt
+            : styles.emoji
+        }
+      >
         {state.currentEmoji}
       </Text>
       {state.currentHint ? <Text style={styles.hintHe}>{state.currentHint}</Text> : null}
 
       {state.questionType === "choice" ? (
         <View style={{ width: "100%", alignItems: "center" }}>
-          <Text style={styles.prompt}>
-            {state.category === "math"
-              ? he.howMuch
-              : state.category === "english"
-                ? he.spellEnglish
-                : he.whatIsThis}
-          </Text>
+          <Text style={styles.prompt}>{choicePrompt(state.category)}</Text>
           {state.choiceWords.map((w, i) => (
             <Pressable key={`${w}-${i}`} onPress={() => setState((s) => answerChoice(s, w))} style={styles.choice}>
               <Text
                 style={[
                   styles.choiceText,
-                  state.category === "english" && styles.ltr,
+                  usesLtr(state) && styles.ltr,
                 ]}
               >
                 {w}
@@ -276,7 +267,7 @@ export default function GameScreen() {
           <View
             style={[
               styles.blanks,
-              state.category === "english" && styles.ltrRow,
+              usesLtr(state) && styles.ltrRow,
               state.shaking && styles.shake,
             ]}
           >
@@ -293,7 +284,7 @@ export default function GameScreen() {
                   <Text
                     style={[
                       styles.blankLetter,
-                      state.category === "english" && styles.ltr,
+                      usesLtr(state) && styles.ltr,
                     ]}
                   >
                     {p?.letter ?? ""}
@@ -311,7 +302,7 @@ export default function GameScreen() {
             />
             <PrimaryButton label={he.delete} onPress={() => setState((s) => deleteLast(s))} color="#636e72" />
           </View>
-          <View style={[styles.tiles, state.category === "english" && styles.ltrRow]}>
+          <View style={[styles.tiles, usesLtr(state) && styles.ltrRow]}>
             {state.tiles.map((t) => (
               <Pressable
                 key={t.id}
@@ -326,7 +317,7 @@ export default function GameScreen() {
                 ]}
               >
                 <Text
-                  style={[styles.tileText, state.category === "english" && styles.ltr]}
+                  style={[styles.tileText, usesLtr(state) && styles.ltr]}
                 >
                   {t.letter}
                 </Text>
@@ -360,6 +351,42 @@ export default function GameScreen() {
   );
 }
 
+function categoryTitle(cat: Category) {
+  if (cat === "math") return he.categoryMath;
+  if (cat === "english") return he.categoryEnglish;
+  if (cat === "logic") return he.categoryLogic;
+  if (cat === "science") return he.categoryScience;
+  return he.categoryLanguage;
+}
+
+function choicePrompt(cat: Category) {
+  if (cat === "math") return he.howMuch;
+  if (cat === "english") return he.spellEnglish;
+  if (cat === "logic") return he.logicPrompt;
+  if (cat === "science") return he.sciencePrompt;
+  return he.whatIsThis;
+}
+
+function isQuiz(cat: Category) {
+  return cat === "math" || cat === "logic" || cat === "science";
+}
+
+function usesLtr(state: GameState) {
+  return state.category === "english" || /^\d+$/.test(state.currentWord);
+}
+
+function winEmoji(state: GameState) {
+  if (state.category === "math") return "🔢";
+  if (state.category === "logic") return "🧠";
+  if (state.category === "science") return "🌿";
+  return state.currentEmoji;
+}
+
+function answerLine(state: GameState) {
+  if (state.category === "math") return `${state.currentEmoji} = ${state.currentWord}`;
+  return state.currentWord;
+}
+
 const styles = StyleSheet.create({
   header: { flexDirection: "row", width: "100%", alignItems: "center", marginBottom: 8 },
   badge: { fontFamily: "Heebo_800ExtraBold" },
@@ -383,7 +410,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   mathPrompt: {
-    fontSize: 40,
+    fontSize: 32,
     color: "#fff",
     fontFamily: "Heebo_900Black",
     marginVertical: 16,

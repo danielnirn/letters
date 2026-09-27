@@ -17,6 +17,12 @@ const LEVEL: Record<string, string> = {
   "english:easy": `${he.categoryEnglish} · ${he.easy}`,
   "english:mid": `${he.categoryEnglish} · ${he.mid}`,
   "english:hard": `${he.categoryEnglish} · ${he.hard}`,
+  "logic:easy": `${he.categoryLogic} · ${he.easy}`,
+  "logic:mid": `${he.categoryLogic} · ${he.mid}`,
+  "logic:hard": `${he.categoryLogic} · ${he.hard}`,
+  "science:easy": `${he.categoryScience} · ${he.easy}`,
+  "science:mid": `${he.categoryScience} · ${he.mid}`,
+  "science:hard": `${he.categoryScience} · ${he.hard}`,
 };
 const RANK = ["🥇", "🥈", "🥉"];
 

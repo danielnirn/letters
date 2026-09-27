@@ -1,4 +1,10 @@
-export type Word = { word: string; emoji: string; hint?: string };
+export type Word = {
+  word: string;
+  emoji: string;
+  hint?: string;
+  /** Extra wrong answers for multiple-choice (answer is still `word`). */
+  choices?: string[];
+};
 
 export const WORDS: Record<"easy" | "mid" | "hard", Word[]> = {
   easy: [

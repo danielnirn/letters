@@ -76,6 +76,20 @@ export default function HomeScreen() {
               color="#6bcb77"
               onPress={() => setCategory("english")}
             />
+            <LevelCard
+              emoji="🧠"
+              title={he.categoryLogic}
+              desc={he.categoryLogicDesc}
+              color="#a29bfe"
+              onPress={() => setCategory("logic")}
+            />
+            <LevelCard
+              emoji="🌿"
+              title={he.categoryScience}
+              desc={he.categoryScienceDesc}
+              color="#00cec9"
+              onPress={() => setCategory("science")}
+            />
           </View>
 
           <View style={styles.actions}>
@@ -96,6 +110,7 @@ export default function HomeScreen() {
               title={he.easy}
               desc={levelDesc(category, "easy")}
               color="#6bcb77"
+              stacked
               onPress={() => start("easy")}
             />
             <LevelCard
@@ -103,6 +118,7 @@ export default function HomeScreen() {
               title={he.mid}
               desc={levelDesc(category, "mid")}
               color="#f9ca24"
+              stacked
               onPress={() => start("mid")}
             />
             <LevelCard
@@ -110,6 +126,7 @@ export default function HomeScreen() {
               title={he.hard}
               desc={levelDesc(category, "hard")}
               color="#ff6b6b"
+              stacked
               onPress={() => start("hard")}
             />
           </View>
@@ -125,6 +142,8 @@ export default function HomeScreen() {
 function categoryLabel(category: Category) {
   if (category === "math") return he.categoryMath;
   if (category === "english") return he.categoryEnglish;
+  if (category === "logic") return he.categoryLogic;
+  if (category === "science") return he.categoryScience;
   return he.categoryLanguage;
 }
 
@@ -139,28 +158,46 @@ function levelDesc(category: Category, level: Difficulty) {
     if (level === "mid") return he.englishMidDesc;
     return he.englishHardDesc;
   }
+  if (category === "logic") {
+    if (level === "easy") return he.logicEasyDesc;
+    if (level === "mid") return he.logicMidDesc;
+    return he.logicHardDesc;
+  }
+  if (category === "science") {
+    if (level === "easy") return he.scienceEasyDesc;
+    if (level === "mid") return he.scienceMidDesc;
+    return he.scienceHardDesc;
+  }
   if (level === "easy") return he.easyDesc;
   if (level === "mid") return he.midDesc;
   return he.hardDesc;
 }
+
 function LevelCard({
   emoji,
   title,
   desc,
   color,
   onPress,
+  stacked,
 }: {
   emoji: string;
   title: string;
   desc: string;
   color: string;
   onPress: () => void;
+  stacked?: boolean;
 }) {
   return (
-    <Pressable onPress={onPress} style={[styles.card, { borderColor: color }]}>
+    <Pressable
+      onPress={onPress}
+      style={[styles.card, stacked && styles.cardStacked, { borderColor: color }]}
+    >
       <Text style={styles.emoji}>{emoji}</Text>
-      <Text style={styles.cardTitle}>{title}</Text>
-      <Text style={styles.cardDesc}>{desc}</Text>
+      <View style={stacked ? styles.cardCopy : undefined}>
+        <Text style={[styles.cardTitle, stacked && styles.cardTitleStacked]}>{title}</Text>
+        <Text style={[styles.cardDesc, stacked && styles.cardDescStacked]}>{desc}</Text>
+      </View>
     </Pressable>
   );
 }
@@ -176,11 +213,12 @@ const styles = StyleSheet.create({
   invText: { color: "#fff", fontFamily: "Heebo_700Bold" },
   section: { fontFamily: "Heebo_800ExtraBold", fontSize: 18, marginBottom: 12, textAlign: "center" },
   categories: { flexDirection: "row", flexWrap: "wrap", gap: 12, width: "100%", justifyContent: "center" },
-  levels: { flexDirection: "row", gap: 10, width: "100%", justifyContent: "center" },
+  levels: { flexDirection: "column", gap: 12, width: "100%", maxWidth: 420, alignSelf: "center" },
   card: {
     flexGrow: 1,
-    flexBasis: "28%",
-    minWidth: 100,
+    flexBasis: "42%",
+    minWidth: 140,
+    maxWidth: "100%",
     borderWidth: 2,
     borderRadius: 18,
     paddingVertical: 16,
@@ -188,8 +226,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "rgba(255,255,255,0.06)",
   },
+  cardStacked: {
+    flexGrow: 0,
+    flexBasis: "auto",
+    minWidth: 0,
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-start",
+    gap: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  cardCopy: { flex: 1, minWidth: 0, alignItems: "flex-start" },
+  cardTitleStacked: { marginTop: 0, textAlign: "right" },
+  cardDescStacked: { textAlign: "right" },
   emoji: { fontSize: 32 },
-  cardTitle: { color: "#fff", fontFamily: "Heebo_800ExtraBold", fontSize: 18, marginTop: 6 },
+  cardTitle: { color: "#fff", fontFamily: "Heebo_800ExtraBold", fontSize: 18, marginTop: 6, textAlign: "center" },
   cardDesc: { color: "rgba(255,255,255,0.7)", fontFamily: "Heebo_400Regular", fontSize: 12, textAlign: "center" },
   actions: { flexDirection: "row", gap: 12, marginTop: 24 },
 });

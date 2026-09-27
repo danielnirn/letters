@@ -29,6 +29,10 @@ export const TILE_COLORS = [
 export const THEME_IDS = ["theme_space", "theme_jungle", "theme_unicorn"] as const;
 export type ThemeId = (typeof THEME_IDS)[number];
 export type Difficulty = "easy" | "mid" | "hard";
-export type Category = "language" | "math" | "english";
+export type Category = "language" | "math" | "english" | "logic" | "science";
 
-export const CATEGORIES: Category[] = ["language", "math", "english"];
+export const CATEGORIES: Category[] = ["language", "math", "english", "logic", "science"];
+
+export function parseCategory(value: string | undefined): Category {
+  return CATEGORIES.includes(value as Category) ? (value as Category) : "language";
+}

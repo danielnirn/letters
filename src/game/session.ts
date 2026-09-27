@@ -1,6 +1,8 @@
 import { CONFIG, TILE_COLORS, type Category, type Difficulty } from "./config";
 import { ENGLISH_WORDS } from "./english";
+import { generateLogicList } from "./logic";
 import { generateMathList } from "./math";
+import { SCIENCE_WORDS } from "./science";
 import { shuffle, shuffleDistinct } from "./shuffle";
 import { WORDS, type Word } from "./words";
 
@@ -43,24 +45,29 @@ export type GameState = {
 };
 
 function wordBank(category: Category) {
-  return category === "english" ? ENGLISH_WORDS : WORDS;
+  if (category === "english") return ENGLISH_WORDS;
+  if (category === "science") return SCIENCE_WORDS;
+  return WORDS;
 }
 
 function freshWordList(category: Category, level: Difficulty): Word[] {
   if (category === "math") return generateMathList(level);
+  if (category === "logic") return generateLogicList(level);
   return shuffle(wordBank(category)[level]).slice(0, CONFIG.wordsPerRun);
 }
 
-function distractors(state: GameState, answer: string): string[] {
-  if (state.category === "math") {
-    const n = Number(answer);
+function distractors(state: GameState, obj: Word): string[] {
+  if (obj.choices?.length) {
+    return shuffle(obj.choices.filter((c) => c !== obj.word)).slice(0, 2);
+  }
+  if (state.category === "math" || /^\d+$/.test(obj.word)) {
+    const n = Number(obj.word);
     const pool = shuffle([n + 1, n - 1, n + 2, n - 2, n + 3, n + 10, Math.max(0, n - 3)])
       .map((x) => String(Math.max(0, x)))
-      .filter((x) => x !== answer);
-    const unique = [...new Set(pool)];
-    return unique.slice(0, 2);
+      .filter((x) => x !== obj.word);
+    return [...new Set(pool)].slice(0, 2);
   }
-  const pool = wordBank(state.category)[state.level].filter((w) => w.word !== answer);
+  const pool = wordBank(state.category)[state.level].filter((w) => w.word !== obj.word);
   return shuffle(pool)
     .slice(0, 2)
     .map((w) => w.word);
@@ -82,7 +89,7 @@ function loadCurrentWord(state: GameState, keepBonus: boolean): GameState {
   const isBonus = keepBonus ? state.isBonus : false;
   const questionType: "spell" | "choice" =
     !isBonus && Math.random() < 0.5 ? "choice" : "spell";
-  const choiceWords = shuffle([obj.word, ...distractors(state, obj.word)]);
+  const choiceWords = shuffle([obj.word, ...distractors(state, obj)]);
 
   return {
     ...state,
