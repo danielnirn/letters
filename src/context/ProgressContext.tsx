@@ -8,10 +8,10 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { SHOP_ITEMS, type ShopItem } from "../game/shop";
-import { readCache, writeCache } from "../storage/cache";
+import { type ShopItem } from "../game/shop";
 import {
   addScoreRemote,
+  appendPurchaseRemote,
   clearScoresRemote,
   defaultProfile,
   ensureAccount,
@@ -57,18 +57,16 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     async (next: CachedProgress) => {
       dataRef.current = next;
       setData(next);
-      if (!uid) return;
-      if (isLocal) {
-        await writeCache(uid, next);
-        return;
-      }
+      if (!uid || isLocal) return true;
       try {
         await persistUser(uid, next.user);
         const activeP = next.profiles.find((p) => p.id === next.user.activeProfileId);
         if (activeP) await persistProfile(uid, activeP);
         setCloudError(null);
+        return true;
       } catch {
         setCloudError("cloud");
+        return false;
       }
     },
     [uid, isLocal],
@@ -83,12 +81,27 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const cached = isLocal ? await readCache(uid) : null;
-      if (cached && !cancelled) setData(cached);
+      if (isLocal) {
+        const guest: CachedProgress = {
+          user: {
+            email,
+            createdAt: Date.now(),
+            plan: "free",
+            activeProfileId: "default",
+          },
+          profiles: [defaultProfile("default")],
+          scores: [],
+        };
+        if (!cancelled) {
+          setData(guest);
+          setLoading(false);
+        }
+        return;
+      }
       try {
-        const remote = !isLocal && isFirebaseConfigured()
+        const remote = isFirebaseConfigured()
           ? await ensureAccount(uid, email)
-          : cached ?? {
+          : {
               user: {
                 email,
                 createdAt: Date.now(),
@@ -98,13 +111,10 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
               profiles: [defaultProfile("default")],
               scores: [] as ScoreEntry[],
             };
-        if (!cancelled) {
-          setData(remote);
-          if (isLocal) await writeCache(uid, remote);
-        }
+        if (!cancelled) setData(remote);
       } catch {
-        if (!cached && !cancelled) {
-          const fallback: CachedProgress = {
+        if (!cancelled) {
+          setData({
             user: {
               email,
               createdAt: Date.now(),
@@ -113,9 +123,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
             },
             profiles: [defaultProfile("default")],
             scores: [],
-          };
-          setData(fallback);
-          if (isLocal) await writeCache(uid, fallback);
+          });
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -136,6 +144,8 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       (profile) => {
         const current = dataRef.current;
         if (!current) return;
+        const existing = current.profiles.find((p) => p.id === profile.id);
+        if (existing && (existing.updatedAt ?? 0) > (profile.updatedAt ?? 0)) return;
         const profiles = current.profiles.map((p) => (p.id === profile.id ? profile : p));
         const next = { ...current, profiles };
         dataRef.current = next;
@@ -161,11 +171,13 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
 
   const patchActive = async (fn: (p: ProfileDoc) => ProfileDoc) => {
     const current = dataRef.current;
-    if (!current) return;
+    if (!current) return false;
     const currentActive =
       current.profiles.find((p) => p.id === current.user.activeProfileId) ?? current.profiles[0];
-    const profiles = current.profiles.map((p) => (p.id === currentActive.id ? fn(p) : p));
-    await persist({ ...current, profiles });
+    const profiles = current.profiles.map((p) =>
+      p.id === currentActive.id ? { ...fn(p), updatedAt: Date.now() } : p,
+    );
+    return persist({ ...current, profiles });
   };
 
   const value = useMemo<ProgressValue>(() => {
@@ -202,7 +214,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
           current.profiles.find((x) => x.id === current.user.activeProfileId) ??
           current.profiles[0];
         if (p.coins < item.cost) return "funds";
-        await patchActive((prev) => {
+        const saved = await patchActive((prev) => {
           const coins = prev.coins - item.cost;
           if (item.consumable) {
             const inventory = {
@@ -217,6 +229,18 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
           const theme = item.type === "theme" ? (item.id as ProfileDoc["theme"]) : prev.theme;
           return { ...prev, coins, purchases, theme };
         });
+        if (!isLocal && uid) {
+          try {
+            await appendPurchaseRemote(uid, p.id, {
+              itemId: item.id,
+              cost: item.cost,
+              consumable: Boolean(item.consumable),
+            });
+          } catch {
+            setCloudError("cloud");
+          }
+        }
+        if (!isLocal && !saved) return "fail";
         return "ok";
       },
       activateTheme: async (themeId) => {
@@ -257,6 +281,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
         };
         const scores = [...current.scores, entry].slice(-200);
         await persist({ ...current, scores });
+        if (isLocal) return;
         try {
           await addScoreRemote(uid, currentActive.id, entry);
           await submitGlobalScore(uid, entry);
@@ -268,6 +293,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
         const current = dataRef.current;
         if (!current || !uid) return;
         await persist({ ...current, scores: [] });
+        if (isLocal) return;
         try {
           await clearScoresRemote(uid, current.profiles);
         } catch {
@@ -275,7 +301,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
         }
       },
     };
-  }, [data, loading, active, uid, persist, cloudError, globalScores]);
+  }, [data, loading, active, uid, isLocal, persist, cloudError, globalScores]);
 
   return <ProgressContext.Provider value={value}>{children}</ProgressContext.Provider>;
 }

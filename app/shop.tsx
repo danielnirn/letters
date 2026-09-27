@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Screen } from "../src/components/Screen";
 import { GhostButton } from "../src/components/LeaderboardTable";
 import { useToast } from "../src/components/Toast";
+import { useAuth } from "../src/context/AuthContext";
 import { useProgress } from "../src/context/ProgressContext";
 import { SHOP_ITEMS, type ShopItem } from "../src/game/shop";
 import { CONFIG } from "../src/game/config";
@@ -11,6 +12,7 @@ import { colorsFor } from "../src/theme/colors";
 
 export default function ShopScreen() {
   const router = useRouter();
+  const { isLocal } = useAuth();
   const progress = useProgress();
   const { show, node } = useToast();
   const c = colorsFor(progress.active.theme);
@@ -21,9 +23,14 @@ export default function ShopScreen() {
       show(he.notEnoughCoins(item.cost));
       return;
     }
-    if (item.consumable) show(he.addedToBag(item.name));
-    else if (item.type === "theme") show(he.themeOn(item.name));
-    else show(he.purchased(item.name));
+    if (result === "fail") {
+      show(he.cloudError);
+      return;
+    }
+    const extra = isLocal ? he.coinsLocalOnly : he.savedToCloud;
+    if (item.consumable) show(`${he.addedToBag(item.name)}\n${extra}`);
+    else if (item.type === "theme") show(`${he.themeOn(item.name)}\n${extra}`);
+    else show(`${he.purchased(item.name)}\n${extra}`);
   };
 
   const renderGrid = (category: ShopItem["category"]) => {

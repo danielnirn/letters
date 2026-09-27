@@ -33,7 +33,7 @@ export type GameState = {
   isBonus: boolean;
   bonusTimeLeft: number;
   streak: number;
-  questionType: "spell" | "choice";
+  questionType: "spell" | "choice" | "type";
   lives: number;
   doubleCoins: boolean;
   phase: Phase;
@@ -42,6 +42,8 @@ export type GameState = {
   choiceWords: string[];
   shaking: boolean;
   currentHint: string;
+  typedAnswer: string;
+  lastWrongPick: string;
 };
 
 function wordBank(category: Category) {
@@ -56,21 +58,50 @@ function freshWordList(category: Category, level: Difficulty): Word[] {
   return shuffle(wordBank(category)[level]).slice(0, CONFIG.wordsPerRun);
 }
 
-function distractors(state: GameState, obj: Word): string[] {
+function numericDistractors(answer: string, count: number): string[] {
+  const n = Number(answer);
+  const pool = shuffle([
+    n + 1,
+    n - 1,
+    n + 2,
+    n - 2,
+    n + 3,
+    n - 3,
+    n + 4,
+    n + 5,
+    n + 6,
+    n + 10,
+    n + 7,
+    Math.max(0, n - 4),
+    Math.max(0, n - 5),
+    Math.abs(n - 10),
+    n === 0 ? 1 : n * 2,
+  ])
+    .map((x) => String(Math.max(0, x)))
+    .filter((x) => x !== answer);
+  return [...new Set(pool)].slice(0, count);
+}
+
+function distractors(state: GameState, obj: Word, count: number): string[] {
   if (obj.choices?.length) {
-    return shuffle(obj.choices.filter((c) => c !== obj.word)).slice(0, 2);
+    return shuffle(obj.choices.filter((c) => c !== obj.word)).slice(0, count);
   }
   if (state.category === "math" || /^\d+$/.test(obj.word)) {
-    const n = Number(obj.word);
-    const pool = shuffle([n + 1, n - 1, n + 2, n - 2, n + 3, n + 10, Math.max(0, n - 3)])
-      .map((x) => String(Math.max(0, x)))
-      .filter((x) => x !== obj.word);
-    return [...new Set(pool)].slice(0, 2);
+    return numericDistractors(obj.word, count);
   }
   const pool = wordBank(state.category)[state.level].filter((w) => w.word !== obj.word);
   return shuffle(pool)
-    .slice(0, 2)
+    .slice(0, count)
     .map((w) => w.word);
+}
+
+function pickQuestionType(category: Category, isBonus: boolean): GameState["questionType"] {
+  if (category === "math") {
+    if (isBonus) return "type";
+    return Math.random() < 0.5 ? "choice" : "type";
+  }
+  if (!isBonus && Math.random() < 0.5) return "choice";
+  return "spell";
 }
 
 function makeTiles(letters: string[]): Tile[] {
@@ -87,17 +118,19 @@ function loadCurrentWord(state: GameState, keepBonus: boolean): GameState {
   const obj = state.wordList[state.wordIndex % state.wordList.length];
   const letters = obj.word.split("");
   const isBonus = keepBonus ? state.isBonus : false;
-  const questionType: "spell" | "choice" =
-    !isBonus && Math.random() < 0.5 ? "choice" : "spell";
-  const choiceWords = shuffle([obj.word, ...distractors(state, obj)]);
+  const questionType = pickQuestionType(state.category, isBonus);
+  const extraChoices = questionType === "choice" && state.category === "math" ? 3 : 2;
+  const choiceWords =
+    questionType === "choice" ? shuffle([obj.word, ...distractors(state, obj, extraChoices)]) : [];
 
   return {
     ...state,
     currentWord: obj.word,
     currentEmoji: obj.emoji,
     currentHint: obj.hint ?? "",
-    tiles: makeTiles(letters),
+    tiles: questionType === "spell" ? makeTiles(letters) : [],
     placed: [],
+    typedAnswer: "",
     hints: state.hints,
     isBonus,
     bonusTimeLeft: isBonus ? CONFIG.bonusSeconds : CONFIG.bonusSeconds,
@@ -107,6 +140,7 @@ function loadCurrentWord(state: GameState, keepBonus: boolean): GameState {
     shaking: false,
     lastReward: 0,
     lastStreakBonus: 0,
+    lastWrongPick: "",
   };
 }
 
@@ -136,6 +170,8 @@ export function startGame(level: Difficulty, category: Category = "language"): G
       lastStreakBonus: 0,
       choiceWords: [],
       shaking: false,
+      typedAnswer: "",
+      lastWrongPick: "",
     },
     false,
   );
@@ -155,6 +191,10 @@ export function placeTile(state: GameState, tileId: string): GameState {
 }
 
 export function deleteLast(state: GameState): GameState {
+  if (state.questionType === "type") {
+    if (!state.typedAnswer) return state;
+    return { ...state, typedAnswer: state.typedAnswer.slice(0, -1), shaking: false };
+  }
   if (state.placed.length === 0) return state;
   const last = state.placed[state.placed.length - 1];
   if (last.fromHint) return state;
@@ -171,7 +211,12 @@ export function deleteLast(state: GameState): GameState {
 }
 
 export function useHint(state: GameState): GameState {
-  if (state.hints <= 0 || state.questionType !== "spell") return state;
+  if (state.hints <= 0) return state;
+  if (state.questionType === "type") {
+    const next = state.currentWord.slice(0, state.typedAnswer.length + 1);
+    return { ...state, typedAnswer: next, hints: state.hints - 1, shaking: false };
+  }
+  if (state.questionType !== "spell") return state;
   const idx = state.placed.length;
   const letters = state.currentWord.split("");
   if (idx >= letters.length) return state;
@@ -218,7 +263,13 @@ function markCorrect(state: GameState): GameState {
 function markWrong(state: GameState): GameState {
   const lives = state.lives - 1;
   if (lives <= 0) {
-    return { ...state, lives: 0, streak: 0, phase: "gameover", shaking: true };
+    return { ...state, lives: 0, streak: 0, phase: "gameover", shaking: true, typedAnswer: "" };
+  }
+  if (state.questionType === "type") {
+    return { ...state, lives, streak: 0, typedAnswer: "", shaking: true };
+  }
+  if (state.questionType === "choice") {
+    return { ...state, lives, streak: 0, shaking: true };
   }
   const letters = state.currentWord.split("");
   const hintCount = state.placed.filter((p) => p.fromHint).length;
@@ -233,14 +284,24 @@ function markWrong(state: GameState): GameState {
   return { ...state, lives, streak: 0, placed, tiles, shaking: true };
 }
 
+export function typeDigit(state: GameState, digit: string): GameState {
+  if (state.phase !== "playing" || state.questionType !== "type") return state;
+  if (!/^\d$/.test(digit)) return state;
+  if (state.typedAnswer.length >= 4) return state;
+  return { ...state, typedAnswer: state.typedAnswer + digit, shaking: false };
+}
+
+export function submitTyped(state: GameState): GameState {
+  if (state.phase !== "playing" || state.questionType !== "type") return state;
+  if (!state.typedAnswer) return state;
+  if (state.typedAnswer === state.currentWord) return markCorrect(state);
+  return markWrong(state);
+}
+
 export function answerChoice(state: GameState, word: string): GameState {
   if (state.phase !== "playing" || state.questionType !== "choice") return state;
   if (word === state.currentWord) return markCorrect(state);
-  const lives = state.lives - 1;
-  if (lives <= 0) {
-    return { ...state, lives: 0, streak: 0, phase: "gameover" };
-  }
-  return { ...state, lives, streak: 0 };
+  return markWrong({ ...state, lastWrongPick: word });
 }
 
 export function nextWord(state: GameState): GameState {

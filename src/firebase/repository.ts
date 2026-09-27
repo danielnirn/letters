@@ -32,6 +32,7 @@ export function defaultProfile(id: string, displayName = ""): ProfileDoc {
     purchases: [],
     inventory: {},
     theme: null,
+    updatedAt: Date.now(),
   };
 }
 
@@ -44,6 +45,7 @@ function profileFromData(id: string, data: Record<string, unknown>): ProfileDoc 
     purchases: Array.isArray(data.purchases) ? (data.purchases as string[]) : [],
     inventory: (data.inventory as Record<string, number>) ?? {},
     theme: (data.theme as ProfileDoc["theme"]) ?? null,
+    updatedAt: typeof data.updatedAt === "number" ? data.updatedAt : 0,
   };
 }
 
@@ -82,6 +84,7 @@ export async function ensureAccount(
       purchases: [],
       inventory: {},
       theme: null,
+      updatedAt: Date.now(),
     });
     return local;
   }
@@ -112,6 +115,7 @@ export async function loadAccount(uid: string): Promise<CachedProgress> {
       purchases: [],
       inventory: {},
       theme: null,
+      updatedAt: Date.now(),
     });
     profiles.push(p);
   }
@@ -142,8 +146,35 @@ export async function persistUser(uid: string, user: UserDoc): Promise<void> {
 export async function persistProfile(uid: string, profile: ProfileDoc): Promise<void> {
   const fb = getFirebase();
   if (!fb) return;
-  const { id, ...rest } = profile;
-  await setDoc(profileRef(fb.db, uid, id), rest, { merge: true });
+  await setDoc(
+    profileRef(fb.db, uid, profile.id),
+    {
+      displayName: profile.displayName,
+      nameChosen: profile.nameChosen,
+      coins: profile.coins,
+      purchases: profile.purchases,
+      inventory: profile.inventory,
+      theme: profile.theme,
+      updatedAt: profile.updatedAt,
+    },
+    { merge: true },
+  );
+}
+
+export async function appendPurchaseRemote(
+  uid: string,
+  profileId: string,
+  item: { itemId: string; cost: number; consumable: boolean },
+): Promise<void> {
+  const fb = getFirebase();
+  if (!fb) return;
+  const id = `${Date.now()}_${item.itemId}`;
+  await setDoc(doc(fb.db, "users", uid, "profiles", profileId, "purchases", id), {
+    itemId: item.itemId,
+    cost: item.cost,
+    consumable: item.consumable,
+    ts: Date.now(),
+  });
 }
 
 export function watchProfile(

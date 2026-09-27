@@ -9,6 +9,7 @@ export const CONFIG = {
   bonusEveryN: 3,
   bonusSeconds: 20,
   lifeCost: 15,
+  correctHoldMs: 2500,
 } as const;
 
 export const TILE_COLORS = [

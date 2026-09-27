@@ -24,7 +24,9 @@ import {
   revive,
   skipWord,
   startGame,
+  submitTyped,
   tickBonus,
+  typeDigit,
   useHint,
   type GameState,
 } from "../src/game/session";
@@ -51,6 +53,8 @@ export default function GameScreen() {
   const c = colorsFor(progress.active.theme);
   const [state, setState] = useState<GameState>(() => startGame(level || "easy", cat));
   const rewarded = useRef<string | null>(null);
+  const [advancePct, setAdvancePct] = useState(0);
+  const skipAdvance = useRef(false);
 
   useEffect(() => {
     if (!state.isBonus || state.phase !== "playing") return;
@@ -66,7 +70,7 @@ export default function GameScreen() {
 
   useEffect(() => {
     if (!state.shaking) return;
-    const t = setTimeout(() => setState((s) => clearShake(s)), 650);
+    const t = setTimeout(() => setState((s) => clearShake(s)), 1400);
     return () => clearTimeout(t);
   }, [state.shaking]);
 
@@ -80,7 +84,32 @@ export default function GameScreen() {
       if (state.lastStreakBonus) await addCoinsRef.current(state.lastStreakBonus);
       await saveScoreRef.current(state.score, `${state.category}:${state.level}`);
     })();
-  }, [state.phase, state.wordIndex, state.wordsCompleted, state.lastReward, state.lastStreakBonus, state.score, state.level]);
+  }, [state.phase, state.wordIndex, state.wordsCompleted, state.lastReward, state.lastStreakBonus, state.score, state.level, state.category]);
+
+  useEffect(() => {
+    if (state.phase !== "win") {
+      skipAdvance.current = false;
+      setAdvancePct(0);
+      return;
+    }
+    const started = Date.now();
+    setAdvancePct(0);
+    const id = setInterval(() => {
+      if (skipAdvance.current) return;
+      const elapsed = Date.now() - started;
+      setAdvancePct(Math.min(100, (elapsed / CONFIG.correctHoldMs) * 100));
+      if (elapsed >= CONFIG.correctHoldMs) {
+        clearInterval(id);
+        setState((s) => (s.phase === "win" ? nextWord(s) : s));
+      }
+    }, 40);
+    return () => clearInterval(id);
+  }, [state.phase, state.wordIndex, state.wordsCompleted]);
+
+  const goNextNow = () => {
+    skipAdvance.current = true;
+    setState((s) => (s.phase === "win" ? nextWord(s) : s));
+  };
 
   const hearts = Array.from({ length: CONFIG.lives }, (_, i) => (i < state.lives ? "❤️" : "🖤")).join("");
 
@@ -122,47 +151,6 @@ export default function GameScreen() {
     );
   }
 
-  if (state.phase === "win") {
-    const parts = [];
-    if (state.lastReward && (state.doubleCoins || state.lastReward === CONFIG.coinsBonus * (state.doubleCoins ? 2 : 1))) {
-      if (state.lastReward >= CONFIG.coinsBonus) parts.push(he.bonusTag);
-      if (state.doubleCoins) parts.push(he.doubleCoinsTag);
-    }
-    return (
-      <Screen>
-        {node}
-        <Text style={styles.bigEmoji}>{winEmoji(state)}</Text>
-        <Text style={[styles.winTitle, { color: c.score }]}>{he.wellDone}</Text>
-        <Text
-          style={[styles.winWord, usesLtr(state) && styles.ltr]}
-        >
-          {answerLine(state)}
-        </Text>
-        {state.currentHint ? <Text style={styles.hintHe}>{state.currentHint}</Text> : null}
-        <Text style={styles.meta}>
-          {he.scoreLabel}: {state.score} ⭐
-        </Text>
-        <Text style={styles.meta}>
-          {he.coinsBalance}: {progress.active.coins} 🪙
-        </Text>
-        {state.lastStreakBonus > 0 ? (
-          <Text style={styles.streak}>{he.streakTag(CONFIG.streakEvery, state.lastStreakBonus)}</Text>
-        ) : null}
-        <PrimaryButton
-          label={isQuiz(state.category) ? he.nextQuestion : he.nextWord}
-          onPress={() => setState((s) => nextWord(s))}
-        />
-        <Text style={styles.lbTitle}>{he.leaderboard}</Text>
-        <LeaderboardTable
-          scores={progress.topScores}
-          highlightName={progress.active.displayName}
-          highlightScore={state.score}
-        />
-        <GhostButton label={he.backHome} onPress={() => router.replace("/")} />
-      </Screen>
-    );
-  }
-
   if (state.phase === "gameover") {
     const canBuy = progress.active.coins >= CONFIG.lifeCost;
     return (
@@ -193,6 +181,7 @@ export default function GameScreen() {
     );
   }
 
+  const won = state.phase === "win";
   const consumables = SHOP_ITEMS.filter((it) => it.consumable).filter(
     (it) => (progress.active.inventory[it.id] || 0) > 0,
   );
@@ -246,21 +235,90 @@ export default function GameScreen() {
       </Text>
       {state.currentHint ? <Text style={styles.hintHe}>{state.currentHint}</Text> : null}
 
+      {state.shaking && !won ? (
+        <View style={styles.wrongBanner}>
+          <Text style={styles.wrongBannerText}>{he.wrongTryAgain}</Text>
+        </View>
+      ) : null}
+
       {state.questionType === "choice" ? (
         <View style={{ width: "100%", alignItems: "center" }}>
           <Text style={styles.prompt}>{choicePrompt(state.category)}</Text>
-          {state.choiceWords.map((w, i) => (
-            <Pressable key={`${w}-${i}`} onPress={() => setState((s) => answerChoice(s, w))} style={styles.choice}>
-              <Text
+          <View style={state.category === "math" ? styles.choiceGrid : { width: "100%", alignItems: "center" }}>
+            {state.choiceWords.map((w, i) => (
+              <Pressable
+                key={`${w}-${i}`}
+                onPress={() => setState((s) => answerChoice(s, w))}
+                disabled={won}
                 style={[
-                  styles.choiceText,
-                  usesLtr(state) && styles.ltr,
+                  styles.choice,
+                  state.category === "math" && styles.choiceHalf,
+                  !won && state.shaking && w === state.lastWrongPick && styles.choiceWrong,
+                  won && w === state.currentWord && styles.choiceCorrect,
                 ]}
               >
-                {w}
-              </Text>
-            </Pressable>
-          ))}
+                <Text
+                  style={[
+                    styles.choiceText,
+                    usesLtr(state) && styles.ltr,
+                  ]}
+                >
+                  {w}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      ) : state.questionType === "type" ? (
+        <View style={styles.typeWrap}>
+          <Text style={styles.prompt}>{he.typeTheAnswer}</Text>
+          <View style={[styles.typeBox, state.shaking && !won && styles.typeBoxWrong, won && styles.typeBoxCorrect]}>
+            <Text style={styles.typeValue}>{state.typedAnswer || state.currentWord || " "}</Text>
+          </View>
+          {won ? null : (
+            <>
+          <View style={styles.actions}>
+            <PrimaryButton
+              label={`${he.hint} (${state.hints})`}
+              onPress={() => setState((s) => useHint(s))}
+              disabled={state.hints <= 0}
+              color="#4D96FF"
+            />
+            <PrimaryButton
+              label={he.checkAnswer}
+              onPress={() => setState((s) => submitTyped(s))}
+              disabled={!state.typedAnswer}
+            />
+          </View>
+          <View style={styles.keypad}>
+            {["1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", " "].map((key) => {
+              if (key === " ") {
+                return <View key="pad" style={styles.keyGhost} />;
+              }
+              if (key === "⌫") {
+                return (
+                  <Pressable
+                    key="del"
+                    onPress={() => setState((s) => deleteLast(s))}
+                    style={[styles.key, styles.keyDel]}
+                  >
+                    <Text style={styles.keyText}>⌫</Text>
+                  </Pressable>
+                );
+              }
+              return (
+                <Pressable
+                  key={key}
+                  onPress={() => setState((s) => typeDigit(s, key))}
+                  style={styles.key}
+                >
+                  <Text style={styles.keyText}>{key}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+            </>
+          )}
         </View>
       ) : (
         <>
@@ -268,7 +326,7 @@ export default function GameScreen() {
             style={[
               styles.blanks,
               usesLtr(state) && styles.ltrRow,
-              state.shaking && styles.shake,
+              state.shaking && !won && styles.shake,
             ]}
           >
             {state.currentWord.split("").map((_, i) => {
@@ -279,6 +337,7 @@ export default function GameScreen() {
                   style={[
                     styles.blank,
                     p && { borderColor: c.filledBorder, backgroundColor: c.filledBg },
+                    won && styles.blankCorrect,
                   ]}
                 >
                   <Text
@@ -293,6 +352,8 @@ export default function GameScreen() {
               );
             })}
           </View>
+          {won ? null : (
+            <>
           <View style={styles.actions}>
             <PrimaryButton
               label={`${he.hint} (${state.hints})`}
@@ -324,10 +385,30 @@ export default function GameScreen() {
               </Pressable>
             ))}
           </View>
+            </>
+          )}
         </>
       )}
 
-      {consumables.length > 0 ? (
+      {won ? (
+        <View style={styles.correctWrap}>
+          <View style={styles.correctBanner}>
+            <Text style={styles.correctBannerText}>{he.correctFlash(state.lastReward)}</Text>
+            {state.lastStreakBonus > 0 ? (
+              <Text style={styles.correctStreak}>{he.streakTag(CONFIG.streakEvery, state.lastStreakBonus)}</Text>
+            ) : null}
+          </View>
+          <View style={styles.advanceTrack}>
+            <View style={[styles.advanceFill, { width: `${advancePct}%` }]} />
+          </View>
+          <PrimaryButton
+            label={isQuiz(state.category) ? he.nextQuestion : he.nextWord}
+            onPress={goNextNow}
+          />
+        </View>
+      ) : null}
+
+      {consumables.length > 0 && !won ? (
         <View style={styles.tools}>
           {consumables.map((item) => {
             const count = progress.active.inventory[item.id] || 0;
@@ -375,13 +456,6 @@ function usesLtr(state: GameState) {
   return state.category === "english" || /^\d+$/.test(state.currentWord);
 }
 
-function winEmoji(state: GameState) {
-  if (state.category === "math") return "🔢";
-  if (state.category === "logic") return "🧠";
-  if (state.category === "science") return "🌿";
-  return state.currentEmoji;
-}
-
 function answerLine(state: GameState) {
   if (state.category === "math") return `${state.currentEmoji} = ${state.currentWord}`;
   return state.currentWord;
@@ -427,9 +501,142 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     alignItems: "center",
   },
+  choiceGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 10,
+    width: "100%",
+    maxWidth: 340,
+    direction: "ltr",
+  },
+  choiceHalf: {
+    width: "47%",
+    maxWidth: 160,
+    marginBottom: 0,
+  },
+  typeWrap: { width: "100%", alignItems: "center" },
+  typeBox: {
+    minWidth: 160,
+    minHeight: 64,
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.35)",
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+    backgroundColor: "rgba(0,0,0,0.2)",
+  },
+  typeValue: {
+    color: "#fff",
+    fontSize: 36,
+    fontFamily: "Heebo_900Black",
+    writingDirection: "ltr",
+  },
+  keypad: {
+    direction: "ltr",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    width: 252,
+    gap: 8,
+    justifyContent: "center",
+    marginTop: 8,
+  },
+  key: {
+    width: 76,
+    height: 56,
+    borderRadius: 14,
+    backgroundColor: "#4D96FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  keyDel: { backgroundColor: "#636e72" },
+  keyGhost: { width: 76, height: 56 },
+  keyText: { color: "#fff", fontSize: 22, fontFamily: "Heebo_900Black" },
   choiceText: { color: "#fff", fontSize: 22, fontFamily: "Heebo_800ExtraBold" },
   blanks: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8 },
-  shake: { opacity: 0.7 },
+  shake: {
+    opacity: 1,
+    borderColor: "#ff6b6b",
+    backgroundColor: "rgba(255,107,107,0.2)",
+  },
+  wrongBanner: {
+    width: "100%",
+    backgroundColor: "#ff6b6b",
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+    alignItems: "center",
+  },
+  wrongBannerText: {
+    color: "#fff",
+    fontSize: 22,
+    fontFamily: "Heebo_900Black",
+    textAlign: "center",
+  },
+  choiceWrong: {
+    backgroundColor: "#ff6b6b",
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
+  typeBoxWrong: {
+    borderColor: "#ff6b6b",
+    backgroundColor: "rgba(255,107,107,0.35)",
+  },
+  typeBoxCorrect: {
+    borderColor: "#6bcb77",
+    backgroundColor: "rgba(107,203,119,0.35)",
+  },
+  choiceCorrect: {
+    backgroundColor: "#6bcb77",
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
+  blankCorrect: {
+    borderColor: "#6bcb77",
+    backgroundColor: "rgba(107,203,119,0.4)",
+  },
+  correctWrap: {
+    width: "100%",
+    alignItems: "center",
+    marginTop: 16,
+    gap: 12,
+  },
+  correctBanner: {
+    width: "100%",
+    backgroundColor: "#6bcb77",
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: "center",
+  },
+  correctBannerText: {
+    color: "#fff",
+    fontSize: 22,
+    fontFamily: "Heebo_900Black",
+    textAlign: "center",
+  },
+  correctStreak: {
+    color: "#fff",
+    fontFamily: "Heebo_700Bold",
+    marginTop: 4,
+    textAlign: "center",
+  },
+  advanceTrack: {
+    width: "100%",
+    height: 10,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  advanceFill: {
+    height: 10,
+    backgroundColor: "#6bcb77",
+    borderRadius: 8,
+  },
   blank: {
     width: 44,
     height: 52,

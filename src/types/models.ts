@@ -17,6 +17,7 @@ export type ProfileDoc = {
   purchases: string[];
   inventory: Record<string, number>;
   theme: ThemeId | null;
+  updatedAt: number;
 };
 
 export type ScoreEntry = {
