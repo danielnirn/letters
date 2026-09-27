@@ -2,6 +2,18 @@ import type { ThemeId } from "../game/config";
 
 export type Plan = "free" | "plus";
 
+export type AvatarSlot = "base" | "hat" | "top" | "bottom" | "shoes" | "extra";
+
+/** Equipped Tamagotchi/avatar layers. `null` = nothing in that slot. */
+export type AvatarLoadout = {
+  base: string;
+  hat: string | null;
+  top: string | null;
+  bottom: string | null;
+  shoes: string | null;
+  extra: string | null;
+};
+
 export type UserDoc = {
   email: string | null;
   createdAt: number;
@@ -17,6 +29,7 @@ export type ProfileDoc = {
   purchases: string[];
   inventory: Record<string, number>;
   theme: ThemeId | null;
+  avatar: AvatarLoadout;
   updatedAt: number;
 };
 

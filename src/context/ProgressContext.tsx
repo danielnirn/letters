@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { type ShopItem } from "../game/shop";
+import { defaultAvatar, withEquipped } from "../game/avatar";
 import {
   addScoreRemote,
   appendPurchaseRemote,
@@ -21,7 +22,7 @@ import {
   watchGlobalLeaderboard,
   watchProfile,
 } from "../firebase/repository";
-import type { CachedProgress, ProfileDoc, ScoreEntry } from "../types/models";
+import type { CachedProgress, ProfileDoc, ScoreEntry, AvatarSlot } from "../types/models";
 import { isFirebaseConfigured } from "../firebase/app";
 import { useAuth } from "./AuthContext";
 
@@ -36,6 +37,7 @@ type ProgressValue = {
   spendCoins: (amount: number) => Promise<boolean>;
   buyItem: (item: ShopItem) => Promise<"ok" | "funds" | "fail">;
   activateTheme: (themeId: string | null) => Promise<void>;
+  equipAvatar: (slot: AvatarSlot, itemId: string | null) => Promise<void>;
   useInventory: (itemId: string) => Promise<boolean>;
   saveScore: (score: number, level: string) => Promise<void>;
   clearScores: () => Promise<void>;
@@ -227,7 +229,11 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
             ? prev.purchases
             : [...prev.purchases, item.id];
           const theme = item.type === "theme" ? (item.id as ProfileDoc["theme"]) : prev.theme;
-          return { ...prev, coins, purchases, theme };
+          let avatar = prev.avatar ?? defaultAvatar();
+          if (item.section === "avatar" && item.slot) {
+            avatar = withEquipped(avatar, item.slot, item.id);
+          }
+          return { ...prev, coins, purchases, theme, avatar };
         });
         if (!isLocal && uid) {
           try {
@@ -248,6 +254,17 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
           ...p,
           theme: themeId as ProfileDoc["theme"],
         }));
+      },
+      equipAvatar: async (slot, itemId) => {
+        await patchActive((p) => {
+          if (itemId && itemId !== "avatar_base_kid" && !p.purchases.includes(itemId)) {
+            return p;
+          }
+          return {
+            ...p,
+            avatar: withEquipped(p.avatar ?? defaultAvatar(), slot, itemId),
+          };
+        });
       },
       useInventory: async (itemId: string) => {
         const current = dataRef.current;

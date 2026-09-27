@@ -14,6 +14,7 @@ import {
 } from "firebase/firestore";
 import type { Firestore } from "firebase/firestore";
 import type { CachedProgress, ProfileDoc, ScoreEntry, UserDoc } from "../types/models";
+import { defaultAvatar, normalizeAvatar } from "../game/avatar";
 import { getFirebase } from "./app";
 
 const emptyUser = (email: string | null, profileId: string): UserDoc => ({
@@ -32,6 +33,7 @@ export function defaultProfile(id: string, displayName = ""): ProfileDoc {
     purchases: [],
     inventory: {},
     theme: null,
+    avatar: defaultAvatar(),
     updatedAt: Date.now(),
   };
 }
@@ -45,6 +47,7 @@ function profileFromData(id: string, data: Record<string, unknown>): ProfileDoc 
     purchases: Array.isArray(data.purchases) ? (data.purchases as string[]) : [],
     inventory: (data.inventory as Record<string, number>) ?? {},
     theme: (data.theme as ProfileDoc["theme"]) ?? null,
+    avatar: normalizeAvatar(data.avatar),
     updatedAt: typeof data.updatedAt === "number" ? data.updatedAt : 0,
   };
 }
@@ -84,6 +87,7 @@ export async function ensureAccount(
       purchases: [],
       inventory: {},
       theme: null,
+      avatar: defaultAvatar(),
       updatedAt: Date.now(),
     });
     return local;
@@ -115,6 +119,7 @@ export async function loadAccount(uid: string): Promise<CachedProgress> {
       purchases: [],
       inventory: {},
       theme: null,
+      avatar: defaultAvatar(),
       updatedAt: Date.now(),
     });
     profiles.push(p);
@@ -155,6 +160,7 @@ export async function persistProfile(uid: string, profile: ProfileDoc): Promise<
       purchases: profile.purchases,
       inventory: profile.inventory,
       theme: profile.theme,
+      avatar: profile.avatar,
       updatedAt: profile.updatedAt,
     },
     { merge: true },

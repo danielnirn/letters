@@ -8,6 +8,8 @@ import { useToast } from "../src/components/Toast";
 import { useAuth } from "../src/context/AuthContext";
 import { useProgress } from "../src/context/ProgressContext";
 import { he } from "../src/i18n/he";
+import { AvatarPreview } from "../src/components/AvatarPreview";
+import { defaultAvatar } from "../src/game/avatar";
 import { colorsFor } from "../src/theme/colors";
 
 export default function ProfileScreen() {
@@ -29,6 +31,7 @@ export default function ProfileScreen() {
     <Screen>
       {node}
       <Text style={[styles.title, { color: c.title }]}>{he.profileTitle}</Text>
+      <AvatarPreview loadout={active.avatar ?? defaultAvatar()} size={100} />
       <Text style={[styles.label, { color: c.subtitle }]}>{he.parentAccount}</Text>
       <Text style={styles.value}>{email ?? (isLocal ? "מכשיר מקומי" : "—")}</Text>
 

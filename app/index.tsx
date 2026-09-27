@@ -7,6 +7,8 @@ import { useAuth } from "../src/context/AuthContext";
 import { useProgress } from "../src/context/ProgressContext";
 import { he } from "../src/i18n/he";
 import { colorsFor } from "../src/theme/colors";
+import { AvatarPreview } from "../src/components/AvatarPreview";
+import { defaultAvatar } from "../src/game/avatar";
 import type { Category, Difficulty } from "../src/game/config";
 
 export default function HomeScreen() {
@@ -34,6 +36,7 @@ export default function HomeScreen() {
       <Text style={[styles.title, { color: c.title }]}>{he.appTitle}</Text>
       <Text style={[styles.sub, { color: c.subtitle }]}>{he.appSubtitle}</Text>
       <Text style={[styles.hello, { color: c.accent }]}>{he.helloName(active.displayName)}</Text>
+      <AvatarPreview loadout={active.avatar ?? defaultAvatar()} size={72} />
       {isLocal ? <Text style={styles.localHint}>{he.coinsLocalOnly}</Text> : null}
 
       {!category ? (
