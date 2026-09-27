@@ -244,7 +244,7 @@ export default function GameScreen() {
       {state.questionType === "choice" ? (
         <View style={{ width: "100%", alignItems: "center" }}>
           <Text style={styles.prompt}>{choicePrompt(state.category)}</Text>
-          <View style={state.category === "math" ? styles.choiceGrid : { width: "100%", alignItems: "center" }}>
+          <View style={state.choiceWords.length >= 4 ? styles.choiceGrid : { width: "100%", alignItems: "center" }}>
             {state.choiceWords.map((w, i) => (
               <Pressable
                 key={`${w}-${i}`}
@@ -252,7 +252,7 @@ export default function GameScreen() {
                 disabled={won}
                 style={[
                   styles.choice,
-                  state.category === "math" && styles.choiceHalf,
+                  state.choiceWords.length >= 4 && styles.choiceHalf,
                   !won && state.shaking && w === state.lastWrongPick && styles.choiceWrong,
                   won && w === state.currentWord && styles.choiceCorrect,
                 ]}
@@ -261,6 +261,7 @@ export default function GameScreen() {
                   style={[
                     styles.choiceText,
                     usesLtr(state) && styles.ltr,
+                    usesRtl(state) && styles.rtl,
                   ]}
                 >
                   {w}
@@ -326,6 +327,7 @@ export default function GameScreen() {
             style={[
               styles.blanks,
               usesLtr(state) && styles.ltrRow,
+              usesRtl(state) && styles.rtlRow,
               state.shaking && !won && styles.shake,
             ]}
           >
@@ -344,6 +346,7 @@ export default function GameScreen() {
                     style={[
                       styles.blankLetter,
                       usesLtr(state) && styles.ltr,
+                      usesRtl(state) && styles.rtl,
                     ]}
                   >
                     {p?.letter ?? ""}
@@ -363,7 +366,7 @@ export default function GameScreen() {
             />
             <PrimaryButton label={he.delete} onPress={() => setState((s) => deleteLast(s))} color="#636e72" />
           </View>
-          <View style={[styles.tiles, usesLtr(state) && styles.ltrRow]}>
+          <View style={[styles.tiles, usesLtr(state) && styles.ltrRow, usesRtl(state) && styles.rtlRow]}>
             {state.tiles.map((t) => (
               <Pressable
                 key={t.id}
@@ -378,7 +381,7 @@ export default function GameScreen() {
                 ]}
               >
                 <Text
-                  style={[styles.tileText, usesLtr(state) && styles.ltr]}
+                  style={[styles.tileText, usesLtr(state) && styles.ltr, usesRtl(state) && styles.rtl]}
                 >
                   {t.letter}
                 </Text>
@@ -453,7 +456,12 @@ function isQuiz(cat: Category) {
 }
 
 function usesLtr(state: GameState) {
-  return state.category === "english" || /^\d+$/.test(state.currentWord);
+  if (state.category === "english" || state.category === "math") return true;
+  return /^\d+$/.test(state.currentWord);
+}
+
+function usesRtl(state: GameState) {
+  return !usesLtr(state);
 }
 
 function answerLine(state: GameState) {
@@ -474,7 +482,9 @@ const styles = StyleSheet.create({
   track: { width: "80%", height: 8, backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 8, overflow: "hidden" },
   fill: { height: 8, backgroundColor: "#f9ca24" },
   ltr: { writingDirection: "ltr", textAlign: "left" },
-  ltrRow: { writingDirection: "ltr", flexDirection: "row" },
+  ltrRow: { direction: "ltr", writingDirection: "ltr", flexDirection: "row" },
+  rtl: { writingDirection: "rtl", textAlign: "right" },
+  rtlRow: { direction: "rtl", writingDirection: "rtl", flexDirection: "row" },
   emoji: { fontSize: 72, marginVertical: 12 },
   hintHe: {
     fontSize: 22,

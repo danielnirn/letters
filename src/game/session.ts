@@ -1,6 +1,6 @@
-import { CONFIG, TILE_COLORS, type Category, type Difficulty } from "./config";
+import { CONFIG, TILE_COLORS, isSpellingCategory, type Category, type Difficulty } from "./config";
 import { ENGLISH_WORDS } from "./english";
-import { generateLogicList } from "./logic";
+import { generateLogicList, LOGIC_WORDS } from "./logic";
 import { generateMathList } from "./math";
 import { SCIENCE_WORDS } from "./science";
 import { shuffle, shuffleDistinct } from "./shuffle";
@@ -49,6 +49,7 @@ export type GameState = {
 function wordBank(category: Category) {
   if (category === "english") return ENGLISH_WORDS;
   if (category === "science") return SCIENCE_WORDS;
+  if (category === "logic") return LOGIC_WORDS;
   return WORDS;
 }
 
@@ -83,25 +84,39 @@ function numericDistractors(answer: string, count: number): string[] {
 }
 
 function distractors(state: GameState, obj: Word, count: number): string[] {
-  if (obj.choices?.length) {
-    return shuffle(obj.choices.filter((c) => c !== obj.word)).slice(0, count);
-  }
+  const seen = new Set<string>([obj.word]);
+  const out: string[] = [];
+  const push = (items: string[]) => {
+    for (const x of items) {
+      if (!x || seen.has(x)) continue;
+      seen.add(x);
+      out.push(x);
+      if (out.length >= count) return;
+    }
+  };
+
+  if (obj.choices?.length) push(shuffle(obj.choices));
+  if (out.length >= count) return out.slice(0, count);
+
   if (state.category === "math" || /^\d+$/.test(obj.word)) {
-    return numericDistractors(obj.word, count);
+    push(numericDistractors(obj.word, count * 4));
+    return out.slice(0, count);
   }
-  const pool = wordBank(state.category)[state.level].filter((w) => w.word !== obj.word);
-  return shuffle(pool)
-    .slice(0, count)
-    .map((w) => w.word);
+
+  const bank = wordBank(state.category);
+  push(shuffle((bank[state.level] ?? []).map((w) => w.word)));
+  for (const lvl of ["easy", "mid", "hard"] as const) {
+    if (out.length >= count) break;
+    push(shuffle((bank[lvl] ?? []).map((w) => w.word)));
+  }
+  push(["מים", "בית", "שמש", "כלב", "עץ", "ים", "לב", "יד", "פרח", "גשם"]);
+  return out.slice(0, count);
 }
 
 function pickQuestionType(category: Category, isBonus: boolean): GameState["questionType"] {
-  if (category === "math") {
-    if (isBonus) return "type";
-    return Math.random() < 0.5 ? "choice" : "type";
-  }
-  if (!isBonus && Math.random() < 0.5) return "choice";
-  return "spell";
+  if (!isSpellingCategory(category)) return "choice";
+  if (isBonus) return "spell";
+  return Math.random() < 0.5 ? "choice" : "spell";
 }
 
 function makeTiles(letters: string[]): Tile[] {
@@ -119,7 +134,7 @@ function loadCurrentWord(state: GameState, keepBonus: boolean): GameState {
   const letters = obj.word.split("");
   const isBonus = keepBonus ? state.isBonus : false;
   const questionType = pickQuestionType(state.category, isBonus);
-  const extraChoices = questionType === "choice" && state.category === "math" ? 3 : 2;
+  const extraChoices = 3;
   const choiceWords =
     questionType === "choice" ? shuffle([obj.word, ...distractors(state, obj, extraChoices)]) : [];
 

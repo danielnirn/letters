@@ -34,6 +34,10 @@ export type Category = "language" | "math" | "english" | "logic" | "science";
 
 export const CATEGORIES: Category[] = ["language", "math", "english", "logic", "science"];
 
+export function isSpellingCategory(category: Category) {
+  return category === "language" || category === "english";
+}
+
 export function parseCategory(value: string | undefined): Category {
   return CATEGORIES.includes(value as Category) ? (value as Category) : "language";
 }
