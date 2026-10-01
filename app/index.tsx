@@ -37,8 +37,8 @@ export default function HomeScreen() {
   const c = useColors();
 
   useEffect(() => {
-    if (params.category) setCategory(parseCategory(params.category));
-    if (params.level) setDifficulty(parseDifficulty(params.level));
+    setCategory(params.category ? parseCategory(params.category) : null);
+    setDifficulty(params.level ? parseDifficulty(params.level) : null);
   }, [params.category, params.level]);
 
   const start = (stage: number) => {

@@ -108,6 +108,7 @@ const ICON_PATHS = {
   replay: ["M4 12a8 8 0 1 0 2.4-5.7", "M4 4v4h4"],
   logout: ["M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3", "M10 8l-4 4 4 4", "M6 12h10"],
   next: ["M15 5l-7 7 7 7"],
+  home: ["M4 12l8-8 8 8", "M6 10.5V20h12v-9.5"],
 } as const;
 
 export type IconName = keyof typeof ICON_PATHS;

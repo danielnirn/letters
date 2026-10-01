@@ -76,6 +76,10 @@ function GameRun() {
     router.replace({ pathname: "/", params: { category: cat, level: difficulty } });
   };
 
+  const backToHome = () => {
+    router.replace("/");
+  };
+
   const hasNextStage = miniLevel < CONFIG.miniLevels;
   const goNextStage = () => {
     router.replace({
@@ -249,6 +253,7 @@ function GameRun() {
               }}
             />
             <PrimaryButton label={he.backToStages} onPress={backToStages} />
+            <PrimaryButton label={he.backToHome} icon="home" variant="soft" onPress={backToHome} />
           </View>
         </Screen>
       );
@@ -306,6 +311,7 @@ function GameRun() {
           ) : (
             <PrimaryButton label={he.backToStages} onPress={backToStages} />
           )}
+          <PrimaryButton label={he.backToHome} icon="home" variant="soft" onPress={backToHome} />
         </View>
       </Screen>
     );
@@ -574,9 +580,24 @@ function GameRun() {
       ) : null}
 
       {!won && !state.shaking ? (
-        <Pressable onPress={() => setState((s) => skipWord(s))} style={styles.skip}>
-          <Icon name="skip" size={18} color={c.soft} />
-          <Text style={[styles.skipText, { color: c.soft }]}>{he.skipThis}</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={he.skipThis}
+          onPress={() => setState((s) => skipWord(s))}
+          style={({ pressed }) => [
+            styles.skip,
+            {
+              backgroundColor: c.surface,
+              borderBottomColor: c.line,
+              borderBottomWidth: pressed ? 2 : 5,
+              marginTop: pressed ? 21 : 18,
+            },
+          ]}
+        >
+          <View style={[styles.skipIcon, { backgroundColor: c.primaryTint }]}>
+            <Icon name="skip" size={18} color={c.primary} weight={2.8} />
+          </View>
+          <Text style={[styles.skipText, { color: c.ink }]}>{he.skipThis}</Text>
         </Pressable>
       ) : null}
 
@@ -837,8 +858,18 @@ const styles = StyleSheet.create({
     flexDirection: "row-reverse",
   },
   advanceFill: { height: 8, borderRadius: 8 },
-  skip: { flexDirection: "row-reverse", alignItems: "center", gap: 6, marginTop: 16, padding: 10, minHeight: 44 },
-  skipText: { fontFamily: font.bold, fontSize: 15 },
+  skip: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 10,
+    minHeight: 52,
+    paddingVertical: 8,
+    paddingRight: 8,
+    paddingLeft: 20,
+    borderRadius: 999,
+  },
+  skipIcon: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  skipText: { fontFamily: font.heavy, fontSize: 16 },
   tools: { flexDirection: "row-reverse", flexWrap: "wrap", marginTop: 8, justifyContent: "center", gap: 8 },
   tool: {
     flexDirection: "row-reverse",

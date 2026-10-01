@@ -68,6 +68,7 @@ export const he = {
   tapForWhy: "לחצו להסבר",
   closeReport: "סגירה",
   backToStages: "חזרה לשלבים",
+  backToHome: "חזרה למסך הבית",
   nextStage: "לשלב הבא",
   miniLevelProgress: (stage: number, total: number) => `שלב ${stage} מתוך ${total}`,
   howMuch: "❓ כמה זה?",
