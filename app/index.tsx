@@ -2,12 +2,13 @@ import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Screen } from "../src/components/Screen";
-import { GhostButton } from "../src/components/LeaderboardTable";
 import { useAuth } from "../src/context/AuthContext";
 import { useProgress } from "../src/context/ProgressContext";
 import { he } from "../src/i18n/he";
-import { colorsFor } from "../src/theme/colors";
+import { CATEGORY_COLORS, DIFFICULTY_COLORS, GOLD, OK, font } from "../src/theme/colors";
 import { AvatarPreview } from "../src/components/AvatarPreview";
+import { CategoryTile, DifficultyTile, Icon, Star, type IconName } from "../src/components/Art";
+import { Buddy, Card, CoinPill, ProgressBar, TopBar, useColors } from "../src/components/ui";
 import { defaultAvatar } from "../src/game/avatar";
 import {
   CONFIG,
@@ -20,6 +21,8 @@ import {
   type Difficulty,
 } from "../src/game/config";
 
+const DIFFICULTIES: Difficulty[] = ["easy", "mid", "hard"];
+
 export default function HomeScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ category?: string; level?: string }>();
@@ -31,7 +34,7 @@ export default function HomeScreen() {
   const [difficulty, setDifficulty] = useState<Difficulty | null>(
     params.level ? parseDifficulty(params.level) : null,
   );
-  const c = colorsFor(active.theme);
+  const c = useColors();
 
   useEffect(() => {
     if (params.category) setCategory(parseCategory(params.category));
@@ -43,187 +46,352 @@ export default function HomeScreen() {
     router.push({ pathname: "/game", params: { level: difficulty, category, stage: String(stage) } });
   };
 
+  const coinPill = <CoinPill coins={active.coins} onPress={() => router.push("/shop")} />;
+
   if (loading) {
     return (
       <Screen>
-        <Text style={[styles.title, { color: c.title }]}>{he.appTitle}</Text>
+        <Buddy size={120} body={c.primary} />
+        <Text style={[styles.loading, { color: c.ink }]}>{he.appName}</Text>
       </Screen>
     );
   }
 
+  if (!category) {
+    const total = DIFFICULTIES.length * CONFIG.miniLevels;
+    const done = (cat: Category) =>
+      DIFFICULTIES.reduce((sum, d) => sum + clearedStages(active.stageClears, cat, d), 0);
+    return (
+      <Screen>
+        <View style={styles.helloBar}>
+          <Pressable onPress={() => router.push("/profile")} style={styles.helloWho}>
+            <AvatarPreview loadout={active.avatar ?? defaultAvatar()} size={50} showGear={false} />
+            <View style={{ alignItems: "flex-end" }}>
+              <Text style={[styles.helloSmall, { color: c.soft }]}>{he.hello}</Text>
+              <Text style={[styles.helloName, { color: c.ink }]} numberOfLines={1}>
+                {active.displayName}
+              </Text>
+            </View>
+          </Pressable>
+          {coinPill}
+        </View>
+
+        <View style={[styles.hero, { backgroundColor: c.primary, borderBottomColor: c.primaryLip }]}>
+          <View style={[styles.heroBlob, { backgroundColor: c.heroBlob }]} />
+          <View style={styles.heroMascot}>
+            <Buddy size={104} />
+          </View>
+          <View style={styles.heroStar}>
+            <Star size={18} fill="#FFC23D" stroke="#FFC23D" />
+          </View>
+          <View style={styles.heroCopy}>
+            <Text style={styles.heroTitle}>{he.appName}</Text>
+            <Text style={[styles.heroSub, { color: c.primaryTint }]}>{he.appSubtitle}</Text>
+            {isLocal ? (
+              <View style={styles.heroChip}>
+                <Text style={[styles.heroChipText, { color: c.primary }]}>{he.guestBadge}</Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
+        {isLocal ? <Text style={[styles.localHint, { color: c.soft }]}>{he.coinsLocalOnly}</Text> : null}
+
+        <Text style={[styles.section, { color: c.ink }]}>{he.pickCategory}</Text>
+        <View style={styles.grid}>
+          {(["language", "math", "english", "logic"] as Category[]).map((cat) => (
+            <SubjectCard
+              key={cat}
+              category={cat}
+              done={done(cat)}
+              total={total}
+              onPress={() => setCategory(cat)}
+            />
+          ))}
+          <SubjectCard
+            category="science"
+            done={done("science")}
+            total={total}
+            wide
+            onPress={() => setCategory("science")}
+          />
+        </View>
+
+        <View style={[styles.dock, { backgroundColor: c.surface, borderBottomColor: c.line }]}>
+          <DockItem icon="bag" label={he.navShop} tint={CATEGORY_COLORS.language.tint} onPress={() => router.push("/shop")} />
+          <DockItem icon="backpack" label={he.navGear} tint={CATEGORY_COLORS.english.tint} onPress={() => router.push("/inventory")} />
+          <DockItem icon="trophy" label={he.navLeaderboard} tint={GOLD.tint} onPress={() => router.push("/leaderboard")} />
+          <DockItem icon="user" label={he.navProfile} tint={CATEGORY_COLORS.logic.tint} onPress={() => router.push("/profile")} />
+        </View>
+
+        <Pressable onPress={() => signOut()} style={styles.logout}>
+          <Icon name="logout" size={18} color={c.soft} />
+          <Text style={[styles.logoutText, { color: c.soft }]}>{he.logout}</Text>
+        </Pressable>
+      </Screen>
+    );
+  }
+
+  const chip = (
+    <View style={[styles.chip, { backgroundColor: c.surface, borderBottomColor: c.line }]}>
+      <CategoryTile category={category} size={32} />
+      <Text style={[styles.chipText, { color: c.ink }]} numberOfLines={1}>
+        {difficulty ? `${categoryLabel(category)} · ${difficultyLabel(difficulty)}` : categoryLabel(category)}
+      </Text>
+    </View>
+  );
+
+  if (!difficulty) {
+    return (
+      <Screen>
+        <TopBar
+          onBack={() => {
+            setCategory(null);
+            router.replace("/");
+          }}
+          backLabel={he.backLabel}
+          center={chip}
+          trailing={coinPill}
+        />
+        <Text style={[styles.section, styles.sectionCenter, { color: c.ink }]}>{he.pickDifficulty}</Text>
+        <View style={styles.levels}>
+          {DIFFICULTIES.map((d) => {
+            const cleared = clearedStages(active.stageClears, category, d);
+            const sw = DIFFICULTY_COLORS[d];
+            return (
+              <Pressable
+                key={d}
+                onPress={() => setDifficulty(d)}
+                style={({ pressed }) => [
+                  styles.levelCard,
+                  {
+                    backgroundColor: c.surface,
+                    borderBottomColor: c.line,
+                    borderBottomWidth: pressed ? 2 : 5,
+                    marginTop: pressed ? 3 : 0,
+                  },
+                ]}
+              >
+                <DifficultyTile difficulty={d} size={58} />
+                <View style={styles.levelCopy}>
+                  <Text style={[styles.cardTitle, { color: c.ink }]}>{difficultyLabel(d)}</Text>
+                  <Text style={[styles.cardDesc, { color: c.soft }]}>{levelDesc(category, d)}</Text>
+                  <View style={styles.levelProgress}>
+                    <Text style={[styles.fraction, { color: c.soft }]}>{he.fraction(cleared, CONFIG.miniLevels)}</Text>
+                    <View style={{ flex: 1 }}>
+                      <ProgressBar pct={(cleared / CONFIG.miniLevels) * 100} color={sw.base} />
+                    </View>
+                  </View>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      </Screen>
+    );
+  }
+
+  const cleared = clearedStages(active.stageClears, category, difficulty);
   return (
     <Screen>
-      <Text style={[styles.title, { color: c.title }]}>{he.appTitle}</Text>
-      <Text style={[styles.sub, { color: c.subtitle }]}>{he.appSubtitle}</Text>
-      <Text style={[styles.hello, { color: c.accent }]}>{he.helloName(active.displayName)}</Text>
-      <AvatarPreview loadout={active.avatar ?? defaultAvatar()} size={72} />
-      {isLocal ? <Text style={styles.localHint}>{he.coinsLocalOnly}</Text> : null}
+      <TopBar
+        onBack={() => {
+          setDifficulty(null);
+          router.replace({ pathname: "/", params: { category } });
+        }}
+        backLabel={he.backLabel}
+        center={chip}
+        trailing={coinPill}
+      />
+      <Card style={styles.progressCard}>
+        <View style={styles.progressHead}>
+          <Text style={[styles.progressTitle, { color: c.ink }]}>{he.yourProgress}</Text>
+          <Text style={[styles.progressSub, { color: c.soft }]}>{he.stagesDone(cleared, CONFIG.miniLevels)}</Text>
+        </View>
+        <ProgressBar pct={(cleared / CONFIG.miniLevels) * 100} color={CATEGORY_COLORS[category].base} height={10} />
+      </Card>
 
-      {!category ? (
-        <>
-          <View style={styles.info}>
-            <Pressable onPress={() => router.push("/profile")}>
-              <Text style={styles.coins}>🪙 {active.coins}</Text>
-            </Pressable>
-            <Pressable onPress={() => router.push("/profile")} style={styles.invBtn}>
-              <Text style={styles.invText}>{he.profile}</Text>
-            </Pressable>
-            <Pressable onPress={() => router.push("/shop")} style={styles.invBtn}>
-              <Text style={styles.invText}>{he.shop}</Text>
-            </Pressable>
-            <Pressable onPress={() => router.push("/inventory")} style={styles.invBtn}>
-              <Text style={styles.invText}>{he.myGear}</Text>
-            </Pressable>
-          </View>
-
-          <Text style={[styles.section, { color: c.subtitle }]}>{he.pickCategory}</Text>
-          <View style={styles.categories}>
-            <LevelCard
-              emoji="🔤"
-              title={he.categoryLanguage}
-              desc={he.categoryLanguageDesc}
-              color="#4D96FF"
-              onPress={() => setCategory("language")}
+      <View style={styles.map}>
+        {Array.from({ length: CONFIG.miniLevels }, (_, i) => i + 1).map((stage) => {
+          const unlocked = isStageUnlocked(active.stageClears, category, difficulty, stage);
+          const done = cleared >= stage;
+          const perfect =
+            done && isStagePerfectClear(active.stagePerfect, active.stageCoins, category, difficulty, stage);
+          return (
+            <StageNode
+              key={stage}
+              stage={stage}
+              state={!unlocked ? "locked" : perfect ? "perfect" : done ? "partial" : "current"}
+              onPress={() => start(stage)}
             />
-            <LevelCard
-              emoji="🔢"
-              title={he.categoryMath}
-              desc={he.categoryMathDesc}
-              color="#f9ca24"
-              onPress={() => setCategory("math")}
-            />
-            <LevelCard
-              emoji="🇬🇧"
-              title={he.categoryEnglish}
-              desc={he.categoryEnglishDesc}
-              color="#6bcb77"
-              onPress={() => setCategory("english")}
-            />
-            <LevelCard
-              emoji="🧠"
-              title={he.categoryLogic}
-              desc={he.categoryLogicDesc}
-              color="#a29bfe"
-              onPress={() => setCategory("logic")}
-            />
-            <LevelCard
-              emoji="🌿"
-              title={he.categoryScience}
-              desc={he.categoryScienceDesc}
-              color="#00cec9"
-              onPress={() => setCategory("science")}
-            />
-          </View>
-
-          <View style={styles.actions}>
-            <GhostButton label={he.leaderboard} onPress={() => router.push("/leaderboard")} />
-          </View>
-          <Pressable onPress={() => signOut()} style={{ marginTop: 24 }}>
-            <Text style={{ color: "rgba(255,255,255,0.5)", fontFamily: "Heebo_700Bold" }}>{he.logout}</Text>
-          </Pressable>
-        </>
-      ) : !difficulty ? (
-        <>
-          <Text style={[styles.section, { color: c.subtitle }]}>
-            {categoryLabel(category)} — {he.pickDifficulty}
-          </Text>
-          <View style={styles.levels}>
-            <LevelCard
-              emoji="🌱"
-              title={he.easy}
-              desc={levelDesc(category, "easy")}
-              color="#6bcb77"
-              stacked
-              onPress={() => setDifficulty("easy")}
-            />
-            <LevelCard
-              emoji="⭐"
-              title={he.mid}
-              desc={levelDesc(category, "mid")}
-              color="#f9ca24"
-              stacked
-              onPress={() => setDifficulty("mid")}
-            />
-            <LevelCard
-              emoji="🔥"
-              title={he.hard}
-              desc={levelDesc(category, "hard")}
-              color="#ff6b6b"
-              stacked
-              onPress={() => setDifficulty("hard")}
-            />
-          </View>
-          <View style={{ marginTop: 16 }}>
-            <GhostButton
-              label={he.back}
-              onPress={() => {
-                setCategory(null);
-                router.replace("/");
-              }}
-            />
-          </View>
-        </>
-      ) : (
-        <>
-          <Text style={[styles.section, { color: c.subtitle }]}>
-            {categoryLabel(category)} · {difficultyLabel(difficulty)}
-          </Text>
-          <Text style={styles.stageHint}>
-            {he.stageProgress(clearedStages(active.stageClears, category, difficulty), CONFIG.miniLevels)}
-          </Text>
-          <View style={styles.stageList}>
-            {Array.from({ length: CONFIG.miniLevels }, (_, i) => i + 1).map((stage) => {
-              const unlocked = isStageUnlocked(active.stageClears, category, difficulty, stage);
-              const done = clearedStages(active.stageClears, category, difficulty) >= stage;
-              const perfect =
-                done &&
-                isStagePerfectClear(active.stagePerfect, active.stageCoins, category, difficulty, stage);
-              return (
-                <Pressable
-                  key={stage}
-                  disabled={!unlocked}
-                  onPress={() => start(stage)}
-                  style={[
-                    styles.stageBtn,
-                    done && styles.stageDone,
-                    perfect && styles.stagePerfect,
-                    !unlocked && styles.stageLocked,
-                  ]}
-                >
-                  <Text style={styles.stageNum}>{done ? (perfect ? "⭐" : "✓") : stage}</Text>
-                  <Text style={styles.stageCap}>
-                    {!unlocked
-                      ? he.stageLocked
-                      : perfect
-                        ? he.stagePerfectBadge
-                        : done
-                          ? he.stagePartialBadge
-                          : he.stageLabel(stage)}
-                  </Text>
-                  {done && !perfect ? (
-                    <Pressable
-                      onPress={() => start(stage)}
-                      style={styles.retryBtn}
-                    >
-                      <Text style={styles.retryText}>{he.stageRetry}</Text>
-                    </Pressable>
-                  ) : null}
-                </Pressable>
-              );
-            })}
-          </View>
-          <View style={{ marginTop: 16 }}>
-            <GhostButton
-              label={he.back}
-              onPress={() => {
-                setDifficulty(null);
-                router.replace({ pathname: "/", params: { category } });
-              }}
-            />
-          </View>
-        </>
-      )}
+          );
+        })}
+      </View>
     </Screen>
+  );
+}
+
+const ZIGZAG = [0, -72, -104, -72, 0, 72, 104, 72, 0, -72];
+
+function StageNode({
+  stage,
+  state,
+  onPress,
+}: {
+  stage: number;
+  state: "locked" | "perfect" | "partial" | "current";
+  onPress: () => void;
+}) {
+  const c = useColors();
+  const offset = ZIGZAG[(stage - 1) % ZIGZAG.length];
+  const size = state === "current" ? 70 : state === "locked" ? 52 : 58;
+  const fill =
+    state === "perfect"
+      ? OK
+      : state === "partial"
+        ? GOLD
+        : state === "current"
+          ? { base: c.primary, lip: c.primaryLip }
+          : { base: "#DCE6F2", lip: "#C3D1E3" };
+  // Side labels go toward the screen center so they never clip.
+  const side = offset <= 0 ? { left: size + 12 } : { right: size + 12 };
+  const align = offset <= 0 ? "flex-start" : "flex-end";
+  const otherSide = offset <= 0 ? { right: size + 6 } : { left: size + 6 };
+
+  return (
+    <View style={styles.mapRow}>
+      <View style={{ width: size, height: size, transform: [{ translateX: offset }] }}>
+        {state === "current" ? (
+          <View style={[styles.halo, { backgroundColor: c.primaryTint, top: -11, left: -11, width: size + 22, height: size + 22, borderRadius: (size + 22) / 2 }]} />
+        ) : null}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={state === "locked" ? `${he.stageLabel(stage)} · ${he.stageLocked}` : he.stageLabel(stage)}
+          disabled={state === "locked"}
+          onPress={onPress}
+          style={({ pressed }) => [
+            styles.node,
+            {
+              width: size,
+              height: size,
+              borderRadius: size / 2,
+              backgroundColor: fill.base,
+              borderBottomColor: fill.lip,
+              borderBottomWidth: pressed ? 2 : 5,
+              marginTop: pressed ? 3 : 0,
+            },
+          ]}
+        >
+          {state === "perfect" ? (
+            <Star size={28} fill="#fff" stroke="#fff" />
+          ) : state === "partial" ? (
+            <Icon name="check" size={28} color="#fff" weight={3.4} />
+          ) : state === "current" ? (
+            <Text style={styles.nodeNum}>{stage}</Text>
+          ) : (
+            <View style={{ alignItems: "center" }}>
+              <Icon name="lock" size={18} color="#8C9BB5" weight={2.4} />
+              <Text style={styles.nodeLockedNum}>{stage}</Text>
+            </View>
+          )}
+        </Pressable>
+
+        {state === "perfect" ? (
+          <View style={[styles.sideLabel, side, { alignItems: align, top: size / 2 - 11 }]}>
+            <Text style={[styles.sideText, { color: OK.deep }]}>{he.stagePerfectBadge}</Text>
+          </View>
+        ) : null}
+        {state === "partial" ? (
+          <View style={[styles.sideLabel, side, { alignItems: align, top: size / 2 - 18 }]}>
+            <Pressable
+              onPress={onPress}
+              style={[styles.retryPill, { backgroundColor: c.surface, borderBottomColor: c.line }]}
+            >
+              <Icon name="replay" size={14} color={GOLD.deep} weight={2.6} />
+              <Text style={[styles.sideText, { color: GOLD.deep }]}>
+                {he.stagePartialBadge} · {he.stageRetry}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
+        {state === "current" ? (
+          <>
+            <View style={[styles.sideLabel, side, { alignItems: align, top: size / 2 - 12 }]}>
+              <Text style={[styles.startText, { color: c.primary }]}>{he.stageStart}</Text>
+            </View>
+            <View style={[styles.mascotPeek, otherSide]}>
+              <Buddy size={54} body={c.primary} />
+            </View>
+          </>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+function SubjectCard({
+  category,
+  done,
+  total,
+  wide,
+  onPress,
+}: {
+  category: Category;
+  done: number;
+  total: number;
+  wide?: boolean;
+  onPress: () => void;
+}) {
+  const c = useColors();
+  const sw = CATEGORY_COLORS[category];
+  const bar = <ProgressBar pct={(done / total) * 100} color={sw.base} />;
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.subject,
+        wide ? styles.subjectWide : styles.subjectHalf,
+        {
+          backgroundColor: c.surface,
+          borderBottomColor: c.line,
+          borderBottomWidth: pressed ? 2 : 5,
+          marginTop: pressed ? 3 : 0,
+        },
+      ]}
+    >
+      <CategoryTile category={category} size={56} />
+      <View style={wide ? styles.subjectCopyWide : styles.subjectCopy}>
+        <Text style={[styles.cardTitle, { color: c.ink }]}>{categoryLabel(category)}</Text>
+        <Text style={[styles.cardDesc, { color: c.soft }]} numberOfLines={2}>
+          {categoryDesc(category)}
+        </Text>
+      </View>
+      <View style={wide ? styles.subjectBarWide : styles.subjectBar}>
+        <Text style={[styles.fraction, { color: c.soft }]}>{he.fraction(done, total)}</Text>
+        <View style={{ flex: 1 }}>{bar}</View>
+      </View>
+    </Pressable>
+  );
+}
+
+function DockItem({
+  icon,
+  label,
+  tint,
+  onPress,
+}: {
+  icon: IconName;
+  label: string;
+  tint: string;
+  onPress: () => void;
+}) {
+  const c = useColors();
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.dockItem, pressed && { opacity: 0.7 }]}>
+      <View style={[styles.dockIcon, { backgroundColor: tint }]}>
+        <Icon name={icon} size={22} color={c.ink} />
+      </View>
+      <Text style={[styles.dockLabel, { color: c.ink }]}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -239,6 +407,14 @@ function categoryLabel(category: Category) {
   if (category === "logic") return he.categoryLogic;
   if (category === "science") return he.categoryScience;
   return he.categoryLanguage;
+}
+
+function categoryDesc(category: Category) {
+  if (category === "math") return he.categoryMathDesc;
+  if (category === "english") return he.categoryEnglishDesc;
+  if (category === "logic") return he.categoryLogicDesc;
+  if (category === "science") return he.categoryScienceDesc;
+  return he.categoryLanguageDesc;
 }
 
 function levelDesc(category: Category, level: Difficulty) {
@@ -267,120 +443,123 @@ function levelDesc(category: Category, level: Difficulty) {
   return he.hardDesc;
 }
 
-function LevelCard({
-  emoji,
-  title,
-  desc,
-  color,
-  onPress,
-  stacked,
-}: {
-  emoji: string;
-  title: string;
-  desc: string;
-  color: string;
-  onPress: () => void;
-  stacked?: boolean;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={[styles.card, stacked && styles.cardStacked, { borderColor: color }]}
-    >
-      <Text style={styles.emoji}>{emoji}</Text>
-      <View style={stacked ? styles.cardCopy : undefined}>
-        <Text style={[styles.cardTitle, stacked && styles.cardTitleStacked]}>{title}</Text>
-        <Text style={[styles.cardDesc, stacked && styles.cardDescStacked]}>{desc}</Text>
-      </View>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
-  title: { fontSize: 34, fontFamily: "Heebo_900Black", textAlign: "center" },
-  sub: { fontSize: 16, fontFamily: "Heebo_700Bold", marginBottom: 8, textAlign: "center" },
-  hello: { fontSize: 22, fontFamily: "Heebo_800ExtraBold", marginBottom: 12, textAlign: "center" },
-  localHint: { color: "#ffd93d", textAlign: "center", marginBottom: 12, fontFamily: "Heebo_400Regular" },
-  info: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "center", gap: 12, marginVertical: 16 },
-  coins: { color: "#ffd93d", fontSize: 20, fontFamily: "Heebo_800ExtraBold" },
-  invBtn: { backgroundColor: "rgba(255,255,255,0.12)", paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20 },
-  invText: { color: "#fff", fontFamily: "Heebo_700Bold" },
-  section: { fontFamily: "Heebo_800ExtraBold", fontSize: 18, marginBottom: 12, textAlign: "center" },
-  categories: { flexDirection: "row", flexWrap: "wrap", gap: 12, width: "100%", justifyContent: "center" },
-  levels: { flexDirection: "column", gap: 12, width: "100%", maxWidth: 420, alignSelf: "center" },
-  card: {
-    flexGrow: 1,
-    flexBasis: "42%",
-    minWidth: 140,
-    maxWidth: "100%",
-    borderWidth: 2,
-    borderRadius: 18,
-    paddingVertical: 16,
-    paddingHorizontal: 8,
-    alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.06)",
-  },
-  cardStacked: {
-    flexGrow: 0,
-    flexBasis: "auto",
-    minWidth: 0,
-    width: "100%",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-start",
-    gap: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-  },
-  cardCopy: { flex: 1, minWidth: 0, alignItems: "flex-start" },
-  cardTitleStacked: { marginTop: 0, textAlign: "right" },
-  cardDescStacked: { textAlign: "right" },
-  emoji: { fontSize: 32 },
-  cardTitle: { color: "#fff", fontFamily: "Heebo_800ExtraBold", fontSize: 18, marginTop: 6, textAlign: "center" },
-  cardDesc: { color: "rgba(255,255,255,0.7)", fontFamily: "Heebo_400Regular", fontSize: 12, textAlign: "center" },
-  actions: { flexDirection: "row", gap: 12, marginTop: 24 },
-  stageHint: {
-    color: "rgba(255,255,255,0.85)",
-    fontFamily: "Heebo_700Bold",
-    marginBottom: 12,
-    textAlign: "center",
-  },
-  stageList: {
-    flexDirection: "column",
-    width: "100%",
-    maxWidth: 420,
-    alignSelf: "center",
-  },
-  stageBtn: {
+  loading: { fontSize: 28, fontFamily: font.black, marginTop: 16 },
+  helloBar: {
     width: "100%",
     flexDirection: "row-reverse",
     alignItems: "center",
-    justifyContent: "flex-start",
-    marginBottom: 10,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: "#4D96FF",
-    backgroundColor: "rgba(255,255,255,0.08)",
+    justifyContent: "space-between",
+    marginBottom: 16,
   },
-  stageDone: { borderColor: "#ffd93d", backgroundColor: "rgba(249,202,36,0.18)" },
-  stagePerfect: { borderColor: "#6bcb77", backgroundColor: "rgba(107,203,119,0.2)" },
-  stageLocked: { borderColor: "rgba(255,255,255,0.2)", opacity: 0.45 },
-  stageNum: { color: "#fff", fontSize: 22, fontFamily: "Heebo_900Black", width: 36, textAlign: "center" },
-  stageCap: {
-    color: "rgba(255,255,255,0.9)",
-    fontSize: 16,
-    fontFamily: "Heebo_700Bold",
-    marginHorizontal: 12,
-    flex: 1,
-    textAlign: "right",
+  helloWho: { flexDirection: "row-reverse", alignItems: "center", gap: 10, flexShrink: 1 },
+  helloSmall: { fontSize: 13, fontFamily: font.medium },
+  helloName: { fontSize: 21, fontFamily: font.heavy, maxWidth: 180, textAlign: "right" },
+  hero: {
+    width: "100%",
+    borderRadius: 28,
+    borderBottomWidth: 6,
+    minHeight: 132,
+    paddingVertical: 22,
+    paddingRight: 22,
+    paddingLeft: 128,
+    overflow: "hidden",
+    justifyContent: "center",
   },
-  retryBtn: {
-    backgroundColor: "#4D96FF",
-    paddingVertical: 8,
+  heroBlob: { position: "absolute", left: -18, top: -26, width: 150, height: 150, borderRadius: 75 },
+  heroMascot: { position: "absolute", left: 14, bottom: -8 },
+  heroStar: { position: "absolute", left: 112, top: 16 },
+  heroCopy: { alignItems: "flex-end" },
+  heroTitle: { color: "#fff", fontSize: 27, fontFamily: font.black, textAlign: "right" },
+  heroSub: { fontSize: 15, fontFamily: font.medium, textAlign: "right", marginTop: 4 },
+  heroChip: {
+    marginTop: 10,
+    backgroundColor: "#fff",
+    borderRadius: 999,
+    paddingVertical: 5,
     paddingHorizontal: 12,
-    borderRadius: 14,
   },
-  retryText: { color: "#fff", fontFamily: "Heebo_800ExtraBold", fontSize: 13 },
+  heroChipText: { fontFamily: font.heavy, fontSize: 13 },
+  localHint: { fontFamily: font.medium, fontSize: 13, textAlign: "center", marginTop: 10 },
+  section: {
+    alignSelf: "stretch",
+    fontSize: 20,
+    fontFamily: font.heavy,
+    textAlign: "right",
+    marginTop: 20,
+    marginBottom: 12,
+  },
+  sectionCenter: { textAlign: "center", marginTop: 6 },
+  grid: { width: "100%", flexDirection: "row-reverse", flexWrap: "wrap", justifyContent: "space-between" },
+  subject: { borderRadius: 24, padding: 14, marginBottom: 14 },
+  subjectHalf: { width: "48%", minHeight: 176, alignItems: "flex-end", gap: 10 },
+  subjectWide: { width: "100%", flexDirection: "row-reverse", alignItems: "center", gap: 14 },
+  subjectCopy: { alignSelf: "stretch", alignItems: "flex-end", gap: 3 },
+  subjectCopyWide: { flex: 1, alignItems: "flex-end", gap: 3 },
+  subjectBar: { alignSelf: "stretch", flexDirection: "row-reverse", alignItems: "center", gap: 8, marginTop: "auto" },
+  subjectBarWide: { width: 96, flexDirection: "row-reverse", alignItems: "center", gap: 6 },
+  cardTitle: { fontSize: 19, fontFamily: font.heavy, textAlign: "right" },
+  cardDesc: { fontSize: 13, fontFamily: font.medium, textAlign: "right", lineHeight: 18 },
+  fraction: { fontSize: 12, fontFamily: font.bold },
+  dock: {
+    width: "100%",
+    flexDirection: "row-reverse",
+    borderRadius: 24,
+    borderBottomWidth: 5,
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    marginTop: 6,
+  },
+  dockItem: { flex: 1, alignItems: "center", gap: 5, paddingVertical: 6, minHeight: 44 },
+  dockIcon: { width: 42, height: 42, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  dockLabel: { fontSize: 12, fontFamily: font.bold, textAlign: "center" },
+  logout: { flexDirection: "row-reverse", alignItems: "center", gap: 6, marginTop: 22, padding: 10 },
+  logoutText: { fontFamily: font.bold, fontSize: 14 },
+  chip: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 999,
+    borderBottomWidth: 3,
+    paddingVertical: 5,
+    paddingLeft: 14,
+    paddingRight: 6,
+    maxWidth: "100%",
+  },
+  chipText: { fontFamily: font.heavy, fontSize: 16, flexShrink: 1 },
+  levels: { width: "100%" },
+  levelCard: {
+    width: "100%",
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 14,
+    borderRadius: 24,
+    padding: 16,
+    marginBottom: 14,
+  },
+  levelCopy: { flex: 1, alignItems: "flex-end", gap: 3 },
+  levelProgress: { alignSelf: "stretch", flexDirection: "row-reverse", alignItems: "center", gap: 8, marginTop: 8 },
+  progressCard: { gap: 8, paddingVertical: 12 },
+  progressHead: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" },
+  progressTitle: { fontFamily: font.bold, fontSize: 15 },
+  progressSub: { fontFamily: font.bold, fontSize: 14 },
+  map: { width: "100%", marginTop: 18, paddingBottom: 10 },
+  mapRow: { height: 84, width: "100%", alignItems: "center", justifyContent: "center" },
+  halo: { position: "absolute" },
+  node: { alignItems: "center", justifyContent: "center" },
+  nodeNum: { color: "#fff", fontFamily: font.black, fontSize: 28 },
+  nodeLockedNum: { color: "#8C9BB5", fontFamily: font.heavy, fontSize: 11 },
+  sideLabel: { position: "absolute", width: 170 },
+  sideText: { fontFamily: font.heavy, fontSize: 13 },
+  startText: { fontFamily: font.black, fontSize: 17 },
+  retryPill: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 5,
+    borderRadius: 999,
+    borderBottomWidth: 3,
+    paddingVertical: 7,
+    paddingHorizontal: 11,
+  },
+  mascotPeek: { position: "absolute", top: -6 },
 });

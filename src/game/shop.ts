@@ -68,7 +68,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     section: "enhance",
     category: "cosmetics",
     cost: 350,
-    desc: "עיצוב חלל כהה עם כוכבים",
+    desc: "עיצוב חלל סגול וחלומי",
     type: "theme",
     effect: "theme",
   },

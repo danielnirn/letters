@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { colorsFor } from "../theme/colors";
+import { colorsFor, font } from "../theme/colors";
 import { useProgress } from "../context/ProgressContext";
 
 export function useToast() {
@@ -29,10 +29,11 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: 36,
     alignSelf: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 20,
     zIndex: 50,
+    maxWidth: 360,
   },
-  text: { color: "#fff", fontWeight: "800", fontSize: 15, textAlign: "center", fontFamily: "Heebo_700Bold" },
+  text: { color: "#fff", fontSize: 15, textAlign: "center", fontFamily: font.bold },
 });

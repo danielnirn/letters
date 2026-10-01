@@ -7,7 +7,6 @@ import {
   View,
 } from "react-native";
 import { MathErrorCard, FadeIn } from "../src/components/MathErrorCard";
-import { GhostButton } from "../src/components/LeaderboardTable";
 import { PrimaryButton } from "../src/components/PrimaryButton";
 import { Screen } from "../src/components/Screen";
 import { useToast } from "../src/components/Toast";
@@ -33,15 +32,23 @@ import {
 } from "../src/game/session";
 import { SHOP_ITEMS } from "../src/game/shop";
 import { he } from "../src/i18n/he";
-import { colorsFor } from "../src/theme/colors";
+import { BAD, CATEGORY_COLORS, GOLD, OK, TILE_SWATCHES, font } from "../src/theme/colors";
+import { Coin, Icon } from "../src/components/Art";
+import { Buddy, Card, RoundButton, useColors } from "../src/components/ui";
 
 const LEVEL_LABEL: Record<Difficulty, string> = {
-  easy: `🌱 ${he.easy}`,
-  mid: `⭐ ${he.mid}`,
-  hard: `🔥 ${he.hard}`,
+  easy: he.easy,
+  mid: he.mid,
+  hard: he.hard,
 };
 
 export default function GameScreen() {
+  const { level, category, stage } = useLocalSearchParams<{ level: string; category: string; stage: string }>();
+  // Remount per stage so "next stage" starts fresh state.
+  return <GameRun key={`${category}:${level}:${stage}`} />;
+}
+
+function GameRun() {
   const { level, category, stage } = useLocalSearchParams<{
     level: Difficulty;
     category: Category;
@@ -57,7 +64,7 @@ export default function GameScreen() {
   completeStageRef.current = progress.completeStage;
   saveScoreRef.current = progress.saveScore;
   const { show, node } = useToast();
-  const c = colorsFor(progress.active.theme);
+  const c = useColors();
   const [state, setState] = useState<GameState>(() => startGame(difficulty, cat, miniLevel));
   const settled = useRef(false);
   const [advancePct, setAdvancePct] = useState(0);
@@ -67,6 +74,14 @@ export default function GameScreen() {
 
   const backToStages = () => {
     router.replace({ pathname: "/", params: { category: cat, level: difficulty } });
+  };
+
+  const hasNextStage = miniLevel < CONFIG.miniLevels;
+  const goNextStage = () => {
+    router.replace({
+      pathname: "/game",
+      params: { level: difficulty, category: cat, stage: String(miniLevel + 1) },
+    });
   };
 
   useEffect(() => {
@@ -156,10 +171,14 @@ export default function GameScreen() {
     }
   };
 
+
+  const crumb = `${categoryTitle(state.category)} · ${LEVEL_LABEL[state.level]} · ${he.stageLabel(state.stage)}`;
+
   if (state.phase === "timeout") {
     return (
       <Screen>
-        <Text style={styles.timeout}>{he.timeout}</Text>
+        <Buddy size={120} body={c.primary} />
+        <Text style={[styles.timeout, { color: c.ink }]}>{he.timeout}</Text>
       </Screen>
     );
   }
@@ -168,33 +187,48 @@ export default function GameScreen() {
     if (showReport) {
       return (
         <Screen>
-          <Text style={styles.winTitle}>{he.mistakeReportTitle}</Text>
+          <Text style={[styles.reportTitle, { color: c.ink }]}>{he.mistakeReportTitle}</Text>
+          <Text style={[styles.crumb, { color: c.soft, marginBottom: 14 }]}>{crumb}</Text>
           {state.mistakes.map((m, i) => {
             const open = openMistake === i;
             return (
               <Pressable
                 key={`${m.index}-${m.answer}-${i}`}
                 onPress={() => setOpenMistake(open ? null : i)}
-                style={styles.reportCard}
+                style={[styles.reportCard, { backgroundColor: c.surface, borderBottomColor: c.line }]}
               >
-                <Text style={styles.reportQ}>{he.mistakeQuestion(m.index + 1)}</Text>
-                {m.prompt ? <Text style={styles.reportPrompt}>{m.prompt}</Text> : null}
-                <Text style={styles.reportWrong}>
-                  {m.skipped ? he.skippedThis : `${he.yourAnswer}: ${m.guess || "—"}`}
-                </Text>
-                <Text style={styles.reportRight}>
-                  {he.correctAnswer}: {m.answer}
-                </Text>
-                {!open ? <Text style={styles.reportTap}>{he.tapForWhy}</Text> : null}
+                <View style={styles.reportHead}>
+                  <View style={[styles.reportNum, { backgroundColor: BAD.tint }]}>
+                    <Text style={[styles.reportNumText, { color: BAD.deep }]}>{m.index + 1}</Text>
+                  </View>
+                  <View style={{ flex: 1, alignItems: "flex-end" }}>
+                    <Text style={[styles.reportQ, { color: c.soft }]}>{he.mistakeQuestion(m.index + 1)}</Text>
+                    {m.prompt ? <Text style={[styles.reportPrompt, { color: c.ink }]}>{m.prompt}</Text> : null}
+                  </View>
+                  <Icon name={open ? "close" : "next"} size={18} color={c.soft} />
+                </View>
+                <View style={styles.reportAnswers}>
+                  <View style={[styles.answerTag, { backgroundColor: BAD.tint }]}>
+                    <Text style={[styles.answerTagText, { color: BAD.deep }]}>
+                      {m.skipped ? he.skippedThis : `${he.yourAnswer}: ${m.guess || "—"}`}
+                    </Text>
+                  </View>
+                  <View style={[styles.answerTag, { backgroundColor: OK.tint }]}>
+                    <Text style={[styles.answerTagText, { color: OK.deep }]}>
+                      {he.correctAnswer}: {m.answer}
+                    </Text>
+                  </View>
+                </View>
+                {!open ? <Text style={[styles.reportTap, { color: c.primary }]}>{he.tapForWhy}</Text> : null}
                 {open ? (
                   state.category === "math" ? (
-                    <View style={{ width: "100%", marginTop: 10 }}>
-                      <MathErrorCard expr={m.prompt} guess={m.guess} answer={m.answer} />
+                    <View style={{ width: "100%", marginTop: 12 }}>
+                      <MathErrorCard expr={m.prompt} guess={m.guess} answer={m.answer} title={false} />
                     </View>
                   ) : (
-                    <View style={styles.reportWhy}>
-                      {m.hint ? <Text style={styles.reportHint}>{m.hint}</Text> : null}
-                      <Text style={styles.reportWhyText}>
+                    <View style={[styles.reportWhy, { backgroundColor: GOLD.tint }]}>
+                      {m.hint ? <Text style={[styles.reportHint, { color: c.ink }]}>{m.hint}</Text> : null}
+                      <Text style={[styles.reportWhyText, { color: GOLD.deep }]}>
                         {m.skipped
                           ? `${he.correctAnswer}: ${m.answer}`
                           : `${m.prompt || ""} זה לא ${m.guess || "—"} · ${m.answer}`}
@@ -205,42 +239,81 @@ export default function GameScreen() {
               </Pressable>
             );
           })}
-          <PrimaryButton
-            label={he.closeReport}
-            onPress={() => {
-              setShowReport(false);
-              setOpenMistake(null);
-            }}
-          />
-          <View style={{ marginTop: 12 }}>
-            <GhostButton label={he.backToStages} onPress={backToStages} />
+          <View style={styles.stackButtons}>
+            <PrimaryButton
+              label={he.closeReport}
+              variant="soft"
+              onPress={() => {
+                setShowReport(false);
+                setOpenMistake(null);
+              }}
+            />
+            <PrimaryButton label={he.backToStages} onPress={backToStages} />
           </View>
         </Screen>
       );
     }
+    const perfect = stageIsPerfect(state);
+    const okCount = state.questionMarks.filter((m) => m === "ok").length;
     return (
       <Screen>
-        <Text style={styles.bigEmoji}>🎉</Text>
-        <Text style={styles.winTitle}>{he.stageCompleteTitle}</Text>
-        <Text style={styles.meta}>{he.stageLabel(state.stage)}</Text>
-        <Text style={styles.meta}>
-          {stageIsPerfect(state) ? he.stagePerfect : he.stageHadMistakes}
-        </Text>
-        <Text style={styles.meta}>🪙 {stageCoinReward(state)}</Text>
-        <Text style={styles.meta}>
-          🔥 {state.streak}/{CONFIG.streakEvery}
-        </Text>
-        {state.mistakes.length > 0 ? (
-          <PrimaryButton label={he.viewMistakes} onPress={() => setShowReport(true)} />
-        ) : null}
-        <View style={{ marginTop: 12 }}>
-          <PrimaryButton label={he.backToStages} onPress={backToStages} />
+        <Confetti />
+        <View style={[styles.completeBadge, { backgroundColor: GOLD.tint }]}>
+          <Buddy size={118} body={OK.base} />
+        </View>
+        <Text style={[styles.completeTitle, { color: c.ink }]}>{he.stageCompleteTitle}</Text>
+        <Text style={[styles.crumb, { color: c.soft }]}>{crumb}</Text>
+
+        <Card style={styles.resultCard}>
+          <View style={styles.resultDots}>
+            {state.wordList.map((_, i) => {
+              const mark = state.questionMarks[i];
+              const sw = mark === "ok" ? OK : BAD;
+              return (
+                <View key={i} style={[styles.resultDot, { backgroundColor: sw.base, borderBottomColor: sw.lip }]}>
+                  <Icon name={mark === "ok" ? "check" : "x"} size={16} color="#fff" weight={3.2} />
+                </View>
+              );
+            })}
+          </View>
+          <Text style={[styles.resultLine, { color: perfect ? OK.deep : GOLD.deep }]}>
+            {perfect ? he.stagePerfect : he.stageHadMistakes} · {he.correctOf(okCount, state.wordList.length)}
+          </Text>
+          <View style={[styles.statsRow, { borderTopColor: c.line }]}>
+            <View style={styles.stat}>
+              <View style={styles.statValueRow}>
+                <Coin size={28} />
+                <Text style={[styles.statValue, { color: c.ink }]}>+{stageCoinReward(state)}</Text>
+              </View>
+              <Text style={[styles.statLabel, { color: c.soft }]}>{he.coinsLabel}</Text>
+            </View>
+            <View style={[styles.statDivider, { backgroundColor: c.line }]} />
+            <View style={styles.stat}>
+              <Text style={[styles.statValue, { color: c.ink }]}>
+                🔥 {state.streak}/{CONFIG.streakEvery}
+              </Text>
+              <Text style={[styles.statLabel, { color: c.soft }]}>{he.streakLabel}</Text>
+            </View>
+          </View>
+        </Card>
+
+        <View style={styles.stackButtons}>
+          {state.mistakes.length > 0 ? (
+            <PrimaryButton label={he.viewMistakes} variant="soft" onPress={() => setShowReport(true)} />
+          ) : null}
+          {hasNextStage ? (
+            <PrimaryButton label={he.nextStage} icon="next" onPress={goNextStage} />
+          ) : (
+            <PrimaryButton label={he.backToStages} onPress={backToStages} />
+          )}
         </View>
       </Screen>
     );
   }
 
   const won = state.phase === "win";
+  const wrong = state.shaking && !won;
+  const hebrewRow = state.category === "english" ? "row" : "row-reverse";
   const consumables = SHOP_ITEMS.filter((it) => it.consumable).filter(
     (it) => (progress.active.inventory[it.id] || 0) > 0,
   );
@@ -249,250 +322,262 @@ export default function GameScreen() {
     <Screen>
       {node}
       <View style={styles.header}>
-        <GhostButton label={he.back} onPress={backToStages} />
-        <View style={{ alignItems: "center", flex: 1 }}>
-          <Text style={[styles.badge, { color: c.accent }]}>
-            {categoryTitle(state.category)} · {LEVEL_LABEL[state.level]}
-          </Text>
-          <Text style={styles.progress}>{he.miniLevelProgress(state.stage, CONFIG.miniLevels)}</Text>
-          <Text style={styles.player}>👤 {progress.active.displayName}</Text>
+        <RoundButton icon="close" onPress={backToStages} label={he.exitLabel} />
+        <View
+          style={styles.segments}
+          accessibilityLabel={he.questionProgress(state.wordIndex + 1, state.wordList.length)}
+        >
+          {state.wordList.map((_, i) => {
+            const mark = state.questionMarks[i];
+            const current = i === state.wordIndex && !mark;
+            const bg = mark === "ok" ? OK.base : mark === "bad" ? BAD.base : current ? c.primary : c.line;
+            return <View key={i} style={[styles.segment, { backgroundColor: bg }, current && styles.segmentNow]} />;
+          })}
         </View>
       </View>
+      <Text style={[styles.crumb, { color: c.soft }]}>{crumb}</Text>
 
-      <Text
-        style={
-          state.category === "math" || state.category === "logic"
-            ? styles.mathPrompt
-            : styles.emoji
-        }
-      >
-        {state.category === "math"
-          ? `${state.currentEmoji} = ${won ? state.currentWord : "?"}`
-          : state.currentEmoji}
-      </Text>
-      {state.currentHint ? <Text style={styles.hintHe}>{state.currentHint}</Text> : null}
+      <Card style={styles.promptCard}>
+        {state.category === "math" ? (
+          <View style={styles.exprRow}>
+            <Text style={[styles.exprText, { color: c.ink }]}>{state.currentEmoji} =</Text>
+            <View
+              style={[
+                styles.exprBox,
+                won
+                  ? { backgroundColor: OK.tint, borderColor: OK.base, borderStyle: "solid" }
+                  : { backgroundColor: c.primaryTint, borderColor: c.primary },
+              ]}
+            >
+              <Text style={[styles.exprText, { color: won ? OK.deep : c.primary }]}>
+                {won ? state.currentWord : "?"}
+              </Text>
+            </View>
+          </View>
+        ) : state.category === "logic" ? (
+          <Text style={[styles.logicPrompt, { color: c.ink }]}>{state.currentEmoji}</Text>
+        ) : (
+          <Text style={styles.emoji}>{state.currentEmoji}</Text>
+        )}
+        {state.currentHint ? <Text style={[styles.hintHe, { color: c.ink }]}>{state.currentHint}</Text> : null}
+        {state.questionType !== "spell" && state.category !== "math" ? (
+          <Text style={[styles.prompt, { color: c.soft }]}>
+            {state.questionType === "type" ? he.promptType : choicePrompt(state.category)}
+          </Text>
+        ) : null}
+      </Card>
 
-      {state.shaking && !won && state.category === "math" ? (
-        <MathErrorCard
-          expr={state.currentEmoji}
-          guess={state.lastWrongPick}
-          answer={state.currentWord}
-        />
-      ) : state.shaking && !won ? (
+      {wrong && state.category === "math" ? (
+        <MathErrorCard expr={state.currentEmoji} guess={state.lastWrongPick} answer={state.currentWord} />
+      ) : wrong ? (
         <FadeIn resetKey={`${state.wordIndex}-${state.lastWrongPick}-${state.missedThisWord}`}>
-          <View style={styles.wrongBanner}>
-            <Text style={styles.wrongBannerText}>{he.wrongTryAgain}</Text>
+          <View style={[styles.feedback, { backgroundColor: c.surface, borderColor: BAD.tint, borderBottomColor: BAD.lip }]}>
+            <View style={[styles.feedbackIcon, { backgroundColor: BAD.base }]}>
+              <Icon name="x" size={22} color="#fff" weight={3.2} />
+            </View>
+            <View style={{ flex: 1, alignItems: "flex-end" }}>
+              <Text style={[styles.feedbackTitle, { color: BAD.deep }]}>{he.wrongTitle}</Text>
+              <Text style={[styles.feedbackSub, { color: c.soft }]}>{he.wrongNext}</Text>
+            </View>
           </View>
         </FadeIn>
       ) : null}
 
       {state.questionType === "choice" ? (
-        <View style={{ width: "100%", alignItems: "center" }}>
-          {state.category === "math" ? null : (
-            <Text style={styles.prompt}>{choicePrompt(state.category)}</Text>
-          )}
-          <View style={state.choiceWords.length >= 4 ? styles.choiceGrid : { width: "100%", alignItems: "center" }}>
-            {state.choiceWords.map((w, i) => (
+        <View style={styles.choiceGrid}>
+          {state.choiceWords.map((w, i) => {
+            const isWrong = wrong && w === state.lastWrongPick;
+            const isRight = won && w === state.currentWord;
+            const sw = isWrong ? BAD : isRight ? OK : null;
+            return (
               <Pressable
                 key={`${w}-${i}`}
                 onPress={() => setState((s) => answerChoice(s, w))}
                 disabled={won || state.shaking}
-                style={[
+                style={({ pressed }) => [
                   styles.choice,
-                  state.choiceWords.length >= 4 && styles.choiceHalf,
-                  !won && state.shaking && w === state.lastWrongPick && styles.choiceWrong,
-                  won && w === state.currentWord && styles.choiceCorrect,
+                  state.choiceWords.length >= 4 ? styles.choiceHalf : styles.choiceFull,
+                  {
+                    backgroundColor: sw ? sw.tint : c.surface,
+                    borderColor: sw ? sw.base : "transparent",
+                    borderBottomColor: sw ? sw.lip : c.line,
+                    borderBottomWidth: pressed ? 2 : 5,
+                    marginTop: pressed ? 3 : 0,
+                    opacity: (won || state.shaking) && !sw ? 0.55 : 1,
+                  },
                 ]}
               >
-                <Text style={styles.choiceText}>{w}</Text>
+                {sw ? (
+                  <View style={[styles.choiceMark, { backgroundColor: sw.base }]}>
+                    <Icon name={isRight ? "check" : "x"} size={14} color="#fff" weight={3.4} />
+                  </View>
+                ) : null}
+                <Text style={[styles.choiceText, { color: sw ? sw.deep : c.ink }]}>{w}</Text>
               </Pressable>
-            ))}
-          </View>
+            );
+          })}
         </View>
       ) : state.questionType === "type" ? (
         <View style={styles.typeWrap}>
-          <Text style={styles.prompt}>{he.typeTheAnswer}</Text>
-          <View style={[styles.typeBox, state.shaking && !won && styles.typeBoxWrong, won && styles.typeBoxCorrect]}>
-            <Text style={styles.typeValue}>{state.typedAnswer || state.currentWord || " "}</Text>
+          <View
+            style={[
+              styles.typeBox,
+              { backgroundColor: c.surface, borderColor: c.primary },
+              wrong && { borderColor: BAD.base, backgroundColor: BAD.tint },
+              won && { borderColor: OK.base, backgroundColor: OK.tint },
+            ]}
+          >
+            <Text style={[styles.typeValue, { color: c.ink }]}>{state.typedAnswer || state.currentWord || " "}</Text>
           </View>
           {won ? null : (
             <>
-          <View style={styles.actions}>
-            <PrimaryButton
-              label={`${he.hint} (${state.hints})`}
-              onPress={() => setState((s) => useHint(s))}
-              disabled={state.hints <= 0}
-              color="#4D96FF"
-            />
-            <PrimaryButton
-              label={he.checkAnswer}
-              onPress={() => setState((s) => submitTyped(s))}
-              disabled={!state.typedAnswer}
-            />
-          </View>
-          <View style={styles.keypad}>
-            {["1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", " "].map((key) => {
-              if (key === " ") {
-                return <View key="pad" style={styles.keyGhost} />;
-              }
-              if (key === "⌫") {
-                return (
-                  <Pressable
-                    key="del"
-                    onPress={() => setState((s) => deleteLast(s))}
-                    style={[styles.key, styles.keyDel]}
-                  >
-                    <Text style={styles.keyText}>⌫</Text>
-                  </Pressable>
-                );
-              }
-              return (
-                <Pressable
-                  key={key}
-                  onPress={() => setState((s) => typeDigit(s, key))}
-                  style={styles.key}
-                >
-                  <Text style={styles.keyText}>{key}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
+              <View style={styles.keypad}>
+                {["1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", "✓"].map((key) => {
+                  const isDel = key === "⌫";
+                  const isOk = key === "✓";
+                  const disabled = isOk && !state.typedAnswer;
+                  return (
+                    <Pressable
+                      key={key}
+                      accessibilityLabel={isDel ? he.deleteLetter : isOk ? he.checkLabel : key}
+                      disabled={disabled || state.shaking}
+                      onPress={() =>
+                        setState((s) => (isDel ? deleteLast(s) : isOk ? submitTyped(s) : typeDigit(s, key)))
+                      }
+                      style={({ pressed }) => [
+                        styles.key,
+                        {
+                          backgroundColor: isOk ? OK.base : c.surface,
+                          borderBottomColor: isOk ? OK.lip : c.line,
+                          borderBottomWidth: pressed ? 2 : 5,
+                          marginTop: pressed ? 7 : 4,
+                          opacity: disabled ? 0.45 : 1,
+                        },
+                      ]}
+                    >
+                      {isDel ? (
+                        <Icon name="erase" size={24} color={c.ink} />
+                      ) : isOk ? (
+                        <Icon name="check" size={26} color="#fff" weight={3.2} />
+                      ) : (
+                        <Text style={[styles.keyText, { color: c.ink }]}>{key}</Text>
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <SoftAction
+                icon="bulb"
+                label={he.hintCount(state.hints)}
+                disabled={state.hints <= 0}
+                onPress={() => setState((s) => useHint(s))}
+              />
             </>
           )}
         </View>
       ) : (
         <>
-          <View
-            style={[
-              styles.blanks,
-              { flexDirection: state.category === "english" ? "row" : "row-reverse" },
-              state.shaking && !won && styles.shake,
-            ]}
-          >
+          <View style={[styles.blanks, { flexDirection: hebrewRow }]}>
             {state.currentWord.split("").map((_, i) => {
               const p = state.placed[i];
+              const sw = won ? OK : wrong ? BAD : null;
               return (
                 <View
                   key={i}
                   style={[
                     styles.blank,
-                    p && { borderColor: c.filledBorder, backgroundColor: c.filledBg },
-                    won && styles.blankCorrect,
+                    {
+                      backgroundColor: sw ? sw.tint : p ? c.surface : "transparent",
+                      borderColor: sw ? sw.base : p ? c.primary : c.line,
+                      borderStyle: p || sw ? "solid" : "dashed",
+                    },
                   ]}
                 >
-                  <Text style={styles.blankLetter}>{p?.letter ?? ""}</Text>
+                  <Text style={[styles.blankLetter, { color: sw ? sw.deep : c.ink }]}>{p?.letter ?? ""}</Text>
                 </View>
               );
             })}
           </View>
           {won ? null : (
             <>
-          <View style={styles.actions}>
-            <PrimaryButton
-              label={`${he.hint} (${state.hints})`}
-              onPress={() => setState((s) => useHint(s))}
-              disabled={state.hints <= 0}
-              color="#4D96FF"
-            />
-            <PrimaryButton label={he.delete} onPress={() => setState((s) => deleteLast(s))} color="#636e72" />
-          </View>
-          <View
-            style={[
-              styles.tiles,
-              { flexDirection: state.category === "english" ? "row" : "row-reverse" },
-            ]}
-          >
-            {state.tiles.map((t) => (
-              <Pressable
-                key={t.id}
-                disabled={t.used || won || state.shaking}
-                onPress={() => setState((s) => placeTile(s, t.id))}
-                style={[
-                  styles.tile,
-                  {
-                    backgroundColor: progress.active.theme === "theme_unicorn" ? "#a855f7" : t.color,
-                    opacity: t.used ? 0.25 : 1,
-                  },
-                ]}
-              >
-                <Text style={styles.tileText}>{t.letter}</Text>
-              </Pressable>
-            ))}
-          </View>
+              <View style={styles.actions}>
+                <SoftAction
+                  icon="bulb"
+                  label={he.hintCount(state.hints)}
+                  disabled={state.hints <= 0}
+                  onPress={() => setState((s) => useHint(s))}
+                />
+                <SoftAction icon="erase" label={he.deleteLetter} onPress={() => setState((s) => deleteLast(s))} />
+              </View>
+              <View style={[styles.tiles, { flexDirection: hebrewRow }]}>
+                {state.tiles.map((t, i) => {
+                  const sw = TILE_SWATCHES[i % TILE_SWATCHES.length];
+                  return (
+                    <Pressable
+                      key={t.id}
+                      disabled={t.used || won || state.shaking}
+                      onPress={() => setState((s) => placeTile(s, t.id))}
+                      style={({ pressed }) => [
+                        styles.tile,
+                        {
+                          backgroundColor: sw.tint,
+                          borderBottomColor: sw.base,
+                          borderBottomWidth: pressed ? 2 : 5,
+                          marginTop: pressed ? 8 : 5,
+                          opacity: t.used ? 0.25 : 1,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.tileText, { color: c.ink }]}>{t.letter}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
             </>
           )}
         </>
       )}
 
-      <View style={styles.qProgress}>
-        <View style={styles.qTrack}>
-          <View
-            style={[
-              styles.qFill,
-              {
-                width: `${Math.round(
-                  (state.questionMarks.filter((m) => m).length / Math.max(1, state.wordList.length)) * 100,
-                )}%`,
-                backgroundColor: c.accent,
-              },
-            ]}
-          />
-        </View>
-        <View style={styles.qDots}>
-          {state.wordList.map((_, i) => {
-            const mark = state.questionMarks[i];
-            const current = i === state.wordIndex && !mark && !won;
-            return (
-              <View
-                key={i}
-                style={[
-                  styles.qDot,
-                  mark === "ok" && styles.qDotDone,
-                  mark === "bad" && styles.qDotBad,
-                  current && [styles.qDotNow, { borderColor: c.accent, backgroundColor: c.accent }],
-                ]}
-              />
-            );
-          })}
-        </View>
-        <Text style={styles.qProgressLabel}>
-          {he.questionProgress(state.wordIndex + 1, state.wordList.length)}
-        </Text>
-      </View>
-
-      {!won && !state.shaking ? (
-        <View style={styles.skipWrap}>
-          <PrimaryButton
-            label={he.skipQuestion}
-            onPress={() => setState((s) => skipWord(s))}
-            color="#636e72"
-          />
-        </View>
-      ) : null}
-
       {won ? (
-        <View style={styles.correctWrap}>
-          <View style={styles.correctBanner}>
-            <Text style={styles.correctBannerText}>{he.correctFlash()}</Text>
+        <View style={[styles.correct, { backgroundColor: c.surface, borderColor: OK.tint, borderBottomColor: OK.lip }]}>
+          <View style={styles.correctHead}>
+            <View style={[styles.feedbackIcon, { backgroundColor: OK.base }]}>
+              <Icon name="check" size={22} color="#fff" weight={3.2} />
+            </View>
+            <Text style={[styles.correctTitle, { color: OK.deep }]}>{he.correctTitle}</Text>
           </View>
-          {state.lastFirstTryBonus > 0 ? (
-            <View style={styles.correctExtra}>
-              <Text style={styles.correctStreak}>{he.firstTryBonus()}</Text>
+          {state.lastFirstTryBonus > 0 || state.lastStreakBonus > 0 ? (
+            <View style={styles.correctTags}>
+              {state.lastFirstTryBonus > 0 ? (
+                <View style={[styles.tag, { backgroundColor: GOLD.tint }]}>
+                  <Text style={[styles.tagText, { color: GOLD.deep }]}>{he.firstTryBonus()}</Text>
+                </View>
+              ) : null}
+              {state.lastStreakBonus > 0 ? (
+                <View style={[styles.tag, { backgroundColor: BAD.tint }]}>
+                  <Text style={[styles.tagText, { color: BAD.deep }]}>{he.streakTag(CONFIG.streakEvery)}</Text>
+                </View>
+              ) : null}
             </View>
           ) : null}
-          {state.lastStreakBonus > 0 ? (
-            <View style={styles.correctExtra}>
-              <Text style={styles.correctStreak}>{he.streakTag(CONFIG.streakEvery)}</Text>
-            </View>
-          ) : null}
-          <View style={styles.advanceTrack}>
-            <View style={[styles.advanceFill, { width: `${advancePct}%` }]} />
+          <View style={[styles.advanceTrack, { backgroundColor: OK.tint }]}>
+            <View style={[styles.advanceFill, { width: `${advancePct}%`, backgroundColor: OK.base }]} />
           </View>
           <PrimaryButton
             label={isQuiz(state.category) ? he.nextQuestion : he.nextWord}
             onPress={goNextNow}
+            color={OK.base}
+            icon="next"
+            style={{ alignSelf: "stretch" }}
           />
         </View>
+      ) : null}
+
+      {!won && !state.shaking ? (
+        <Pressable onPress={() => setState((s) => skipWord(s))} style={styles.skip}>
+          <Icon name="skip" size={18} color={c.soft} />
+          <Text style={[styles.skipText, { color: c.soft }]}>{he.skipThis}</Text>
+        </Pressable>
       ) : null}
 
       {consumables.length > 0 && !won ? (
@@ -505,10 +590,17 @@ export default function GameScreen() {
                 key={item.id}
                 disabled={activeDouble}
                 onPress={() => useTool(item.id)}
-                style={styles.tool}
+                style={[
+                  styles.tool,
+                  {
+                    backgroundColor: activeDouble ? GOLD.tint : c.surface,
+                    borderBottomColor: activeDouble ? GOLD.lip : c.line,
+                  },
+                ]}
               >
-                <Text style={styles.toolText}>
-                  {item.emoji} {item.name} {activeDouble ? he.itemActive : `×${count}`}
+                <Text style={styles.toolEmoji}>{item.emoji}</Text>
+                <Text style={[styles.toolText, { color: c.ink }]}>
+                  {item.name} {activeDouble ? he.itemActive : `×${count}`}
                 </Text>
               </Pressable>
             );
@@ -516,6 +608,67 @@ export default function GameScreen() {
         </View>
       ) : null}
     </Screen>
+  );
+}
+
+function SoftAction({
+  icon,
+  label,
+  onPress,
+  disabled,
+}: {
+  icon: "bulb" | "erase";
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  const c = useColors();
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={({ pressed }) => [
+        styles.softAction,
+        {
+          backgroundColor: c.surface,
+          borderBottomColor: c.line,
+          borderBottomWidth: pressed ? 1 : 4,
+          marginTop: pressed ? 3 : 0,
+          opacity: disabled ? 0.45 : 1,
+        },
+      ]}
+    >
+      <Icon name={icon} size={20} color={icon === "bulb" ? GOLD.lip : c.ink} />
+      <Text style={[styles.softActionText, { color: c.ink }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+const CONFETTI = [
+  { left: "8%", top: 10, color: CATEGORY_COLORS.language.base, rotate: "20deg" },
+  { left: "22%", top: 54, color: CATEGORY_COLORS.math.base, rotate: "-30deg" },
+  { left: "36%", top: 4, color: CATEGORY_COLORS.logic.base, rotate: "45deg" },
+  { left: "62%", top: 30, color: CATEGORY_COLORS.english.base, rotate: "-15deg" },
+  { left: "76%", top: 2, color: CATEGORY_COLORS.science.base, rotate: "60deg" },
+  { left: "90%", top: 48, color: CATEGORY_COLORS.language.base, rotate: "-50deg" },
+  { left: "14%", top: 120, color: CATEGORY_COLORS.science.base, rotate: "10deg" },
+  { left: "84%", top: 128, color: CATEGORY_COLORS.math.base, rotate: "35deg" },
+] as const;
+
+function Confetti() {
+  return (
+    <View pointerEvents="none" style={styles.confetti}>
+      {CONFETTI.map((p, i) => (
+        <View
+          key={i}
+          style={[
+            styles.confettiBit,
+            { left: p.left, top: p.top, backgroundColor: p.color, transform: [{ rotate: p.rotate }] },
+            i % 2 === 1 && styles.confettiDot,
+          ]}
+        />
+      ))}
+    </View>
   );
 }
 
@@ -528,316 +681,228 @@ function categoryTitle(cat: Category) {
 }
 
 function choicePrompt(cat: Category) {
-  if (cat === "math") return he.howMuch;
-  if (cat === "english") return he.spellEnglish;
-  if (cat === "logic") return he.logicPrompt;
-  if (cat === "science") return he.sciencePrompt;
-  return he.whatIsThis;
+  if (cat === "english") return he.promptEnglish;
+  if (cat === "logic") return he.promptLogic;
+  if (cat === "science") return he.promptScience;
+  return he.promptWhat;
 }
 
 function isQuiz(cat: Category) {
   return cat === "math" || cat === "logic" || cat === "science";
 }
 
-function answerLine(state: GameState) {
-  if (state.category === "math") return `${state.currentEmoji} = ${state.currentWord}`;
-  return state.currentWord;
-}
-
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", width: "100%", alignItems: "center", marginBottom: 8 },
-  badge: { fontFamily: "Heebo_800ExtraBold" },
-  progress: { color: "#fff", fontFamily: "Heebo_400Regular", fontSize: 13 },
-  player: { color: "#fff", fontFamily: "Heebo_700Bold" },
-  streakLine: { color: "#ff6b6b", fontFamily: "Heebo_700Bold" },
-  bonus: { width: "100%", alignItems: "center", marginBottom: 8 },
-  bonusTitle: { color: "#f9ca24", fontFamily: "Heebo_900Black", fontSize: 20 },
-  bonusSub: { color: "#fff", fontFamily: "Heebo_400Regular" },
-  timer: { color: "#fff", fontSize: 28, fontFamily: "Heebo_900Black" },
-  track: { width: "80%", height: 8, backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 8 },
-  fill: { height: 8, backgroundColor: "#f9ca24" },
-  emoji: { fontSize: 72, marginVertical: 12 },
-  hintHe: {
-    fontSize: 22,
-    fontFamily: "Heebo_800ExtraBold",
-    color: "#fff",
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  qProgress: {
-    width: "100%",
-    maxWidth: 340,
+  header: { flexDirection: "row-reverse", width: "100%", alignItems: "center", gap: 12 },
+  segments: { flex: 1, flexDirection: "row-reverse", alignItems: "center", gap: 5 },
+  segment: { flex: 1, height: 12, borderRadius: 6 },
+  segmentNow: { height: 16, borderRadius: 8 },
+  crumb: { fontFamily: font.bold, fontSize: 14, textAlign: "center", marginTop: 10, marginBottom: 12 },
+  promptCard: { alignItems: "center", paddingVertical: 22, marginBottom: 14 },
+  emoji: { fontSize: 96, lineHeight: 116 },
+  exprRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  exprText: { fontFamily: font.black, fontSize: 44 },
+  exprBox: {
+    minWidth: 76,
+    height: 70,
+    paddingHorizontal: 10,
+    borderRadius: 18,
+    borderWidth: 3,
+    borderStyle: "dashed",
     alignItems: "center",
-    marginTop: 22,
+    justifyContent: "center",
+  },
+  logicPrompt: { fontFamily: font.black, fontSize: 34, textAlign: "center", lineHeight: 46 },
+  hintHe: { fontSize: 22, fontFamily: font.heavy, marginTop: 8, textAlign: "center" },
+  prompt: { fontFamily: font.bold, fontSize: 16, marginTop: 8, textAlign: "center" },
+  feedback: {
+    width: "100%",
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 22,
+    borderWidth: 2,
+    borderBottomWidth: 5,
+    padding: 14,
     marginBottom: 14,
   },
-  qTrack: {
-    width: "100%",
-    height: 10,
-    backgroundColor: "rgba(255,255,255,0.18)",
-    borderRadius: 8,
-    alignItems: "flex-end",
-  },
-  qFill: {
-    height: 10,
-    borderRadius: 8,
-  },
-  qDots: {
-    flexDirection: "row-reverse",
-    marginTop: 8,
-  },
-  qDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginHorizontal: 4,
-    backgroundColor: "rgba(255,255,255,0.22)",
-    borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.22)",
-  },
-  qDotDone: {
-    backgroundColor: "#6bcb77",
-    borderColor: "#6bcb77",
-  },
-  qDotBad: {
-    backgroundColor: "#e57373",
-    borderColor: "#e57373",
-  },
-  qDotNow: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-  },
-  qProgressLabel: {
-    color: "#fff",
-    fontFamily: "Heebo_700Bold",
-    fontSize: 13,
-    marginTop: 6,
-    textAlign: "center",
-  },
-  skipWrap: {
-    width: "100%",
-    alignItems: "center",
-    marginTop: 8,
-    marginBottom: 16,
-  },
-  mathPrompt: {
-    fontSize: 32,
-    color: "#fff",
-    fontFamily: "Heebo_900Black",
-    marginVertical: 16,
-    textAlign: "center",
-  },
-  bigEmoji: { fontSize: 72 },
-  prompt: { color: "#fff", fontFamily: "Heebo_800ExtraBold", marginBottom: 12, fontSize: 20 },
-  choice: {
-    width: "100%",
-    maxWidth: 320,
-    backgroundColor: "rgba(255,255,255,0.12)",
-    padding: 14,
-    borderRadius: 16,
-    marginBottom: 10,
-    alignItems: "center",
-  },
+  feedbackIcon: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  feedbackTitle: { fontFamily: font.black, fontSize: 19 },
+  feedbackSub: { fontFamily: font.medium, fontSize: 14, marginTop: 2 },
   choiceGrid: {
-    flexDirection: "row",
+    flexDirection: "row-reverse",
     flexWrap: "wrap",
-    justifyContent: "center",
+    justifyContent: "space-between",
     width: "100%",
-    maxWidth: 340,
   },
-  choiceHalf: {
-    width: "48%",
-    maxWidth: 160,
-    marginBottom: 8,
-    marginHorizontal: 4,
+  choice: {
+    minHeight: 76,
+    paddingVertical: 14,
+    paddingHorizontal: 10,
+    borderRadius: 22,
+    borderWidth: 2,
+    marginBottom: 12,
+    alignItems: "center",
+    justifyContent: "center",
   },
+  choiceHalf: { width: "48%" },
+  choiceFull: { width: "100%" },
+  choiceMark: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  choiceText: { fontSize: 26, fontFamily: font.heavy, textAlign: "center" },
   typeWrap: { width: "100%", alignItems: "center" },
   typeBox: {
-    minWidth: 160,
-    minHeight: 64,
-    borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.35)",
-    borderRadius: 16,
+    minWidth: 180,
+    minHeight: 72,
+    borderWidth: 3,
+    borderRadius: 20,
     paddingHorizontal: 20,
     paddingVertical: 10,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 8,
-    backgroundColor: "rgba(0,0,0,0.2)",
+    marginBottom: 6,
   },
-  typeValue: {
-    color: "#fff",
-    fontSize: 36,
-    fontFamily: "Heebo_900Black",
-    textAlign: "center",
-  },
-  keypad: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    width: 252,
-    justifyContent: "center",
-    marginTop: 8,
-  },
+  typeValue: { fontSize: 40, fontFamily: font.black, textAlign: "center" },
+  keypad: { flexDirection: "row", flexWrap: "wrap", width: 270, justifyContent: "center", marginBottom: 12 },
   key: {
-    width: 76,
-    height: 56,
-    borderRadius: 14,
-    backgroundColor: "#4D96FF",
+    width: 80,
+    height: 60,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
-    margin: 4,
+    marginHorizontal: 5,
+    marginBottom: 4,
   },
-  keyDel: { backgroundColor: "#636e72" },
-  keyGhost: { width: 76, height: 56 },
-  keyText: { color: "#fff", fontSize: 22, fontFamily: "Heebo_900Black" },
-  choiceText: { color: "#fff", fontSize: 22, fontFamily: "Heebo_800ExtraBold" },
-  blanks: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center" },
-  shake: {
-    backgroundColor: "rgba(243,180,180,0.28)",
-  },
-  wrongBanner: {
-    width: "100%",
-    backgroundColor: "#f3b4b4",
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    marginBottom: 12,
-    alignItems: "center",
-  },
-  wrongBannerText: {
-    color: "#5c2b2b",
-    fontSize: 18,
-    fontFamily: "Heebo_800ExtraBold",
-    textAlign: "center",
-  },
-  choiceWrong: {
-    backgroundColor: "#f3b4b4",
-    borderWidth: 2,
-    borderColor: "#e08a8a",
-  },
-  typeBoxWrong: {
-    borderColor: "#e08a8a",
-    backgroundColor: "rgba(243,180,180,0.35)",
-  },
-  typeBoxCorrect: {
-    borderColor: "#6bcb77",
-    backgroundColor: "rgba(107,203,119,0.35)",
-  },
-  choiceCorrect: {
-    backgroundColor: "#6bcb77",
-    borderWidth: 2,
-    borderColor: "#fff",
-  },
-  blankCorrect: {
-    borderColor: "#6bcb77",
-    backgroundColor: "rgba(107,203,119,0.4)",
-  },
-  correctWrap: {
-    width: "100%",
-    alignItems: "center",
-    marginTop: 16,
-  },
-  correctBanner: {
-    width: "100%",
-    backgroundColor: "#6bcb77",
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  correctExtra: {
-    width: "100%",
-    backgroundColor: "rgba(107,203,119,0.55)",
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  correctBannerText: {
-    color: "#fff",
-    fontSize: 22,
-    fontFamily: "Heebo_900Black",
-    textAlign: "center",
-  },
-  correctStreak: {
-    color: "#fff",
-    fontFamily: "Heebo_700Bold",
-    textAlign: "center",
-  },
-  advanceTrack: {
-    width: "100%",
-    height: 10,
-    backgroundColor: "rgba(255,255,255,0.18)",
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  advanceFill: {
-    height: 10,
-    backgroundColor: "#6bcb77",
-    borderRadius: 8,
-  },
+  keyText: { fontSize: 26, fontFamily: font.black },
+  blanks: { flexWrap: "wrap", justifyContent: "center", marginBottom: 4 },
   blank: {
-    width: 44,
-    height: 52,
-    borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.25)",
-    borderRadius: 10,
+    width: 50,
+    height: 58,
+    borderWidth: 3,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
     margin: 4,
   },
-  blankLetter: { color: "#fff", fontSize: 24, fontFamily: "Heebo_900Black" },
-  actions: { flexDirection: "row", marginVertical: 14 },
-  tiles: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center" },
-  tile: { width: 52, height: 56, borderRadius: 12, alignItems: "center", justifyContent: "center", margin: 4 },
-  tileText: { color: "#fff", fontSize: 24, fontFamily: "Heebo_900Black" },
-  tools: { flexDirection: "row", flexWrap: "wrap", marginTop: 16, justifyContent: "center" },
-  tool: { backgroundColor: "rgba(255,255,255,0.12)", padding: 10, borderRadius: 14 },
-  toolText: { color: "#fff", fontFamily: "Heebo_700Bold" },
-  timeout: { color: "#fff", fontSize: 32, fontFamily: "Heebo_900Black", marginTop: 80 },
-  winTitle: { fontSize: 28, fontFamily: "Heebo_900Black", color: "#fff", textAlign: "center" },
-  winWord: { fontSize: 32, color: "#fff", fontFamily: "Heebo_900Black", marginVertical: 8 },
-  meta: { color: "#fff", fontFamily: "Heebo_700Bold", marginBottom: 6 },
-  streak: { color: "#ff6b6b", fontFamily: "Heebo_800ExtraBold", marginBottom: 8 },
-  lbTitle: { color: "#fff", fontFamily: "Heebo_800ExtraBold", marginTop: 20, marginBottom: 4 },
-  want: { color: "#fff", fontFamily: "Heebo_800ExtraBold", marginTop: 12 },
-  reportCard: {
-    width: "100%",
-    backgroundColor: "rgba(255,255,255,0.1)",
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginBottom: 12,
-    alignItems: "flex-end",
-  },
-  reportQ: { color: "#ffd93d", fontFamily: "Heebo_800ExtraBold", marginBottom: 4 },
-  reportPrompt: { color: "#fff", fontSize: 22, fontFamily: "Heebo_900Black", textAlign: "right", marginBottom: 4 },
-  reportHint: { color: "rgba(255,255,255,0.85)", fontFamily: "Heebo_700Bold", textAlign: "right", marginBottom: 6 },
-  reportWrong: { color: "#f3b4b4", fontFamily: "Heebo_700Bold", textAlign: "right" },
-  reportRight: { color: "#6bcb77", fontFamily: "Heebo_800ExtraBold", textAlign: "right", marginTop: 4 },
-  reportTap: {
-    color: "rgba(255,255,255,0.65)",
-    fontFamily: "Heebo_400Regular",
-    fontSize: 13,
-    marginTop: 8,
-    textAlign: "right",
-  },
-  reportWhy: {
-    width: "100%",
-    marginTop: 10,
-    backgroundColor: "#f3b4b4",
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+  blankLetter: { fontSize: 28, fontFamily: font.black },
+  actions: { flexDirection: "row-reverse", justifyContent: "center", gap: 10, marginVertical: 14 },
+  softAction: {
+    flexDirection: "row-reverse",
     alignItems: "center",
+    gap: 6,
+    minHeight: 44,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 999,
   },
-  reportWhyText: {
-    color: "#5c2b2b",
-    fontFamily: "Heebo_700Bold",
-    textAlign: "center",
-    fontSize: 15,
+  softActionText: { fontFamily: font.bold, fontSize: 15 },
+  tiles: { flexWrap: "wrap", justifyContent: "center" },
+  tile: {
+    width: 58,
+    height: 62,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    marginHorizontal: 5,
+    marginBottom: 5,
   },
+  tileText: { fontSize: 30, fontFamily: font.black },
+  correct: {
+    width: "100%",
+    alignItems: "center",
+    borderRadius: 24,
+    borderWidth: 2,
+    borderBottomWidth: 5,
+    padding: 16,
+    marginTop: 14,
+  },
+  correctHead: { flexDirection: "row-reverse", alignItems: "center", gap: 10 },
+  correctTitle: { fontFamily: font.black, fontSize: 26 },
+  correctTags: { flexDirection: "row-reverse", flexWrap: "wrap", justifyContent: "center", gap: 8, marginTop: 10 },
+  tag: { borderRadius: 999, paddingVertical: 6, paddingHorizontal: 12 },
+  tagText: { fontFamily: font.bold, fontSize: 14 },
+  advanceTrack: {
+    alignSelf: "stretch",
+    height: 8,
+    borderRadius: 8,
+    marginVertical: 14,
+    overflow: "hidden",
+    flexDirection: "row-reverse",
+  },
+  advanceFill: { height: 8, borderRadius: 8 },
+  skip: { flexDirection: "row-reverse", alignItems: "center", gap: 6, marginTop: 16, padding: 10, minHeight: 44 },
+  skipText: { fontFamily: font.bold, fontSize: 15 },
+  tools: { flexDirection: "row-reverse", flexWrap: "wrap", marginTop: 8, justifyContent: "center", gap: 8 },
+  tool: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: 999,
+    borderBottomWidth: 3,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    minHeight: 44,
+  },
+  toolEmoji: { fontSize: 18 },
+  toolText: { fontFamily: font.bold, fontSize: 14 },
+  timeout: { fontSize: 30, fontFamily: font.black, marginTop: 20, textAlign: "center" },
+  confetti: { position: "absolute", top: 0, left: 0, right: 0, height: 180 },
+  confettiBit: { position: "absolute", width: 10, height: 18, borderRadius: 3 },
+  confettiDot: { width: 12, height: 12, borderRadius: 6 },
+  completeBadge: {
+    width: 170,
+    height: 170,
+    borderRadius: 85,
+    alignItems: "center",
+    justifyContent: "flex-end",
+    overflow: "hidden",
+    marginTop: 24,
+  },
+  completeTitle: { fontFamily: font.black, fontSize: 32, textAlign: "center", marginTop: 16 },
+  resultCard: { alignItems: "center", marginTop: 4 },
+  resultDots: { flexDirection: "row-reverse", flexWrap: "wrap", justifyContent: "center", gap: 8 },
+  resultDot: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderBottomWidth: 3,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  resultLine: { fontFamily: font.heavy, fontSize: 17, marginTop: 12, textAlign: "center" },
+  statsRow: {
+    alignSelf: "stretch",
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    borderTopWidth: 2,
+    marginTop: 14,
+    paddingTop: 14,
+  },
+  stat: { flex: 1, alignItems: "center" },
+  statValueRow: { flexDirection: "row-reverse", alignItems: "center", gap: 6 },
+  statValue: { fontFamily: font.black, fontSize: 26 },
+  statLabel: { fontFamily: font.bold, fontSize: 13, marginTop: 2 },
+  statDivider: { width: 2, height: 44, borderRadius: 1 },
+  stackButtons: { width: "100%", gap: 12, marginTop: 18 },
+  reportTitle: { fontFamily: font.black, fontSize: 28, textAlign: "center", marginTop: 8 },
+  reportCard: { width: "100%", borderRadius: 22, borderBottomWidth: 5, padding: 14, marginBottom: 12 },
+  reportHead: { flexDirection: "row-reverse", alignItems: "center", gap: 10 },
+  reportNum: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  reportNumText: { fontFamily: font.black, fontSize: 16 },
+  reportQ: { fontFamily: font.bold, fontSize: 13 },
+  reportPrompt: { fontSize: 22, fontFamily: font.black, textAlign: "right", marginTop: 2 },
+  reportAnswers: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 8, marginTop: 10 },
+  answerTag: { borderRadius: 999, paddingVertical: 6, paddingHorizontal: 12 },
+  answerTagText: { fontFamily: font.bold, fontSize: 14 },
+  reportTap: { fontFamily: font.bold, fontSize: 13, marginTop: 10, textAlign: "right" },
+  reportHint: { fontFamily: font.bold, textAlign: "center", marginBottom: 6 },
+  reportWhy: { width: "100%", marginTop: 12, borderRadius: 16, padding: 14, alignItems: "center" },
+  reportWhyText: { fontFamily: font.bold, textAlign: "center", fontSize: 15 },
 });

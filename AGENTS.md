@@ -15,75 +15,93 @@ Owner: Daniel (software engineer). Prefer small, direct code changes. Do not com
 - Expo SDK ~57, Expo Router, React Native + `react-native-web`
 - TypeScript
 - Firebase Auth (Google + Apple) + Firestore
-- Fonts: `@expo-google-fonts/heebo`
+- Fonts: **Rubik** (`@expo-google-fonts/rubik`) — `font` in `src/theme/colors.ts` (not Heebo)
+- SVG: `react-native-svg` (mascot, icons, coins, stars, subject tiles)
 - Entry: `expo-router/entry`, screens in `app/`
+- `userInterfaceStyle`: **light** (`app.json`)
 
 ## Layout
 
 ```
-app/                 Expo Router screens
-  _layout.tsx        fonts, Auth+Progress providers, Gate
-  index.tsx          category → difficulty → 10 mini-levels
-  game.tsx           play + stage complete + mistake report
-  login.tsx, name.tsx, shop.tsx, inventory.tsx, profile.tsx, leaderboard.tsx
-src/game/            engine + banks
-  config.ts          CONFIG, Category, Difficulty, stage helpers
-  session.ts         GameState, startGame, answers, mistakes, coins
-  words.ts, english.ts, math.ts, logic.ts, science.ts, shop.ts, avatar.ts
-src/context/         AuthContext, ProgressContext
-src/firebase/        app, repository, googleNative
+app/
+  _layout.tsx        Rubik, Auth+Progress, Gate, light ground
+  index.tsx          hero + category grid + dock → difficulty → 10 stages
+  game.tsx           play + complete + mistake report
+  login / name / shop / inventory / profile / leaderboard
+src/theme/colors.ts  ThemeColors, CATEGORY_COLORS, DIFFICULTY_COLORS, OK/BAD/GOLD, font
+src/components/ui.tsx     Card, CoinPill, RoundButton, TopBar, ProgressBar, ScreenTitle, useColors
+src/components/Art.tsx    Mascot (גמדה), Coin, Star, Icon, CategoryTile, DifficultyTile
+src/components/Screen.tsx light c.ground + SafeArea + ScrollView
+src/components/PrimaryButton.tsx  toy button solid|soft + lip squash
+src/game/            engine + word banks
 src/i18n/he.ts       ALL user-visible strings
-src/components/      Screen, PrimaryButton, MathErrorCard, Toast, …
-src/types/models.ts  ProfileDoc, AvatarLoadout, scores
-firestore.rules
 ```
 
-Legacy static site: `index.html`, `js/`, `css/` — do not treat as source of truth for new features.
+Legacy static site: `index.html`, `js/`, `css/` — not the source of truth.
 
-## Game rules (implement here, not only in GAME.md)
+## UI system (current — do not revert to dark/Heebo)
+
+Toy-box look: **light ground**, **white cards**, **chunky 3D lip** (`borderBottomWidth` 4–6 + darker lip). Pressed = thinner lip + extra `marginTop` (squish).
+
+Tokens (`src/theme/colors.ts`):
+
+- Theme: `ground`, `surface`, `ink`, `soft`, `line`, `primary`, `primaryLip`, `primaryTint`, `heroBlob`, `toast`
+- Shop themes (`theme_space` / `jungle` / `unicorn`) retint the whole app
+- Fixed: `CATEGORY_COLORS`, `DIFFICULTY_COLORS`, `OK` green, `BAD` coral, `GOLD` amber
+- Type: `font.regular | medium | bold | heavy | black` → Rubik
+
+Building blocks:
+
+- `useColors()` — always theme-aware
+- `Card`, `CoinPill` (SVG coin, not 🪙), `TopBar` (RTL: back on the **right**, `row-reverse`), `RoundButton`, `ProgressBar` (fill from the right)
+- `PrimaryButton` `variant="solid" | "soft"` + optional `icon`
+- `Mascot` = gnome girl; shirt color `body` (default / theme primary). Default avatar `avatar_base_kid` **is** this mascot
+- `Icon` names: `bag`, `backpack`, `trophy`, `user`, `back`, `skip`, `lock`, `check`, `x`, `replay`, `logout`, …
+- New chrome copy is often **plain Hebrew**; icons carry the meaning (`navShop`, `backLabel`, …)
+- No GhostButton — use TopBar / RoundButton / `variant="soft"`
+
+Screens:
+
+- **Login**: mascot in a primary circle + stars; own SafeArea (not `Screen`)
+- **Home**: hello (avatar + name + CoinPill) → colored **hero** + mascot → 2×2 subjects + science wide → **dock** (shop, gear, leaderboard, profile)
+- **Difficulty / stages**: TopBar + category chip + CoinPill; stages green = `הכל נכון`, yellow = `יש טעויות` + retry
+- **Play**: no coins/streak in the header; math `{expr} = ?`; skip icon; progress under answers
+- **Complete**: mascot + result dots + `Coin +N` + streak; **🤔 איפה טעיתי?** report; tap row → `MathErrorCard` (math)
+
+Do **not** restore dark navy, Heebo, LinearGradient shells, or emoji-only nav as the main chrome.
+
+## Game rules
 
 - Categories: `language | math | english | logic | science`
 - Difficulties: `easy | mid | hard`
-- After category + difficulty: **10 mini-levels**. Unlock sequential (`stageClears`).
-- Questions per stage: odd stages **6**, even **7** (`questionsInStage`).
-- No lives/hearts. Wrong answer → mark bad (red dot) → short feedback → **next question** (no retry on that item). Skip also marks bad.
-- Coins **only at stage complete**, not per question:
-  - Perfect (every mark `ok`): `questions * CONFIG.coinsCorrect` (10)
-  - Any miss/skip: **half** (floor)
-- Mini-level list: green = perfect (`הכל נכון`), yellow = partial (`יש טעויות` + `נסו שוב`). No coin amounts on that list.
-- Question screen: no 🔥 / 🪙 / score in the header. Show them on **stage complete** only.
-- Math: show `{expr} = ?`, never the “כמה זה?” prompt. Non-spelling cats are always 4-choice.
-- Hebrew tiles/blanks: `flexDirection: "row-reverse"`. English spelling: `"row"`.
-- Mistake report title/button: `🤔 איפה טעיתי?`. Tap a row to expand the same explanation as in-play (`MathErrorCard` for math).
-- Perfect complete may auto-return to stage picker; with mistakes stay so the player can open the report.
+- **10 mini-levels** per category+difficulty; unlock sequential (`stageClears`)
+- Odd stages **6** questions, even **7**
+- No lives. Wrong → red mark → short feedback → next question. Skip = bad
+- Coins **only at stage complete**: perfect = `n * 10`; any miss/skip = half
+- Question screen: no 🔥 / coins / running score in the chrome
+- Hebrew tiles: `row-reverse`; English spelling: `row`
+- Perfect complete may auto-return; with mistakes stay for the report
 
 ## Persistence (logged-in only)
 
-`ProfileDoc` on `users/{uid}/profiles/{id}`:
+`users/{uid}/profiles/{id}`: `coins`, `purchases`, `inventory`, `theme`, `avatar`, `stageClears`, `stageCoins`, `stagePerfect`.
 
-- `coins`, `purchases`, `inventory`, `theme`, `avatar`
-- `stageClears`: `{ "math:easy": 3 }` highest cleared stage
-- `stageCoins`: `{ "math:easy:2": 30 }` best coins for that stage
-- `stagePerfect`: `{ "math:easy:2": true }` ever-perfect flag
-
-`completeStage(category, difficulty, stage, coins, perfect)` in `ProgressContext` writes these + adds coins. Guests: `isLocal` → `persist` skips Firestore.
+`completeStage(category, difficulty, stage, coins, perfect)` adds coins and updates maps. Guests (`isLocal`) skip Firestore.
 
 ## Web / RN pitfalls (do not regress)
 
-- **Never** put CSS `direction` in `StyleSheet.create` (RN-web throws `Invalid style property of "direction"`). Use `row-reverse` / `textAlign` instead. Avoid `writingDirection` on web.
-- **Always import** `{ Screen }` from `src/components/Screen`. On web, an undeclared `<Screen>` binds to the browser `Screen` API → `Illegal constructor`.
-- Prefer no `Animated` + `useNativeDriver: true` on web (Illegal constructor). MathErrorCard uses opacity rAF fade, not Animated.
-- `Screen` on web is a plain `View` background, not `LinearGradient` (gradient CSS Typed OM issues historically).
-- Do not name a React component `Screen` without importing the local one.
+- Never CSS `direction` in StyleSheet. Use `row-reverse` / `textAlign`. Avoid `writingDirection` on web.
+- Always `import { Screen } from "../src/components/Screen"`. Bare `<Screen>` on web = browser API → `Illegal constructor`.
+- No `Animated` + `useNativeDriver: true` on web. MathErrorCard uses rAF fade.
+- Screen is solid `c.ground`, not LinearGradient.
+- UI uses `gap` in places; if RN-web rejects a style, that instance → `margin`.
 
 ## Conventions
 
-- User-facing copy: add/change in `src/i18n/he.ts` only.
-- Game math/flow: `src/game/session.ts` + `config.ts`.
-- New words: the matching bank file; math/logic can generate.
-- Do not use `gap` if you hit RN-web style errors; use `margin` (home still has some `gap`).
-- Do not commit `.env`.
-- Match existing style; no drive-by refactors or extra docs unless asked.
+- Copy only in `src/i18n/he.ts`. Prefer toy-box keys for new UI (`appName`, `navShop`, `wrongTitle`, `tabEnhance`, …).
+- New UI: compose `ui.tsx` + `Art.tsx` + `colors.ts`. Do not invent a second palette.
+- Engine: `session.ts` + `config.ts`. Banks: `words.ts` / `english.ts` / `math.ts` / `logic.ts` / `science.ts`.
+- Do not commit `.env`. Do not commit unless asked.
 
 ## Run
 
@@ -91,4 +109,4 @@ Legacy static site: `index.html`, `js/`, `css/` — do not treat as source of tr
 npx expo start
 ```
 
-Web: `http://localhost:8081`. LAN: `http://<mac-lan-ip>:8081` (Safari on same Wi‑Fi). iOS Expo Go requires the **same Expo account** as the CLI for local Metro — siblings should use the LAN web URL.
+Web: `http://localhost:8081`. LAN Safari: `http://<mac-lan-ip>:8081`. iOS Expo Go needs the **same Expo account** as the CLI for local Metro.

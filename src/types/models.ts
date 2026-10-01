@@ -2,6 +2,8 @@ import type { ThemeId } from "../game/config";
 
 export type Plan = "free" | "plus";
 
+export type Gender = "girl" | "boy";
+
 export type AvatarSlot = "base" | "hat" | "top" | "bottom" | "shoes" | "extra";
 
 /** Equipped Tamagotchi/avatar layers. `null` = nothing in that slot. */
@@ -25,6 +27,8 @@ export type ProfileDoc = {
   id: string;
   displayName: string;
   nameChosen: boolean;
+  /** Which mascot the child plays as. `null` until chosen. */
+  gender: Gender | null;
   coins: number;
   purchases: string[];
   inventory: Record<string, number>;

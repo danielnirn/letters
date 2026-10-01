@@ -22,7 +22,7 @@ import {
   watchGlobalLeaderboard,
   watchProfile,
 } from "../firebase/repository";
-import type { CachedProgress, ProfileDoc, ScoreEntry, AvatarSlot } from "../types/models";
+import type { CachedProgress, Gender, ProfileDoc, ScoreEntry, AvatarSlot } from "../types/models";
 import { isFirebaseConfigured } from "../firebase/app";
 import { useAuth } from "./AuthContext";
 import { stageProgressKey, stageCoinsKey, type Category, type Difficulty } from "../game/config";
@@ -34,6 +34,7 @@ type ProgressValue = {
   scores: ScoreEntry[];
   topScores: ScoreEntry[];
   setActiveName: (name: string) => Promise<void>;
+  setGender: (gender: Gender) => Promise<void>;
   addCoins: (amount: number) => Promise<void>;
   spendCoins: (amount: number) => Promise<boolean>;
   buyItem: (item: ShopItem) => Promise<"ok" | "funds" | "fail">;
@@ -203,6 +204,9 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
         const trimmed = name.trim();
         if (!trimmed) return;
         await patchActive((p) => ({ ...p, displayName: trimmed, nameChosen: true }));
+      },
+      setGender: async (gender) => {
+        await patchActive((p) => ({ ...p, gender }));
       },
       addCoins: async (amount: number) => {
         await patchActive((p) => ({ ...p, coins: p.coins + amount }));

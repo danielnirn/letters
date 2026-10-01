@@ -1,8 +1,9 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { he } from "../i18n/he";
-import { colorsFor } from "../theme/colors";
+import { BAD, GOLD, OK, font } from "../theme/colors";
 import type { ScoreEntry } from "../types/models";
-import { useProgress } from "../context/ProgressContext";
+import { Star } from "./Art";
+import { useColors } from "./ui";
 
 const LEVEL: Record<string, string> = {
   easy: he.easy,
@@ -24,7 +25,13 @@ const LEVEL: Record<string, string> = {
   "science:mid": `${he.categoryScience} · ${he.mid}`,
   "science:hard": `${he.categoryScience} · ${he.hard}`,
 };
-const RANK = ["🥇", "🥈", "🥉"];
+const MEDAL = [GOLD, { ...OK, base: "#A9B6CC", lip: "#8392AD" }, { ...BAD, base: "#E0925A", lip: "#B96F3B" }];
+
+function levelLabel(level: string) {
+  if (LEVEL[level]) return LEVEL[level];
+  const [cat, diff] = level.split(":");
+  return LEVEL[`${cat}:${diff}`] ?? level;
+}
 
 export function LeaderboardTable({
   scores,
@@ -35,27 +42,45 @@ export function LeaderboardTable({
   highlightName?: string;
   highlightScore?: number;
 }) {
-  const { active } = useProgress();
-  const c = colorsFor(active.theme);
+  const c = useColors();
   if (scores.length === 0) {
-    return <Text style={[styles.empty, { color: c.subtitle }]}>{he.noScores}</Text>;
+    return <Text style={[styles.empty, { color: c.soft }]}>{he.noScores}</Text>;
   }
   return (
     <View style={styles.table}>
-      <View style={styles.head}>
-        <Text style={styles.th}>{he.colRank}</Text>
-        <Text style={[styles.th, styles.name]}>{he.colName}</Text>
-        <Text style={styles.th}>{he.colScore}</Text>
-        <Text style={styles.th}>{he.colLevel}</Text>
-      </View>
       {scores.map((entry, i) => {
-        const mine = entry.name === highlightName && entry.score === highlightScore;
+        const mine = entry.name === highlightName && (highlightScore == null || entry.score === highlightScore);
+        const medal = MEDAL[i];
         return (
-          <View key={entry.id} style={[styles.row, mine && styles.mine]}>
-            <Text style={styles.td}>{i < 3 ? RANK[i] : String(i + 1)}</Text>
-            <Text style={[styles.td, styles.name]}>{entry.name}</Text>
-            <Text style={styles.td}>{entry.score} ⭐</Text>
-            <Text style={styles.td}>{LEVEL[entry.level] ?? entry.level}</Text>
+          <View
+            key={entry.id}
+            style={[
+              styles.row,
+              { backgroundColor: mine ? c.primaryTint : c.surface, borderBottomColor: c.line },
+            ]}
+          >
+            <View
+              style={[
+                styles.rank,
+                medal
+                  ? { backgroundColor: medal.base, borderBottomColor: medal.lip, borderBottomWidth: 3 }
+                  : { backgroundColor: c.ground },
+              ]}
+            >
+              <Text style={[styles.rankText, { color: medal ? "#fff" : c.soft }]}>{i + 1}</Text>
+            </View>
+            <View style={styles.who}>
+              <Text style={[styles.name, { color: c.ink }]} numberOfLines={1}>
+                {entry.name}
+              </Text>
+              <Text style={[styles.level, { color: c.soft }]} numberOfLines={1}>
+                {levelLabel(entry.level)}
+              </Text>
+            </View>
+            <View style={styles.score}>
+              <Star size={18} />
+              <Text style={[styles.scoreText, { color: c.ink }]}>{entry.score}</Text>
+            </View>
           </View>
         );
       })}
@@ -64,24 +89,52 @@ export function LeaderboardTable({
 }
 
 export function GhostButton({ label, onPress }: { label: string; onPress: () => void }) {
-  const { active } = useProgress();
-  const c = colorsFor(active.theme);
+  const c = useColors();
   return (
-    <Pressable onPress={onPress} style={[styles.ghost, { borderColor: c.accent }]}>
-      <Text style={[styles.ghostText, { color: c.accent }]}>{label}</Text>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.ghost,
+        {
+          backgroundColor: c.surface,
+          borderBottomColor: c.line,
+          borderBottomWidth: pressed ? 1 : 4,
+          marginTop: pressed ? 3 : 0,
+        },
+      ]}
+    >
+      <Text style={[styles.ghostText, { color: c.ink }]}>{label}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  empty: { textAlign: "center", fontSize: 16, fontFamily: "Heebo_700Bold", marginVertical: 16 },
-  table: { width: "100%", marginTop: 12 },
-  head: { flexDirection: "row", paddingVertical: 8, opacity: 0.7 },
-  row: { flexDirection: "row", paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: "rgba(255,255,255,0.12)" },
-  mine: { backgroundColor: "rgba(255,255,255,0.08)", borderRadius: 8 },
-  th: { flex: 1, color: "#fff", fontWeight: "800", textAlign: "center", fontFamily: "Heebo_800ExtraBold" },
-  td: { flex: 1, color: "#fff", textAlign: "center", fontFamily: "Heebo_400Regular" },
-  name: { flex: 1.4 },
-  ghost: { borderWidth: 2, borderRadius: 28, paddingVertical: 10, paddingHorizontal: 18 },
-  ghostText: { fontWeight: "800", fontSize: 16, fontFamily: "Heebo_800ExtraBold" },
+  empty: { textAlign: "center", fontSize: 16, fontFamily: font.bold, marginVertical: 24 },
+  table: { width: "100%", marginTop: 4, marginBottom: 20 },
+  row: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 20,
+    borderBottomWidth: 4,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 10,
+  },
+  rank: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  rankText: { fontFamily: font.black, fontSize: 16 },
+  who: { flex: 1, alignItems: "flex-end" },
+  name: { fontFamily: font.heavy, fontSize: 17, textAlign: "right" },
+  level: { fontFamily: font.medium, fontSize: 12, textAlign: "right" },
+  score: { flexDirection: "row-reverse", alignItems: "center", gap: 4 },
+  scoreText: { fontFamily: font.black, fontSize: 18 },
+  ghost: {
+    minHeight: 48,
+    borderRadius: 22,
+    paddingVertical: 11,
+    paddingHorizontal: 22,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ghostText: { fontSize: 16, fontFamily: font.heavy },
 });

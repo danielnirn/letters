@@ -1,11 +1,19 @@
 import "react-native-gesture-handler";
-import { Heebo_400Regular, Heebo_700Bold, Heebo_800ExtraBold, Heebo_900Black, useFonts } from "@expo-google-fonts/heebo";
+import {
+  Rubik_400Regular,
+  Rubik_500Medium,
+  Rubik_700Bold,
+  Rubik_800ExtraBold,
+  Rubik_900Black,
+  useFonts,
+} from "@expo-google-fonts/rubik";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, type ReactNode } from "react";
 import { I18nManager, Platform, View } from "react-native";
 import { AuthProvider, useAuth } from "../src/context/AuthContext";
 import { ProgressProvider, useProgress } from "../src/context/ProgressContext";
+import { defaultTheme } from "../src/theme/colors";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -30,26 +38,27 @@ function Gate({ children }: { children: ReactNode }) {
       return;
     }
     if (progress.loading) return;
-    const needsName = !progress.active.nameChosen;
+    const needsName = !progress.active.nameChosen || !progress.active.gender;
     if (onLogin || (needsName && !onName)) {
       router.replace(needsName ? "/name" : "/");
       return;
     }
     if (!needsName && onName) router.replace("/");
-  }, [uid, ready, segments, router, progress.loading, progress.active.nameChosen]);
+  }, [uid, ready, segments, router, progress.loading, progress.active.nameChosen, progress.active.gender]);
 
   if (!ready || (uid && progress.loading)) {
-    return <View style={{ flex: 1, backgroundColor: "#1a1a2e" }} />;
+    return <View style={{ flex: 1, backgroundColor: defaultTheme.ground }} />;
   }
   return <>{children}</>;
 }
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
-    Heebo_400Regular,
-    Heebo_700Bold,
-    Heebo_800ExtraBold,
-    Heebo_900Black,
+    Rubik_400Regular,
+    Rubik_500Medium,
+    Rubik_700Bold,
+    Rubik_800ExtraBold,
+    Rubik_900Black,
   });
 
   useEffect(() => {
@@ -65,7 +74,7 @@ export default function RootLayout() {
           <Stack
             screenOptions={{
               headerShown: false,
-              contentStyle: { backgroundColor: "#1a1a2e" },
+              contentStyle: { backgroundColor: defaultTheme.ground },
               animation: "fade",
             }}
           />

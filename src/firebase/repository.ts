@@ -29,6 +29,7 @@ export function defaultProfile(id: string, displayName = ""): ProfileDoc {
     id,
     displayName,
     nameChosen: false,
+    gender: null,
     coins: 0,
     purchases: [],
     inventory: {},
@@ -46,6 +47,7 @@ function profileFromData(id: string, data: Record<string, unknown>): ProfileDoc 
     id,
     displayName: typeof data.displayName === "string" ? data.displayName : "",
     nameChosen: data.nameChosen === true,
+    gender: data.gender === "girl" || data.gender === "boy" ? data.gender : null,
     coins: typeof data.coins === "number" ? data.coins : 0,
     purchases: Array.isArray(data.purchases) ? (data.purchases as string[]) : [],
     inventory: (data.inventory as Record<string, number>) ?? {},
@@ -98,6 +100,7 @@ export async function ensureAccount(
     await setDoc(profileRef(fb.db, uid, profileId), {
       displayName: "",
       nameChosen: false,
+      gender: null,
       coins: 0,
       purchases: [],
       inventory: {},
@@ -133,6 +136,7 @@ export async function loadAccount(uid: string): Promise<CachedProgress> {
     await setDoc(profileRef(fb.db, uid, p.id), {
       displayName: "",
       nameChosen: false,
+      gender: null,
       coins: 0,
       purchases: [],
       inventory: {},
@@ -177,6 +181,7 @@ export async function persistProfile(uid: string, profile: ProfileDoc): Promise<
     {
       displayName: profile.displayName,
       nameChosen: profile.nameChosen,
+      gender: profile.gender ?? null,
       coins: profile.coins,
       purchases: profile.purchases,
       inventory: profile.inventory,

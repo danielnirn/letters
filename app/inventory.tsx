@@ -1,51 +1,81 @@
 import { useRouter } from "expo-router";
 import { StyleSheet, Text, View } from "react-native";
 import { Screen } from "../src/components/Screen";
-import { GhostButton } from "../src/components/LeaderboardTable";
+import { PrimaryButton } from "../src/components/PrimaryButton";
+import { Buddy, Card, CoinPill, TopBar, useColors } from "../src/components/ui";
 import { useProgress } from "../src/context/ProgressContext";
 import { SHOP_ITEMS } from "../src/game/shop";
 import { he } from "../src/i18n/he";
-import { colorsFor } from "../src/theme/colors";
+import { GOLD, font } from "../src/theme/colors";
 
 export default function InventoryScreen() {
   const router = useRouter();
   const { active } = useProgress();
-  const c = colorsFor(active.theme);
+  const c = useColors();
   const items = SHOP_ITEMS.filter((it) => it.consumable).filter(
     (it) => (active.inventory[it.id] || 0) > 0,
   );
 
   return (
     <Screen>
-      <Text style={[styles.title, { color: c.title }]}>{he.gearOf(active.displayName)}</Text>
-      <Text style={[styles.coins, { color: c.coin }]}>{he.coinsCount(active.coins)}</Text>
+      <TopBar
+        onBack={() => router.back()}
+        backLabel={he.backLabel}
+        center={
+          <Text style={[styles.title, { color: c.ink }]} numberOfLines={1}>
+            {he.gearTitle(active.displayName)}
+          </Text>
+        }
+        trailing={<CoinPill coins={active.coins} />}
+      />
       {items.length === 0 ? (
-        <Text style={styles.empty}>{he.emptyInventory}</Text>
+        <Card style={styles.empty}>
+          <Buddy size={110} body={c.primary} />
+          <Text style={[styles.emptyTitle, { color: c.ink }]}>{he.emptyBag}</Text>
+          <Text style={[styles.emptyHint, { color: c.soft }]}>{he.emptyBagHint}</Text>
+          <PrimaryButton label={he.toShop} icon="bag" onPress={() => router.push("/shop")} style={{ marginTop: 16 }} />
+        </Card>
       ) : (
         items.map((it) => (
-          <View key={it.id} style={styles.row}>
-            <Text style={{ fontSize: 32 }}>{it.emoji}</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.name}>{it.name}</Text>
-              <Text style={styles.desc}>
+          <View key={it.id} style={[styles.row, { backgroundColor: c.surface, borderBottomColor: c.line }]}>
+            <View style={[styles.emojiWrap, { backgroundColor: c.ground }]}>
+              <Text style={styles.emoji}>{it.emoji}</Text>
+            </View>
+            <View style={{ flex: 1, alignItems: "flex-end" }}>
+              <Text style={[styles.name, { color: c.ink }]}>{it.name}</Text>
+              <Text style={[styles.desc, { color: c.soft }]}>
                 {it.desc} · {he.forGame}
               </Text>
             </View>
-            <Text style={styles.count}>×{active.inventory[it.id]}</Text>
+            <View style={[styles.count, { backgroundColor: GOLD.tint }]}>
+              <Text style={[styles.countText, { color: GOLD.deep }]}>×{active.inventory[it.id]}</Text>
+            </View>
           </View>
         ))
       )}
-      <GhostButton label={he.back} onPress={() => router.back()} />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 26, fontFamily: "Heebo_900Black", textAlign: "center" },
-  coins: { fontFamily: "Heebo_800ExtraBold", marginBottom: 16 },
-  empty: { color: "rgba(255,255,255,0.7)", textAlign: "center", fontFamily: "Heebo_400Regular", marginBottom: 16 },
-  row: { flexDirection: "row", alignItems: "center", gap: 10, width: "100%", marginBottom: 10 },
-  name: { color: "#fff", fontFamily: "Heebo_800ExtraBold" },
-  desc: { color: "rgba(255,255,255,0.65)", fontFamily: "Heebo_400Regular" },
-  count: { color: "#ffd93d", fontFamily: "Heebo_800ExtraBold" },
+  title: { fontSize: 20, fontFamily: font.black },
+  empty: { alignItems: "center", paddingVertical: 24, marginTop: 12 },
+  emptyTitle: { fontFamily: font.black, fontSize: 22, marginTop: 12 },
+  emptyHint: { fontFamily: font.medium, fontSize: 15, marginTop: 4, textAlign: "center" },
+  row: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 12,
+    width: "100%",
+    borderRadius: 22,
+    borderBottomWidth: 5,
+    padding: 14,
+    marginBottom: 12,
+  },
+  emojiWrap: { width: 56, height: 56, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  emoji: { fontSize: 30 },
+  name: { fontFamily: font.heavy, fontSize: 17 },
+  desc: { fontFamily: font.medium, fontSize: 13, textAlign: "right", marginTop: 2 },
+  count: { borderRadius: 999, paddingVertical: 6, paddingHorizontal: 12 },
+  countText: { fontFamily: font.black, fontSize: 16 },
 });
