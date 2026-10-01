@@ -433,14 +433,6 @@ export function afterTimeout(state: GameState): GameState {
   );
 }
 
-export function extraHints(state: GameState): GameState {
-  return { ...state, hints: state.hints + CONFIG.hintsPerWord };
-}
-
-export function enableDoubleCoins(state: GameState): GameState {
-  return { ...state, doubleCoins: true };
-}
-
 export function clearShake(state: GameState): GameState {
   return { ...state, shaking: false };
 }

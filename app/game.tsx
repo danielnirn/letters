@@ -9,7 +9,6 @@ import {
 import { MathErrorCard, FadeIn } from "../src/components/MathErrorCard";
 import { PrimaryButton } from "../src/components/PrimaryButton";
 import { Screen } from "../src/components/Screen";
-import { useToast } from "../src/components/Toast";
 import { useProgress } from "../src/context/ProgressContext";
 import { CONFIG, parseCategory, parseDifficulty, parseStage, type Category, type Difficulty } from "../src/game/config";
 import {
@@ -17,8 +16,6 @@ import {
   answerChoice,
   clearShake,
   deleteLast,
-  enableDoubleCoins,
-  extraHints,
   nextWord,
   placeTile,
   skipWord,
@@ -30,7 +27,6 @@ import {
   useHint,
   type GameState,
 } from "../src/game/session";
-import { SHOP_ITEMS } from "../src/game/shop";
 import { he } from "../src/i18n/he";
 import { BAD, CATEGORY_COLORS, GOLD, OK, TILE_SWATCHES, font } from "../src/theme/colors";
 import { Coin, Icon } from "../src/components/Art";
@@ -63,7 +59,6 @@ function GameRun() {
   const saveScoreRef = useRef(progress.saveScore);
   completeStageRef.current = progress.completeStage;
   saveScoreRef.current = progress.saveScore;
-  const { show, node } = useToast();
   const c = useColors();
   const [state, setState] = useState<GameState>(() => startGame(difficulty, cat, miniLevel));
   const settled = useRef(false);
@@ -153,28 +148,6 @@ function GameRun() {
     skipAdvance.current = true;
     setState((s) => (s.phase === "win" ? nextWord(s) : s));
   };
-
-  const useTool = async (itemId: string) => {
-    const item = SHOP_ITEMS.find((it) => it.id === itemId);
-    if (!item) return;
-    if (item.effect === "double_coins" && state.doubleCoins) {
-      show(he.doubleAlready);
-      return;
-    }
-    const ok = await progress.useInventory(itemId);
-    if (!ok) return;
-    if (item.effect === "extra_hints") {
-      setState((s) => extraHints(s));
-      show(he.extraHintsToast(CONFIG.hintsPerWord));
-    } else if (item.effect === "skip_word") {
-      show(he.skipped);
-      setState((s) => skipWord(s));
-    } else if (item.effect === "double_coins") {
-      setState((s) => enableDoubleCoins(s));
-      show(he.doubleOn);
-    }
-  };
-
 
   const crumb = `${categoryTitle(state.category)} · ${LEVEL_LABEL[state.level]} · ${he.stageLabel(state.stage)}`;
 
@@ -320,13 +293,9 @@ function GameRun() {
   const won = state.phase === "win";
   const wrong = state.shaking && !won;
   const hebrewRow = state.category === "english" ? "row" : "row-reverse";
-  const consumables = SHOP_ITEMS.filter((it) => it.consumable).filter(
-    (it) => (progress.active.inventory[it.id] || 0) > 0,
-  );
 
   return (
     <Screen>
-      {node}
       <View style={styles.header}>
         <RoundButton icon="close" onPress={backToStages} label={he.exitLabel} />
         <View
@@ -600,34 +569,6 @@ function GameRun() {
           <Text style={[styles.skipText, { color: c.ink }]}>{he.skipThis}</Text>
         </Pressable>
       ) : null}
-
-      {consumables.length > 0 && !won ? (
-        <View style={styles.tools}>
-          {consumables.map((item) => {
-            const count = progress.active.inventory[item.id] || 0;
-            const activeDouble = item.effect === "double_coins" && state.doubleCoins;
-            return (
-              <Pressable
-                key={item.id}
-                disabled={activeDouble}
-                onPress={() => useTool(item.id)}
-                style={[
-                  styles.tool,
-                  {
-                    backgroundColor: activeDouble ? GOLD.tint : c.surface,
-                    borderBottomColor: activeDouble ? GOLD.lip : c.line,
-                  },
-                ]}
-              >
-                <Text style={styles.toolEmoji}>{item.emoji}</Text>
-                <Text style={[styles.toolText, { color: c.ink }]}>
-                  {item.name} {activeDouble ? he.itemActive : `×${count}`}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      ) : null}
     </Screen>
   );
 }
@@ -870,19 +811,6 @@ const styles = StyleSheet.create({
   },
   skipIcon: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   skipText: { fontFamily: font.heavy, fontSize: 16 },
-  tools: { flexDirection: "row-reverse", flexWrap: "wrap", marginTop: 8, justifyContent: "center", gap: 8 },
-  tool: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 6,
-    borderRadius: 999,
-    borderBottomWidth: 3,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    minHeight: 44,
-  },
-  toolEmoji: { fontSize: 18 },
-  toolText: { fontFamily: font.bold, fontSize: 14 },
   timeout: { fontSize: 30, fontFamily: font.black, marginTop: 20, textAlign: "center" },
   confetti: { position: "absolute", top: 0, left: 0, right: 0, height: 180 },
   confettiBit: { position: "absolute", width: 10, height: 18, borderRadius: 3 },

@@ -10,7 +10,7 @@ import { defaultAvatar, equippedId } from "../src/game/avatar";
 import { SHOP_ITEMS, type ShopItem, type ShopSection } from "../src/game/shop";
 import { CONFIG } from "../src/game/config";
 import { he } from "../src/i18n/he";
-import { GOLD, OK, font } from "../src/theme/colors";
+import { OK, font } from "../src/theme/colors";
 import { Coin } from "../src/components/Art";
 import { CoinPill, TopBar, useColors } from "../src/components/ui";
 import type { AvatarSlot } from "../src/types/models";
@@ -126,9 +126,6 @@ export default function ShopScreen() {
     </View>
   );
 
-  const consumables = SHOP_ITEMS.filter((it) => it.section === "enhance" && it.consumable);
-  const invItems = consumables.filter((it) => (progress.active.inventory[it.id] || 0) > 0);
-
   return (
     <Screen>
       {node}
@@ -158,8 +155,6 @@ export default function ShopScreen() {
 
       {section === "enhance" ? (
         <>
-          <Text style={[styles.section, { color: c.ink }]}>{he.shopTools}</Text>
-          {renderGrid(SHOP_ITEMS.filter((it) => it.section === "enhance" && it.category === "tools"))}
           <Text style={[styles.section, { color: c.ink }]}>{he.shopThemes}</Text>
           {renderGrid(SHOP_ITEMS.filter((it) => it.section === "enhance" && it.category === "cosmetics"))}
           {progress.active.theme ? (
@@ -173,21 +168,6 @@ export default function ShopScreen() {
               <Text style={[styles.resetText, { color: c.primary }]}>{he.resetThemePlain}</Text>
             </Pressable>
           ) : null}
-          <Text style={[styles.section, { color: c.ink }]}>{he.navGear}</Text>
-          {invItems.length === 0 ? (
-            <Text style={[styles.empty, { color: c.soft }]}>{he.emptyBag}</Text>
-          ) : (
-            invItems.map((it) => (
-              <View key={it.id} style={[styles.invRow, { backgroundColor: c.surface, borderBottomColor: c.line }]}>
-                <Text style={styles.invEmoji}>{it.emoji}</Text>
-                <View style={{ flex: 1, alignItems: "flex-end" }}>
-                  <Text style={[styles.name, { color: c.ink }]}>{it.name}</Text>
-                  <Text style={[styles.desc, { color: c.soft }]}>{it.desc}</Text>
-                </View>
-                <Tag label={`×${progress.active.inventory[it.id]}`} bg={GOLD.tint} fg={GOLD.deep} />
-              </View>
-            ))
-          )}
           <Text style={[styles.notice, { color: c.soft }]}>{he.shopNotice(CONFIG.coinsCorrect)}</Text>
         </>
       ) : (
@@ -297,18 +277,6 @@ const styles = StyleSheet.create({
   smallText: { fontFamily: font.heavy, fontSize: 15 },
   reset: { alignSelf: "center", padding: 10 },
   resetText: { fontFamily: font.bold, fontSize: 14 },
-  empty: { fontFamily: font.medium, textAlign: "center" },
-  invRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 12,
-    width: "100%",
-    borderRadius: 18,
-    borderBottomWidth: 4,
-    padding: 12,
-    marginBottom: 8,
-  },
-  invEmoji: { fontSize: 30 },
   notice: { textAlign: "center", marginVertical: 16, fontFamily: font.medium, fontSize: 13 },
   avatarStage: { width: "100%", borderRadius: 24, borderBottomWidth: 5, padding: 16, alignItems: "center", marginTop: 12 },
 });

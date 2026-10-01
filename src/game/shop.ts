@@ -1,8 +1,7 @@
-import { CONFIG } from "./config";
 import type { AvatarSlot } from "../types/models";
 
 export type ShopSection = "enhance" | "avatar";
-export type ShopCategory = "tools" | "cosmetics" | AvatarSlot;
+export type ShopCategory = "cosmetics" | AvatarSlot;
 export type ShopItem = {
   id: string;
   emoji: string;
@@ -11,8 +10,8 @@ export type ShopItem = {
   category: ShopCategory;
   cost: number;
   desc: string;
-  type: "powerup" | "theme" | "avatar";
-  effect: "extra_hints" | "skip_word" | "double_coins" | "theme" | "equip" | "none";
+  type: "theme" | "avatar";
+  effect: "theme" | "equip" | "none";
   consumable?: boolean;
   /** Avatar clothing slot. */
   slot?: AvatarSlot;
@@ -25,42 +24,6 @@ export type ShopItem = {
 };
 
 export const SHOP_ITEMS: ShopItem[] = [
-  {
-    id: "extra_hints",
-    emoji: "💡",
-    name: "רמזים נוספים",
-    section: "enhance",
-    category: "tools",
-    cost: 30,
-    desc: `+${CONFIG.hintsPerWord} רמזים למשחק הנוכחי`,
-    type: "powerup",
-    effect: "extra_hints",
-    consumable: true,
-  },
-  {
-    id: "skip_word",
-    emoji: "⏭️",
-    name: "דלג מילה",
-    section: "enhance",
-    category: "tools",
-    cost: 20,
-    desc: "דלג על מילה אחת ב-20 מטבעות",
-    type: "powerup",
-    effect: "skip_word",
-    consumable: true,
-  },
-  {
-    id: "double_coins",
-    emoji: "💰",
-    name: "מטבעות כפולים",
-    section: "enhance",
-    category: "tools",
-    cost: 50,
-    desc: "X2 מטבעות עד סוף הסיבוב",
-    type: "powerup",
-    effect: "double_coins",
-    consumable: true,
-  },
   {
     id: "theme_space",
     emoji: "🚀",
