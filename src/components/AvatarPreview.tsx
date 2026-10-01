@@ -1,9 +1,10 @@
-import { StyleSheet, Text, View } from "react-native";
-import { AVATAR_SLOTS, equippedId } from "../game/avatar";
-import { shopItemById } from "../game/shop";
+import { StyleSheet, View } from "react-native";
+import { useProgress } from "../context/ProgressContext";
 import type { AvatarLoadout } from "../types/models";
-import { Buddy, useColors } from "./ui";
+import { AvatarFigure } from "./AvatarArt";
+import { useColors } from "./ui";
 
+/** The player's dressed character. `showGear={false}` = round face badge. */
 export function AvatarPreview({
   loadout,
   size = 88,
@@ -14,20 +15,14 @@ export function AvatarPreview({
   showGear?: boolean;
 }) {
   const c = useColors();
-  const base = shopItemById(loadout.base);
-  const extras = AVATAR_SLOTS.filter((s) => s !== "base")
-    .map((slot) => {
-      const id = equippedId(loadout, slot);
-      return id ? shopItemById(id) : null;
-    })
-    .filter(Boolean);
-  const isGnome = !base || base.id === "avatar_base_kid";
+  const { active } = useProgress();
+  const gender = active.gender ?? "girl";
 
-  return (
-    <View style={styles.wrap}>
+  if (!showGear) {
+    return (
       <View
         style={[
-          styles.stage,
+          styles.badge,
           {
             width: size,
             height: size,
@@ -35,33 +30,21 @@ export function AvatarPreview({
             backgroundColor: c.surface,
             borderBottomColor: c.line,
             borderBottomWidth: Math.max(3, size / 22),
-            justifyContent: isGnome ? "flex-end" : "center",
           },
         ]}
       >
-        {isGnome ? (
-          <Buddy size={size * 0.8} body={c.primary} />
-        ) : (
-          <Text style={{ fontSize: size * 0.52 }}>{base?.emoji}</Text>
-        )}
+        <AvatarFigure loadout={loadout} gender={gender} height={size * 0.96} head />
       </View>
-      {showGear && extras.length > 0 ? (
-        <View style={styles.gear}>
-          {extras.map((it) => (
-            <View key={it!.id} style={[styles.gearChip, { backgroundColor: c.surface, borderBottomColor: c.line }]}>
-              <Text style={styles.gearEmoji}>{it!.emoji}</Text>
-            </View>
-          ))}
-        </View>
-      ) : null}
+    );
+  }
+  return (
+    <View style={styles.wrap}>
+      <AvatarFigure loadout={loadout} gender={gender} height={size * 1.6} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: { alignItems: "center" },
-  stage: { alignItems: "center", overflow: "hidden" },
-  gear: { flexDirection: "row-reverse", gap: 6, marginTop: 8 },
-  gearChip: { width: 34, height: 34, borderRadius: 12, borderBottomWidth: 3, alignItems: "center", justifyContent: "center" },
-  gearEmoji: { fontSize: 18 },
+  badge: { alignItems: "center", justifyContent: "flex-end", overflow: "hidden" },
 });

@@ -2,18 +2,18 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Screen } from "../src/components/Screen";
-import { AvatarPreview } from "../src/components/AvatarPreview";
+import { AvatarFigure, ItemThumb } from "../src/components/AvatarArt";
 import { useToast } from "../src/components/Toast";
 import { useAuth } from "../src/context/AuthContext";
 import { useProgress } from "../src/context/ProgressContext";
-import { defaultAvatar, equippedId } from "../src/game/avatar";
+import { AVATAR_SLOTS, defaultAvatar, equippedId, withEquipped } from "../src/game/avatar";
 import { SHOP_ITEMS, type ShopItem, type ShopSection } from "../src/game/shop";
 import { CONFIG } from "../src/game/config";
 import { he } from "../src/i18n/he";
-import { OK, font } from "../src/theme/colors";
-import { Coin } from "../src/components/Art";
+import { GOLD, OK, font } from "../src/theme/colors";
+import { Coin, Icon } from "../src/components/Art";
 import { CoinPill, TopBar, useColors } from "../src/components/ui";
-import type { AvatarSlot } from "../src/types/models";
+import type { AvatarSlot, Gender } from "../src/types/models";
 
 const SLOT_LABEL: Record<AvatarSlot, string> = {
   base: he.slotBase,
@@ -29,6 +29,11 @@ function isOwned(purchases: string[], item: ShopItem) {
   return purchases.includes(item.id);
 }
 
+function itemName(item: ShopItem, gender: Gender) {
+  if (item.id === "avatar_base_kid") return gender === "boy" ? he.gnomeBoy : he.gnomeGirl;
+  return item.name;
+}
+
 export default function ShopScreen() {
   const router = useRouter();
   const { isLocal } = useAuth();
@@ -39,7 +44,6 @@ export default function ShopScreen() {
   const avatar = progress.active.avatar ?? defaultAvatar();
 
   const onBuy = async (item: ShopItem) => {
-    if (item.locked) return;
     const result = await progress.buyItem(item);
     if (result === "funds") {
       show(he.notEnoughCoins(item.cost));
@@ -59,7 +63,6 @@ export default function ShopScreen() {
     <View style={styles.grid}>
       {items.map((item) => {
         const owned = isOwned(progress.active.purchases, item);
-        const locked = Boolean(item.locked);
         const isActiveTheme = item.type === "theme" && progress.active.theme === item.id;
         const equipped =
           item.section === "avatar" && item.slot
@@ -76,7 +79,6 @@ export default function ShopScreen() {
                 backgroundColor: c.surface,
                 borderColor: highlight ? c.primary : "transparent",
                 borderBottomColor: highlight ? c.primaryLip : c.line,
-                opacity: locked ? 0.6 : 1,
               },
             ]}
           >
@@ -87,9 +89,7 @@ export default function ShopScreen() {
             <Text style={[styles.name, { color: c.ink }]}>{item.name}</Text>
             <Text style={[styles.desc, { color: c.soft }]}>{item.desc}</Text>
             <View style={styles.cardFoot}>
-              {locked ? (
-                <Tag label={he.comingSoonPlain} bg={c.ground} fg={c.soft} />
-              ) : owned && item.type === "theme" ? (
+              {owned && item.type === "theme" ? (
                 isActiveTheme ? (
                   <Tag label={he.activePlain} bg={c.primaryTint} fg={c.primary} />
                 ) : (
@@ -171,22 +171,157 @@ export default function ShopScreen() {
           <Text style={[styles.notice, { color: c.soft }]}>{he.shopNotice(CONFIG.coinsCorrect)}</Text>
         </>
       ) : (
-        <>
-          <View style={[styles.avatarStage, { backgroundColor: c.surface, borderBottomColor: c.line }]}>
-            <AvatarPreview loadout={avatar} size={120} />
-            <Text style={[styles.notice, { color: c.soft, marginBottom: 0 }]}>{he.avatarHint}</Text>
-          </View>
-          {(["base", "hat", "top", "bottom", "shoes", "extra"] as AvatarSlot[]).map((slot) => (
-            <View key={slot} style={{ width: "100%" }}>
-              <Text style={[styles.section, { color: c.ink }]}>{SLOT_LABEL[slot]}</Text>
-              {renderGrid(
-                SHOP_ITEMS.filter((it) => it.section === "avatar" && it.slot === slot),
-              )}
-            </View>
-          ))}
-        </>
+        <DressingRoom onBuy={onBuy} />
       )}
     </Screen>
+  );
+}
+
+/** Avatar tab: a stage with the dressed character, slot tabs, and try-on cards. */
+function DressingRoom({ onBuy }: { onBuy: (item: ShopItem) => Promise<void> }) {
+  const progress = useProgress();
+  const c = useColors();
+  const [slot, setSlot] = useState<AvatarSlot>("base");
+  const [trying, setTrying] = useState<ShopItem | null>(null);
+  const { purchases, coins } = progress.active;
+  const gender = progress.active.gender ?? "girl";
+  const avatar = progress.active.avatar ?? defaultAvatar();
+  const shown = trying?.slot ? withEquipped(avatar, trying.slot, trying.id) : avatar;
+  const items = SHOP_ITEMS.filter((it) => it.section === "avatar" && it.slot === slot);
+  const tryingOwned = trying ? isOwned(purchases, trying) : true;
+  const missing = trying ? Math.max(0, trying.cost - coins) : 0;
+
+  const onCard = (item: ShopItem) => {
+    if (!isOwned(purchases, item)) {
+      setTrying(trying?.id === item.id ? null : item);
+      return;
+    }
+    setTrying(null);
+    const on = equippedId(avatar, item.slot!) === item.id;
+    if (on && item.slot !== "base") progress.equipAvatar(item.slot!, null);
+    else if (!on) progress.equipAvatar(item.slot!, item.id);
+  };
+
+  const buyTrying = async () => {
+    if (!trying) return;
+    await onBuy(trying);
+    setTrying(null);
+  };
+
+  return (
+    <>
+      <View style={[styles.stage, { backgroundColor: c.primaryTint, borderBottomColor: c.line }]}>
+        <View style={[styles.spot, { backgroundColor: c.surface }]} />
+        <View>
+          <AvatarFigure loadout={shown} gender={gender} height={250} />
+        </View>
+        {trying && !tryingOwned ? (
+          <View style={[styles.tryBar, { backgroundColor: c.surface, borderBottomColor: c.line }]}>
+            <Text style={[styles.tryText, { color: c.ink }]}>{he.tryingOn(itemName(trying, gender))}</Text>
+            <View style={styles.tryRow}>
+              <SmallButton
+                label={String(trying.cost)}
+                coin
+                color={OK.base}
+                lip={OK.lip}
+                disabled={missing > 0}
+                onPress={buyTrying}
+                accessibilityLabel={`${he.buy} · ${trying.cost}`}
+              />
+              <SmallButton label={he.tryOnCancel} soft onPress={() => setTrying(null)} />
+            </View>
+            {missing > 0 ? <Text style={[styles.tryMissing, { color: c.soft }]}>{he.needMoreCoins(missing)}</Text> : null}
+          </View>
+        ) : (
+          <Text style={[styles.stageHint, { color: c.soft }]}>{he.avatarHint}</Text>
+        )}
+      </View>
+
+      <View style={styles.slotGrid}>
+        {AVATAR_SLOTS.map((sl) => {
+          const on = sl === slot;
+          const sample = equippedId(avatar, sl) ?? SHOP_ITEMS.find((it) => it.slot === sl)!.id;
+          return (
+            <Pressable
+              key={sl}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: on }}
+              onPress={() => setSlot(sl)}
+              style={({ pressed }) => [
+                styles.slotChip,
+                {
+                  backgroundColor: on ? c.primary : c.surface,
+                  borderBottomColor: on ? c.primaryLip : c.line,
+                  borderBottomWidth: pressed ? 1 : 4,
+                  marginTop: pressed ? 3 : 0,
+                },
+              ]}
+            >
+              <View style={[styles.slotIcon, { backgroundColor: on ? "#fff" : c.ground }]}>
+                <ItemThumb id={sample} slot={sl} gender={gender} size={30} />
+              </View>
+              <Text style={[styles.slotText, { color: on ? "#fff" : c.ink }]}>{SLOT_LABEL[sl]}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <Text style={[styles.section, { color: c.ink }]}>
+        {slot === "base" ? he.avatarStepCharacter : he.avatarStepDress}
+      </Text>
+      <View style={styles.grid}>
+        {items.map((item) => {
+          const owned = isOwned(purchases, item);
+          const on = equippedId(avatar, item.slot!) === item.id;
+          const isTrying = trying?.id === item.id;
+          const border = isTrying ? GOLD.base : on ? c.primary : "transparent";
+          return (
+            <Pressable
+              key={item.id}
+              accessibilityRole="button"
+              accessibilityLabel={itemName(item, gender)}
+              onPress={() => onCard(item)}
+              style={({ pressed }) => [
+                styles.wearCard,
+                {
+                  backgroundColor: c.surface,
+                  borderColor: border,
+                  borderBottomColor: isTrying ? GOLD.lip : on ? c.primaryLip : c.line,
+                  borderBottomWidth: pressed ? 2 : 5,
+                  marginTop: pressed ? 3 : 0,
+                },
+              ]}
+            >
+              <View style={[styles.wearThumb, { backgroundColor: on ? c.primaryTint : isTrying ? GOLD.tint : c.ground }]}>
+                <ItemThumb id={item.id} slot={item.slot!} gender={gender} size={84} />
+              </View>
+              <Text style={[styles.wearName, { color: c.ink }]} numberOfLines={1}>
+                {itemName(item, gender)}
+              </Text>
+              {on ? (
+                <Tag label={he.wearing} bg={c.primaryTint} fg={c.primary} />
+              ) : owned ? (
+                <Tag label={he.ownedPlain} bg={OK.tint} fg={OK.deep} />
+              ) : (
+                <View style={styles.price}>
+                  <Coin size={18} />
+                  <Text style={[styles.priceText, { color: coins >= item.cost ? c.ink : c.soft }]}>{item.cost}</Text>
+                </View>
+              )}
+              {on ? (
+                <View style={[styles.wearCheck, { backgroundColor: c.primary }]}>
+                  <Icon name="check" size={12} color="#fff" weight={3.4} />
+                </View>
+              ) : !owned ? (
+                <View style={[styles.wearCheck, { backgroundColor: c.ground }]}>
+                  <Icon name="lock" size={12} color={c.soft} />
+                </View>
+              ) : null}
+            </Pressable>
+          );
+        })}
+      </View>
+    </>
   );
 }
 
@@ -278,5 +413,56 @@ const styles = StyleSheet.create({
   reset: { alignSelf: "center", padding: 10 },
   resetText: { fontFamily: font.bold, fontSize: 14 },
   notice: { textAlign: "center", marginVertical: 16, fontFamily: font.medium, fontSize: 13 },
-  avatarStage: { width: "100%", borderRadius: 24, borderBottomWidth: 5, padding: 16, alignItems: "center", marginTop: 12 },
+  stage: {
+    width: "100%",
+    borderRadius: 28,
+    borderBottomWidth: 5,
+    paddingTop: 18,
+    paddingBottom: 14,
+    paddingHorizontal: 14,
+    alignItems: "center",
+    marginTop: 12,
+    overflow: "hidden",
+  },
+  spot: { position: "absolute", top: 26, width: 230, height: 230, borderRadius: 115 },
+  stageHint: { textAlign: "center", marginTop: 10, fontFamily: font.medium, fontSize: 13 },
+  tryBar: { width: "100%", borderRadius: 20, borderBottomWidth: 4, padding: 12, marginTop: 10, alignItems: "center" },
+  tryText: { fontFamily: font.heavy, fontSize: 16, textAlign: "center", marginBottom: 8 },
+  tryRow: { flexDirection: "row-reverse", justifyContent: "center", gap: 10 },
+  tryMissing: { fontFamily: font.medium, fontSize: 12, textAlign: "center", marginTop: 8 },
+  slotGrid: { width: "100%", flexDirection: "row-reverse", flexWrap: "wrap", justifyContent: "space-between", marginTop: 14 },
+  slotChip: {
+    width: "31.5%",
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    borderRadius: 18,
+    padding: 6,
+    paddingLeft: 8,
+    marginBottom: 8,
+    minHeight: 50,
+  },
+  slotIcon: { width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center", marginLeft: 6 },
+  slotText: { flex: 1, fontFamily: font.heavy, fontSize: 14, textAlign: "right" },
+  wearCard: {
+    width: "31.5%",
+    borderRadius: 20,
+    borderWidth: 2,
+    padding: 8,
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  wearThumb: { width: "100%", aspectRatio: 1, borderRadius: 14, alignItems: "center", justifyContent: "center", marginBottom: 6 },
+  wearName: { fontFamily: font.heavy, fontSize: 13, textAlign: "center", marginBottom: 6 },
+  wearCheck: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  price: { flexDirection: "row-reverse", alignItems: "center", gap: 4, paddingVertical: 4 },
+  priceText: { fontFamily: font.heavy, fontSize: 15 },
 });
