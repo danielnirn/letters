@@ -27,9 +27,9 @@ export const TILE_COLORS = [
 export const THEME_IDS = ["theme_space", "theme_jungle", "theme_unicorn"] as const;
 export type ThemeId = (typeof THEME_IDS)[number];
 export type Difficulty = "easy" | "mid" | "hard";
-export type Category = "language" | "math" | "english" | "logic" | "science";
+export type Category = "language" | "math" | "english" | "logic" | "science" | "reading";
 
-export const CATEGORIES: Category[] = ["language", "math", "english", "logic", "science"];
+export const CATEGORIES: Category[] = ["language", "math", "english", "logic", "science", "reading"];
 
 export function isSpellingCategory(category: Category) {
   return category === "language" || category === "english";

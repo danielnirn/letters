@@ -2,6 +2,7 @@ import { CONFIG, TILE_COLORS, isSpellingCategory, questionsInStage, type Categor
 import { ENGLISH_WORDS } from "./english";
 import { generateLogicList, LOGIC_WORDS } from "./logic";
 import { generateMathList } from "./math";
+import { generateReadingList } from "./reading";
 import { SCIENCE_WORDS } from "./science";
 import { shuffle, shuffleDistinct } from "./shuffle";
 import { WORDS, type Word } from "./words";
@@ -25,6 +26,7 @@ export type Mistake = {
   answer: string;
   guess: string;
   skipped: boolean;
+  story?: string;
 };
 
 export type GameState = {
@@ -53,6 +55,7 @@ export type GameState = {
   choiceWords: string[];
   shaking: boolean;
   currentHint: string;
+  currentStory: string;
   typedAnswer: string;
   lastWrongPick: string;
   questionMarks: Array<"ok" | "bad" | null>;
@@ -69,6 +72,7 @@ function wordBank(category: Category) {
 function freshWordList(category: Category, level: Difficulty, count: number): Word[] {
   if (category === "math") return generateMathList(level, count);
   if (category === "logic") return generateLogicList(level, count);
+  if (category === "reading") return generateReadingList(level, count);
   const bank = wordBank(category)[level] ?? [];
   const shuffled = shuffle(bank);
   if (shuffled.length >= count) return shuffled.slice(0, count);
@@ -163,6 +167,7 @@ function loadCurrentWord(state: GameState, keepBonus: boolean): GameState {
     currentWord: obj.word,
     currentEmoji: obj.emoji,
     currentHint: obj.hint ?? "",
+    currentStory: obj.story ?? "",
     tiles: questionType === "spell" ? makeTiles(letters) : [],
     placed: [],
     typedAnswer: "",
@@ -195,6 +200,7 @@ export function startGame(level: Difficulty, category: Category = "language", st
       currentWord: "",
       currentEmoji: "",
       currentHint: "",
+      currentStory: "",
       tiles: [],
       placed: [],
       hints: CONFIG.hintsPerWord,
@@ -331,6 +337,7 @@ function addMistake(state: GameState, guess: string, skipped: boolean): GameStat
         answer: state.currentWord,
         guess,
         skipped,
+        story: state.currentStory || undefined,
       },
     ],
   };

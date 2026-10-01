@@ -159,6 +159,17 @@ function CategoryGlyph({ category, size }: { category: Category; size: number })
       </Svg>
     );
   }
+  if (category === "reading") {
+    return (
+      <Svg width={s} height={s} viewBox="0 0 48 48">
+        <Path d="M24 13C19 9 12 9 6 11V38C12 36 19 36 24 40C29 36 36 36 42 38V11C36 9 29 9 24 13Z" fill="#fff" />
+        <Path d="M24 14V39" stroke={lip} strokeWidth={3} strokeLinecap="round" />
+        {["M11 18C14 17.4 17 17.4 19.5 18.4", "M11 24C14 23.4 17 23.4 19.5 24.4", "M28.5 18.4C31 17.4 34 17.4 37 18", "M28.5 24.4C31 23.4 34 23.4 37 24"].map((d) => (
+          <Path key={d} d={d} stroke={lip} strokeWidth={2.5} strokeLinecap="round" />
+        ))}
+      </Svg>
+    );
+  }
   return (
     <Svg width={s} height={s} viewBox="0 0 48 48">
       <Path d="M39 8C18 8 9 20 11 37C27 39 39 30 39 8Z" fill="#fff" />

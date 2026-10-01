@@ -1,4 +1,4 @@
-import { Platform, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../src/context/AuthContext";
 import { he } from "../src/i18n/he";
@@ -8,7 +8,7 @@ import { PrimaryButton } from "../src/components/PrimaryButton";
 import { BAD, OK, defaultTheme as c, font } from "../src/theme/colors";
 
 export default function LoginScreen() {
-  const { signInGoogle, signInApple, signInLocal, firebaseReady } = useAuth();
+  const { signInGoogle, signInApple, signInLocal, firebaseReady, appleAvailable } = useAuth();
   const [error, setError] = useState("");
 
   const run = async (fn: () => Promise<void> | void) => {
@@ -46,7 +46,7 @@ export default function LoginScreen() {
           {firebaseReady ? (
             <>
               <PrimaryButton label={he.loginGoogle} onPress={() => run(signInGoogle)} />
-              {Platform.OS === "ios" ? (
+              {appleAvailable ? (
                 <PrimaryButton label={he.loginApple} color={c.ink} onPress={() => run(signInApple)} />
               ) : null}
             </>

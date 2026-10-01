@@ -12,6 +12,7 @@ import { Buddy, Card, CoinPill, ProgressBar, TopBar, useColors } from "../src/co
 import { defaultAvatar } from "../src/game/avatar";
 import {
   CONFIG,
+  CATEGORIES,
   clearedStages,
   isStagePerfectClear,
   isStageUnlocked,
@@ -98,7 +99,7 @@ export default function HomeScreen() {
 
         <Text style={[styles.section, { color: c.ink }]}>{he.pickCategory}</Text>
         <View style={styles.grid}>
-          {(["language", "math", "english", "logic"] as Category[]).map((cat) => (
+          {CATEGORIES.map((cat) => (
             <SubjectCard
               key={cat}
               category={cat}
@@ -107,13 +108,6 @@ export default function HomeScreen() {
               onPress={() => setCategory(cat)}
             />
           ))}
-          <SubjectCard
-            category="science"
-            done={done("science")}
-            total={total}
-            wide
-            onPress={() => setCategory("science")}
-          />
         </View>
 
         <View style={[styles.dock, { backgroundColor: c.surface, borderBottomColor: c.line }]}>
@@ -406,6 +400,7 @@ function categoryLabel(category: Category) {
   if (category === "english") return he.categoryEnglish;
   if (category === "logic") return he.categoryLogic;
   if (category === "science") return he.categoryScience;
+  if (category === "reading") return he.categoryReading;
   return he.categoryLanguage;
 }
 
@@ -414,6 +409,7 @@ function categoryDesc(category: Category) {
   if (category === "english") return he.categoryEnglishDesc;
   if (category === "logic") return he.categoryLogicDesc;
   if (category === "science") return he.categoryScienceDesc;
+  if (category === "reading") return he.categoryReadingDesc;
   return he.categoryLanguageDesc;
 }
 
@@ -437,6 +433,11 @@ function levelDesc(category: Category, level: Difficulty) {
     if (level === "easy") return he.scienceEasyDesc;
     if (level === "mid") return he.scienceMidDesc;
     return he.scienceHardDesc;
+  }
+  if (category === "reading") {
+    if (level === "easy") return he.readingEasyDesc;
+    if (level === "mid") return he.readingMidDesc;
+    return he.readingHardDesc;
   }
   if (level === "easy") return he.easyDesc;
   if (level === "mid") return he.midDesc;

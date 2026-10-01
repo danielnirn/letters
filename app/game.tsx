@@ -180,7 +180,11 @@ function GameRun() {
                   </View>
                   <View style={{ flex: 1, alignItems: "flex-end" }}>
                     <Text style={[styles.reportQ, { color: c.soft }]}>{he.mistakeQuestion(m.index + 1)}</Text>
-                    {m.prompt ? <Text style={[styles.reportPrompt, { color: c.ink }]}>{m.prompt}</Text> : null}
+                    {m.story ? (
+                      <Text style={[styles.reportHint, { color: c.ink, marginBottom: 0 }]}>{`${m.prompt} ${m.hint}`}</Text>
+                    ) : m.prompt ? (
+                      <Text style={[styles.reportPrompt, { color: c.ink }]}>{m.prompt}</Text>
+                    ) : null}
                   </View>
                   <Icon name={open ? "close" : "next"} size={18} color={c.soft} />
                 </View>
@@ -204,9 +208,10 @@ function GameRun() {
                     </View>
                   ) : (
                     <View style={[styles.reportWhy, { backgroundColor: GOLD.tint }]}>
+                      {m.story ? <Text style={[styles.reportStory, { color: c.ink }]}>{m.story}</Text> : null}
                       {m.hint ? <Text style={[styles.reportHint, { color: c.ink }]}>{m.hint}</Text> : null}
                       <Text style={[styles.reportWhyText, { color: GOLD.deep }]}>
-                        {m.skipped
+                        {m.skipped || m.story
                           ? `${he.correctAnswer}: ${m.answer}`
                           : `${m.prompt || ""} זה לא ${m.guess || "—"} · ${m.answer}`}
                       </Text>
@@ -331,11 +336,26 @@ function GameRun() {
           </View>
         ) : state.category === "logic" ? (
           <Text style={[styles.logicPrompt, { color: c.ink }]}>{state.currentEmoji}</Text>
+        ) : state.category === "reading" ? (
+          <>
+            <View style={styles.storyHead}>
+              <Text style={styles.storyEmoji}>{state.currentEmoji}</Text>
+              <Text style={[styles.prompt, { color: c.soft, marginTop: 0 }]}>{he.promptReading}</Text>
+            </View>
+            <View
+              style={[
+                styles.storyBox,
+                { backgroundColor: c.ground, borderColor: c.line },
+              ]}
+            >
+              <Text style={[styles.storyText, { color: c.ink }]}>{state.currentStory}</Text>
+            </View>
+          </>
         ) : (
           <Text style={styles.emoji}>{state.currentEmoji}</Text>
         )}
         {state.currentHint ? <Text style={[styles.hintHe, { color: c.ink }]}>{state.currentHint}</Text> : null}
-        {state.questionType !== "spell" && state.category !== "math" ? (
+        {state.questionType !== "spell" && state.category !== "math" && state.category !== "reading" ? (
           <Text style={[styles.prompt, { color: c.soft }]}>
             {state.questionType === "type" ? he.promptType : choicePrompt(state.category)}
           </Text>
@@ -387,7 +407,15 @@ function GameRun() {
                     <Icon name={isRight ? "check" : "x"} size={14} color="#fff" weight={3.4} />
                   </View>
                 ) : null}
-                <Text style={[styles.choiceText, { color: sw ? sw.deep : c.ink }]}>{w}</Text>
+                <Text
+                  style={[
+                    styles.choiceText,
+                    state.category === "reading" && styles.choiceTextSmall,
+                    { color: sw ? sw.deep : c.ink },
+                  ]}
+                >
+                  {w}
+                </Text>
               </Pressable>
             );
           })}
@@ -639,6 +667,7 @@ function categoryTitle(cat: Category) {
   if (cat === "english") return he.categoryEnglish;
   if (cat === "logic") return he.categoryLogic;
   if (cat === "science") return he.categoryScience;
+  if (cat === "reading") return he.categoryReading;
   return he.categoryLanguage;
 }
 
@@ -646,11 +675,12 @@ function choicePrompt(cat: Category) {
   if (cat === "english") return he.promptEnglish;
   if (cat === "logic") return he.promptLogic;
   if (cat === "science") return he.promptScience;
+  if (cat === "reading") return he.promptReading;
   return he.promptWhat;
 }
 
 function isQuiz(cat: Category) {
-  return cat === "math" || cat === "logic" || cat === "science";
+  return cat === "math" || cat === "logic" || cat === "science" || cat === "reading";
 }
 
 const styles = StyleSheet.create({
@@ -661,6 +691,18 @@ const styles = StyleSheet.create({
   crumb: { fontFamily: font.bold, fontSize: 14, textAlign: "center", marginTop: 10, marginBottom: 12 },
   promptCard: { alignItems: "center", paddingVertical: 22, marginBottom: 14 },
   emoji: { fontSize: 96, lineHeight: 116 },
+  storyHead: { flexDirection: "row-reverse", alignItems: "center", gap: 10, alignSelf: "stretch", justifyContent: "center" },
+  storyEmoji: { fontSize: 40, lineHeight: 50 },
+  storyBox: {
+    alignSelf: "stretch",
+    borderRadius: 18,
+    borderWidth: 2,
+    borderBottomWidth: 5,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginTop: 10,
+  },
+  storyText: { fontSize: 20, lineHeight: 32, fontFamily: font.medium, textAlign: "right" },
   exprRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   exprText: { fontFamily: font.black, fontSize: 44 },
   exprBox: {
@@ -719,6 +761,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   choiceText: { fontSize: 26, fontFamily: font.heavy, textAlign: "center" },
+  choiceTextSmall: { fontSize: 18, lineHeight: 24 },
   typeWrap: { width: "100%", alignItems: "center" },
   typeBox: {
     minWidth: 180,
@@ -862,6 +905,7 @@ const styles = StyleSheet.create({
   answerTagText: { fontFamily: font.bold, fontSize: 14 },
   reportTap: { fontFamily: font.bold, fontSize: 13, marginTop: 10, textAlign: "right" },
   reportHint: { fontFamily: font.bold, textAlign: "center", marginBottom: 6 },
+  reportStory: { fontFamily: font.medium, fontSize: 15, lineHeight: 24, textAlign: "right", marginBottom: 8 },
   reportWhy: { width: "100%", marginTop: 12, borderRadius: 16, padding: 14, alignItems: "center" },
   reportWhyText: { fontFamily: font.bold, textAlign: "center", fontSize: 15 },
 });

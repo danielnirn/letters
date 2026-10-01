@@ -4,6 +4,8 @@ export type Word = {
   hint?: string;
   /** Extra wrong answers for multiple-choice (answer is still `word`). */
   choices?: string[];
+  /** Reading comprehension: the passage the question is about. */
+  story?: string;
 };
 
 export const WORDS: Record<"easy" | "mid" | "hard", Word[]> = {

@@ -24,6 +24,9 @@ const LEVEL: Record<string, string> = {
   "science:easy": `${he.categoryScience} · ${he.easy}`,
   "science:mid": `${he.categoryScience} · ${he.mid}`,
   "science:hard": `${he.categoryScience} · ${he.hard}`,
+  "reading:easy": `${he.categoryReading} · ${he.easy}`,
+  "reading:mid": `${he.categoryReading} · ${he.mid}`,
+  "reading:hard": `${he.categoryReading} · ${he.hard}`,
 };
 const MEDAL = [GOLD, { ...OK, base: "#A9B6CC", lip: "#8392AD" }, { ...BAD, base: "#E0925A", lip: "#B96F3B" }];
 

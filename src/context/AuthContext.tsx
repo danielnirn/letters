@@ -29,6 +29,7 @@ type AuthValue = {
   displayName: string | null;
   signInGoogle: () => Promise<void>;
   signInApple: () => Promise<void>;
+  appleAvailable: boolean;
   signInLocal: () => void;
   signOut: () => Promise<void>;
 };
@@ -39,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [localUid, setLocalUid] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  const [appleAvailable, setAppleAvailable] = useState(Platform.OS === "web");
   const firebaseReady = isFirebaseConfigured();
   const fb = getFirebase();
   const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || "";
@@ -54,6 +56,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, [fb]);
 
+  useEffect(() => {
+    if (Platform.OS === "web") {
+      setAppleAvailable(true);
+      return;
+    }
+    if (Platform.OS !== "ios") {
+      setAppleAvailable(false);
+      return;
+    }
+    AppleAuthentication.isAvailableAsync()
+      .then(setAppleAvailable)
+      .catch(() => setAppleAvailable(false));
+  }, []);
+
   const signInGoogle = async () => {
     if (!fb) throw new Error("firebase");
     if (Platform.OS === "web") {
@@ -67,6 +83,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInApple = async () => {
     if (!fb) throw new Error("firebase");
+    const provider = new OAuthProvider("apple.com");
+    provider.addScope("email");
+    provider.addScope("name");
+    if (Platform.OS === "web") {
+      await signInWithPopup(fb.auth, provider);
+      return;
+    }
     const nonce = Math.random().toString(36).slice(2);
     const hashed = await Crypto.digestStringAsync(
       Crypto.CryptoDigestAlgorithm.SHA256,
@@ -80,7 +103,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       nonce: hashed,
     });
     if (!apple.identityToken) throw new Error("apple");
-    const provider = new OAuthProvider("apple.com");
     const credential = provider.credential({
       idToken: apple.identityToken,
       rawNonce: nonce,
@@ -105,10 +127,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       displayName: user?.displayName ?? null,
       signInGoogle,
       signInApple,
+      appleAvailable,
       signInLocal: () => setLocalUid(LOCAL_UID),
       signOut,
     }),
-    [uid, user, ready, firebaseReady],
+    [uid, user, ready, firebaseReady, appleAvailable],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

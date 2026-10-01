@@ -73,6 +73,7 @@ export const CATEGORY_COLORS: Record<Category, Swatch> = {
   english: { base: "#2FBF71", lip: "#1E9457", tint: "#D5F5E5", deep: "#146B3E" },
   logic: { base: "#8B6CF6", lip: "#6A4BD8", tint: "#E6DFFF", deep: "#4B2FB0" },
   science: { base: "#1FB5CC", lip: "#138A9C", tint: "#D2F3F8", deep: "#0C6574" },
+  reading: { base: "#FF6FB0", lip: "#D94A8C", tint: "#FFE0EF", deep: "#A3306A" },
 };
 
 export const DIFFICULTY_COLORS: Record<Difficulty, Swatch> = {

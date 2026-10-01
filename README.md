@@ -33,3 +33,15 @@ npx expo start
 
 - ב-iOS חובה Sign in with Apple אם מציעים Google.
 - צרו OAuth Client מסוג Web ב-Google Cloud והדביקו כ-`EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`.
+
+### הפעלת Apple ב-Firebase (חובה כדי שהכפתור יעבוד)
+
+1. [Apple Developer](https://developer.apple.com/account) → Identifiers:
+   - App ID `com.letters.otiot` עם **Sign In with Apple**.
+   - Services ID (לדפדפן), למשל `com.letters.otiot.web`, עם Sign In with Apple.
+   - Return URL של Firebase: `https://<PROJECT_ID>.firebaseapp.com/__/auth/handler`
+     (גם `https://<PROJECT_ID>.web.app/__/auth/handler` אם מופיע בקונסול).
+2. Keys → מפתח חדש עם Sign In with Apple. שמרו את `.p8`, Key ID ו-Team ID.
+3. Firebase Console → Authentication → Sign-in method → **Apple**:
+   - הפעילו את הספק.
+   - בדפדפן: Services ID, Team ID, Key ID והדבקת תוכן ה-`.p8`.
