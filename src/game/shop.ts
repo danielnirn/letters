@@ -2,7 +2,7 @@ import { CONFIG } from "./config";
 import type { AvatarSlot } from "../types/models";
 
 export type ShopSection = "enhance" | "avatar";
-export type ShopCategory = "tools" | "cosmetics" | "coming" | AvatarSlot;
+export type ShopCategory = "tools" | "cosmetics" | AvatarSlot;
 export type ShopItem = {
   id: string;
   emoji: string;
@@ -11,7 +11,7 @@ export type ShopItem = {
   category: ShopCategory;
   cost: number;
   desc: string;
-  type: "powerup" | "theme" | "avatar" | "tbd";
+  type: "powerup" | "theme" | "avatar";
   effect: "extra_hints" | "skip_word" | "double_coins" | "theme" | "equip" | "none";
   consumable?: boolean;
   /** Avatar clothing slot. */
@@ -94,9 +94,6 @@ export const SHOP_ITEMS: ShopItem[] = [
     type: "theme",
     effect: "theme",
   },
-  { id: "coming_1", emoji: "🎭", name: "???", section: "enhance", category: "coming", cost: 999, desc: "בקרוב...", type: "tbd", effect: "none", locked: true },
-  { id: "coming_2", emoji: "🌈", name: "???", section: "enhance", category: "coming", cost: 999, desc: "בקרוב...", type: "tbd", effect: "none", locked: true },
-
   {
     id: "avatar_base_kid",
     emoji: "🧒",

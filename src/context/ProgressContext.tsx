@@ -25,6 +25,7 @@ import {
 import type { CachedProgress, ProfileDoc, ScoreEntry, AvatarSlot } from "../types/models";
 import { isFirebaseConfigured } from "../firebase/app";
 import { useAuth } from "./AuthContext";
+import { stageProgressKey, stageCoinsKey, type Category, type Difficulty } from "../game/config";
 
 type ProgressValue = {
   loading: boolean;
@@ -40,6 +41,13 @@ type ProgressValue = {
   equipAvatar: (slot: AvatarSlot, itemId: string | null) => Promise<void>;
   useInventory: (itemId: string) => Promise<boolean>;
   saveScore: (score: number, level: string) => Promise<void>;
+  completeStage: (
+    category: Category,
+    difficulty: Difficulty,
+    stage: number,
+    coins: number,
+    perfect: boolean,
+  ) => Promise<void>;
   clearScores: () => Promise<void>;
   cloudError: boolean;
 };
@@ -282,6 +290,24 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
           },
         }));
         return true;
+      },
+      completeStage: async (category, difficulty, stage, coins, perfect) => {
+        const key = stageProgressKey(category, difficulty);
+        const coinKey = stageCoinsKey(category, difficulty, stage);
+        const earned = Math.max(0, coins);
+        await patchActive((p) => {
+          const prev = p.stageClears ?? {};
+          const prevCoins = p.stageCoins ?? {};
+          const prevPerfect = p.stagePerfect ?? {};
+          const best = Math.max(prev[key] ?? 0, stage);
+          return {
+            ...p,
+            coins: p.coins + earned,
+            stageClears: { ...prev, [key]: best },
+            stageCoins: { ...prevCoins, [coinKey]: Math.max(prevCoins[coinKey] ?? 0, earned) },
+            stagePerfect: { ...prevPerfect, [coinKey]: Boolean(prevPerfect[coinKey] || perfect) },
+          };
+        });
       },
       saveScore: async (score: number, level: string) => {
         const current = dataRef.current;

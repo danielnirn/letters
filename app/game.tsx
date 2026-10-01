@@ -6,12 +6,13 @@ import {
   Text,
   View,
 } from "react-native";
-import { Screen } from "../src/components/Screen";
-import { GhostButton, LeaderboardTable } from "../src/components/LeaderboardTable";
+import { MathErrorCard, FadeIn } from "../src/components/MathErrorCard";
+import { GhostButton } from "../src/components/LeaderboardTable";
 import { PrimaryButton } from "../src/components/PrimaryButton";
+import { Screen } from "../src/components/Screen";
 import { useToast } from "../src/components/Toast";
 import { useProgress } from "../src/context/ProgressContext";
-import { CONFIG, parseCategory, type Category, type Difficulty } from "../src/game/config";
+import { CONFIG, parseCategory, parseDifficulty, parseStage, type Category, type Difficulty } from "../src/game/config";
 import {
   afterTimeout,
   answerChoice,
@@ -21,11 +22,11 @@ import {
   extraHints,
   nextWord,
   placeTile,
-  revive,
   skipWord,
   startGame,
+  stageCoinReward,
+  stageIsPerfect,
   submitTyped,
-  tickBonus,
   typeDigit,
   useHint,
   type GameState,
@@ -41,26 +42,32 @@ const LEVEL_LABEL: Record<Difficulty, string> = {
 };
 
 export default function GameScreen() {
-  const { level, category } = useLocalSearchParams<{ level: Difficulty; category: Category }>();
+  const { level, category, stage } = useLocalSearchParams<{
+    level: Difficulty;
+    category: Category;
+    stage: string;
+  }>();
   const cat = parseCategory(category);
+  const difficulty = parseDifficulty(level);
+  const miniLevel = parseStage(stage);
   const router = useRouter();
   const progress = useProgress();
-  const addCoinsRef = useRef(progress.addCoins);
+  const completeStageRef = useRef(progress.completeStage);
   const saveScoreRef = useRef(progress.saveScore);
-  addCoinsRef.current = progress.addCoins;
+  completeStageRef.current = progress.completeStage;
   saveScoreRef.current = progress.saveScore;
   const { show, node } = useToast();
   const c = colorsFor(progress.active.theme);
-  const [state, setState] = useState<GameState>(() => startGame(level || "easy", cat));
-  const rewarded = useRef<string | null>(null);
+  const [state, setState] = useState<GameState>(() => startGame(difficulty, cat, miniLevel));
+  const settled = useRef(false);
   const [advancePct, setAdvancePct] = useState(0);
   const skipAdvance = useRef(false);
+  const [showReport, setShowReport] = useState(false);
+  const [openMistake, setOpenMistake] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (!state.isBonus || state.phase !== "playing") return;
-    const id = setInterval(() => setState((s) => tickBonus(s)), 1000);
-    return () => clearInterval(id);
-  }, [state.isBonus, state.phase, state.wordIndex]);
+  const backToStages = () => {
+    router.replace({ pathname: "/", params: { category: cat, level: difficulty } });
+  };
 
   useEffect(() => {
     if (state.phase !== "timeout") return;
@@ -70,21 +77,38 @@ export default function GameScreen() {
 
   useEffect(() => {
     if (!state.shaking) return;
-    const t = setTimeout(() => setState((s) => clearShake(s)), 1400);
+    const wait = state.category === "math" ? 2800 : 1100;
+    const t = setTimeout(() => {
+      setState((s) => {
+        if (!s.shaking) return s;
+        if (s.questionMarks[s.wordIndex] === "bad") return nextWord({ ...s, shaking: false });
+        return clearShake(s);
+      });
+    }, wait);
     return () => clearTimeout(t);
-  }, [state.shaking]);
+  }, [state.shaking, state.category]);
 
   useEffect(() => {
-    if (state.phase !== "win") return;
-    const key = `${state.wordIndex}-${state.wordsCompleted}`;
-    if (rewarded.current === key) return;
-    rewarded.current = key;
+    if (state.phase !== "complete") return;
+    if (settled.current) return;
+    settled.current = true;
+    const coins = stageCoinReward(state);
     void (async () => {
-      await addCoinsRef.current(state.lastReward);
-      if (state.lastStreakBonus) await addCoinsRef.current(state.lastStreakBonus);
-      await saveScoreRef.current(state.score, `${state.category}:${state.level}`);
+      await completeStageRef.current(
+        state.category,
+        state.level,
+        state.stage,
+        coins,
+        stageIsPerfect(state),
+      );
+      await saveScoreRef.current(coins, `${state.category}:${state.level}:${state.stage}`);
     })();
-  }, [state.phase, state.wordIndex, state.wordsCompleted, state.lastReward, state.lastStreakBonus, state.score, state.level, state.category]);
+    if (stageIsPerfect(state)) {
+      const t = setTimeout(backToStages, CONFIG.stageCompleteHoldMs);
+      return () => clearTimeout(t);
+    }
+    return undefined;
+  }, [state.phase, state.score, state.lastStreakBonus, state.category, state.level, state.stage]);
 
   useEffect(() => {
     if (state.phase !== "win") {
@@ -111,8 +135,6 @@ export default function GameScreen() {
     setState((s) => (s.phase === "win" ? nextWord(s) : s));
   };
 
-  const hearts = Array.from({ length: CONFIG.lives }, (_, i) => (i < state.lives ? "❤️" : "🖤")).join("");
-
   const useTool = async (itemId: string) => {
     const item = SHOP_ITEMS.find((it) => it.id === itemId);
     if (!item) return;
@@ -134,15 +156,6 @@ export default function GameScreen() {
     }
   };
 
-  const buyLife = async () => {
-    const ok = await progress.spendCoins(CONFIG.lifeCost);
-    if (!ok) {
-      show(he.notEnoughCoins(CONFIG.lifeCost));
-      return;
-    }
-    setState((s) => revive(s));
-  };
-
   if (state.phase === "timeout") {
     return (
       <Screen>
@@ -151,32 +164,78 @@ export default function GameScreen() {
     );
   }
 
-  if (state.phase === "gameover") {
-    const canBuy = progress.active.coins >= CONFIG.lifeCost;
+  if (state.phase === "complete") {
+    if (showReport) {
+      return (
+        <Screen>
+          <Text style={styles.winTitle}>{he.mistakeReportTitle}</Text>
+          {state.mistakes.map((m, i) => {
+            const open = openMistake === i;
+            return (
+              <Pressable
+                key={`${m.index}-${m.answer}-${i}`}
+                onPress={() => setOpenMistake(open ? null : i)}
+                style={styles.reportCard}
+              >
+                <Text style={styles.reportQ}>{he.mistakeQuestion(m.index + 1)}</Text>
+                {m.prompt ? <Text style={styles.reportPrompt}>{m.prompt}</Text> : null}
+                <Text style={styles.reportWrong}>
+                  {m.skipped ? he.skippedThis : `${he.yourAnswer}: ${m.guess || "—"}`}
+                </Text>
+                <Text style={styles.reportRight}>
+                  {he.correctAnswer}: {m.answer}
+                </Text>
+                {!open ? <Text style={styles.reportTap}>{he.tapForWhy}</Text> : null}
+                {open ? (
+                  state.category === "math" ? (
+                    <View style={{ width: "100%", marginTop: 10 }}>
+                      <MathErrorCard expr={m.prompt} guess={m.guess} answer={m.answer} />
+                    </View>
+                  ) : (
+                    <View style={styles.reportWhy}>
+                      {m.hint ? <Text style={styles.reportHint}>{m.hint}</Text> : null}
+                      <Text style={styles.reportWhyText}>
+                        {m.skipped
+                          ? `${he.correctAnswer}: ${m.answer}`
+                          : `${m.prompt || ""} זה לא ${m.guess || "—"} · ${m.answer}`}
+                      </Text>
+                    </View>
+                  )
+                ) : null}
+              </Pressable>
+            );
+          })}
+          <PrimaryButton
+            label={he.closeReport}
+            onPress={() => {
+              setShowReport(false);
+              setOpenMistake(null);
+            }}
+          />
+          <View style={{ marginTop: 12 }}>
+            <GhostButton label={he.backToStages} onPress={backToStages} />
+          </View>
+        </Screen>
+      );
+    }
     return (
       <Screen>
-        {node}
-        <Text style={styles.bigEmoji}>💔</Text>
-        <Text style={styles.winTitle}>{he.gameOverTitle}</Text>
+        <Text style={styles.bigEmoji}>🎉</Text>
+        <Text style={styles.winTitle}>{he.stageCompleteTitle}</Text>
+        <Text style={styles.meta}>{he.stageLabel(state.stage)}</Text>
         <Text style={styles.meta}>
-          {(isQuiz(state.category) ? he.theAnswerWas : he.theWordWas)}: {answerLine(state)}
+          {stageIsPerfect(state) ? he.stagePerfect : he.stageHadMistakes}
         </Text>
+        <Text style={styles.meta}>🪙 {stageCoinReward(state)}</Text>
         <Text style={styles.meta}>
-          ⭐ {state.score}   📝 {state.wordsCompleted}
+          🔥 {state.streak}/{CONFIG.streakEvery}
         </Text>
-        <Text style={styles.want}>{he.wantToContinue}</Text>
-        <Text style={styles.meta}>{he.buyLifeSub}</Text>
-        <Text style={styles.meta}>
-          {he.balance}: {progress.active.coins} 🪙
-        </Text>
-        <PrimaryButton
-          label={he.buyLife(CONFIG.lifeCost)}
-          onPress={buyLife}
-          disabled={!canBuy}
-          color="#ff6b6b"
-        />
-        <GhostButton label={he.backHome} onPress={() => router.replace("/")} />
-        <LeaderboardTable scores={progress.topScores} highlightName={progress.active.displayName} />
+        {state.mistakes.length > 0 ? (
+          <PrimaryButton label={he.viewMistakes} onPress={() => setShowReport(true)} />
+        ) : null}
+        <View style={{ marginTop: 12 }}>
+          <PrimaryButton label={he.backToStages} onPress={backToStages} />
+        </View>
       </Screen>
     );
   }
@@ -185,44 +244,20 @@ export default function GameScreen() {
   const consumables = SHOP_ITEMS.filter((it) => it.consumable).filter(
     (it) => (progress.active.inventory[it.id] || 0) > 0,
   );
-  const pct = (state.bonusTimeLeft / CONFIG.bonusSeconds) * 100;
 
   return (
     <Screen>
       {node}
       <View style={styles.header}>
-        <GhostButton label={he.back} onPress={() => router.replace("/")} />
+        <GhostButton label={he.back} onPress={backToStages} />
         <View style={{ alignItems: "center", flex: 1 }}>
           <Text style={[styles.badge, { color: c.accent }]}>
             {categoryTitle(state.category)} · {LEVEL_LABEL[state.level]}
           </Text>
-          <Text style={styles.progress}>
-            {he.questionProgress(state.wordIndex + 1, state.wordList.length)}
-          </Text>
+          <Text style={styles.progress}>{he.miniLevelProgress(state.stage, CONFIG.miniLevels)}</Text>
           <Text style={styles.player}>👤 {progress.active.displayName}</Text>
         </View>
-        <View>
-          <Text style={{ color: c.score, fontFamily: "Heebo_800ExtraBold" }}>⭐ {state.score}</Text>
-          <Text style={{ color: c.coin, fontFamily: "Heebo_800ExtraBold" }}>🪙 {progress.active.coins}</Text>
-          <Text style={styles.streakLine}>
-            🔥 {state.streak}/{CONFIG.streakEvery}
-          </Text>
-          <Text style={{ fontSize: 16 }}>{hearts}</Text>
-        </View>
       </View>
-
-      {state.isBonus ? (
-        <View style={styles.bonus}>
-          <Text style={styles.bonusTitle}>{he.bonusBanner}</Text>
-          <Text style={styles.bonusSub}>{he.bonusSublabel(CONFIG.bonusSeconds)}</Text>
-          <Text style={[styles.timer, state.bonusTimeLeft <= 5 && { color: "#ff6b6b" }]}>
-            {state.bonusTimeLeft}
-          </Text>
-          <View style={styles.track}>
-            <View style={[styles.fill, { width: `${pct}%` }]} />
-          </View>
-        </View>
-      ) : null}
 
       <Text
         style={
@@ -231,25 +266,37 @@ export default function GameScreen() {
             : styles.emoji
         }
       >
-        {state.currentEmoji}
+        {state.category === "math"
+          ? `${state.currentEmoji} = ${won ? state.currentWord : "?"}`
+          : state.currentEmoji}
       </Text>
       {state.currentHint ? <Text style={styles.hintHe}>{state.currentHint}</Text> : null}
 
-      {state.shaking && !won ? (
-        <View style={styles.wrongBanner}>
-          <Text style={styles.wrongBannerText}>{he.wrongTryAgain}</Text>
-        </View>
+      {state.shaking && !won && state.category === "math" ? (
+        <MathErrorCard
+          expr={state.currentEmoji}
+          guess={state.lastWrongPick}
+          answer={state.currentWord}
+        />
+      ) : state.shaking && !won ? (
+        <FadeIn resetKey={`${state.wordIndex}-${state.lastWrongPick}-${state.missedThisWord}`}>
+          <View style={styles.wrongBanner}>
+            <Text style={styles.wrongBannerText}>{he.wrongTryAgain}</Text>
+          </View>
+        </FadeIn>
       ) : null}
 
       {state.questionType === "choice" ? (
         <View style={{ width: "100%", alignItems: "center" }}>
-          <Text style={styles.prompt}>{choicePrompt(state.category)}</Text>
+          {state.category === "math" ? null : (
+            <Text style={styles.prompt}>{choicePrompt(state.category)}</Text>
+          )}
           <View style={state.choiceWords.length >= 4 ? styles.choiceGrid : { width: "100%", alignItems: "center" }}>
             {state.choiceWords.map((w, i) => (
               <Pressable
                 key={`${w}-${i}`}
                 onPress={() => setState((s) => answerChoice(s, w))}
-                disabled={won}
+                disabled={won || state.shaking}
                 style={[
                   styles.choice,
                   state.choiceWords.length >= 4 && styles.choiceHalf,
@@ -257,15 +304,7 @@ export default function GameScreen() {
                   won && w === state.currentWord && styles.choiceCorrect,
                 ]}
               >
-                <Text
-                  style={[
-                    styles.choiceText,
-                    usesLtr(state) && styles.ltr,
-                    usesRtl(state) && styles.rtl,
-                  ]}
-                >
-                  {w}
-                </Text>
+                <Text style={styles.choiceText}>{w}</Text>
               </Pressable>
             ))}
           </View>
@@ -326,8 +365,7 @@ export default function GameScreen() {
           <View
             style={[
               styles.blanks,
-              usesLtr(state) && styles.ltrRow,
-              usesRtl(state) && styles.rtlRow,
+              { flexDirection: state.category === "english" ? "row" : "row-reverse" },
               state.shaking && !won && styles.shake,
             ]}
           >
@@ -342,15 +380,7 @@ export default function GameScreen() {
                     won && styles.blankCorrect,
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.blankLetter,
-                      usesLtr(state) && styles.ltr,
-                      usesRtl(state) && styles.rtl,
-                    ]}
-                  >
-                    {p?.letter ?? ""}
-                  </Text>
+                  <Text style={styles.blankLetter}>{p?.letter ?? ""}</Text>
                 </View>
               );
             })}
@@ -366,11 +396,16 @@ export default function GameScreen() {
             />
             <PrimaryButton label={he.delete} onPress={() => setState((s) => deleteLast(s))} color="#636e72" />
           </View>
-          <View style={[styles.tiles, usesLtr(state) && styles.ltrRow, usesRtl(state) && styles.rtlRow]}>
+          <View
+            style={[
+              styles.tiles,
+              { flexDirection: state.category === "english" ? "row" : "row-reverse" },
+            ]}
+          >
             {state.tiles.map((t) => (
               <Pressable
                 key={t.id}
-                disabled={t.used}
+                disabled={t.used || won || state.shaking}
                 onPress={() => setState((s) => placeTile(s, t.id))}
                 style={[
                   styles.tile,
@@ -380,11 +415,7 @@ export default function GameScreen() {
                   },
                 ]}
               >
-                <Text
-                  style={[styles.tileText, usesLtr(state) && styles.ltr, usesRtl(state) && styles.rtl]}
-                >
-                  {t.letter}
-                </Text>
+                <Text style={styles.tileText}>{t.letter}</Text>
               </Pressable>
             ))}
           </View>
@@ -393,14 +424,67 @@ export default function GameScreen() {
         </>
       )}
 
+      <View style={styles.qProgress}>
+        <View style={styles.qTrack}>
+          <View
+            style={[
+              styles.qFill,
+              {
+                width: `${Math.round(
+                  (state.questionMarks.filter((m) => m).length / Math.max(1, state.wordList.length)) * 100,
+                )}%`,
+                backgroundColor: c.accent,
+              },
+            ]}
+          />
+        </View>
+        <View style={styles.qDots}>
+          {state.wordList.map((_, i) => {
+            const mark = state.questionMarks[i];
+            const current = i === state.wordIndex && !mark && !won;
+            return (
+              <View
+                key={i}
+                style={[
+                  styles.qDot,
+                  mark === "ok" && styles.qDotDone,
+                  mark === "bad" && styles.qDotBad,
+                  current && [styles.qDotNow, { borderColor: c.accent, backgroundColor: c.accent }],
+                ]}
+              />
+            );
+          })}
+        </View>
+        <Text style={styles.qProgressLabel}>
+          {he.questionProgress(state.wordIndex + 1, state.wordList.length)}
+        </Text>
+      </View>
+
+      {!won && !state.shaking ? (
+        <View style={styles.skipWrap}>
+          <PrimaryButton
+            label={he.skipQuestion}
+            onPress={() => setState((s) => skipWord(s))}
+            color="#636e72"
+          />
+        </View>
+      ) : null}
+
       {won ? (
         <View style={styles.correctWrap}>
           <View style={styles.correctBanner}>
-            <Text style={styles.correctBannerText}>{he.correctFlash(state.lastReward)}</Text>
-            {state.lastStreakBonus > 0 ? (
-              <Text style={styles.correctStreak}>{he.streakTag(CONFIG.streakEvery, state.lastStreakBonus)}</Text>
-            ) : null}
+            <Text style={styles.correctBannerText}>{he.correctFlash()}</Text>
           </View>
+          {state.lastFirstTryBonus > 0 ? (
+            <View style={styles.correctExtra}>
+              <Text style={styles.correctStreak}>{he.firstTryBonus()}</Text>
+            </View>
+          ) : null}
+          {state.lastStreakBonus > 0 ? (
+            <View style={styles.correctExtra}>
+              <Text style={styles.correctStreak}>{he.streakTag(CONFIG.streakEvery)}</Text>
+            </View>
+          ) : null}
           <View style={styles.advanceTrack}>
             <View style={[styles.advanceFill, { width: `${advancePct}%` }]} />
           </View>
@@ -455,15 +539,6 @@ function isQuiz(cat: Category) {
   return cat === "math" || cat === "logic" || cat === "science";
 }
 
-function usesLtr(state: GameState) {
-  if (state.category === "english" || state.category === "math") return true;
-  return /^\d+$/.test(state.currentWord);
-}
-
-function usesRtl(state: GameState) {
-  return !usesLtr(state);
-}
-
 function answerLine(state: GameState) {
   if (state.category === "math") return `${state.currentEmoji} = ${state.currentWord}`;
   return state.currentWord;
@@ -479,12 +554,8 @@ const styles = StyleSheet.create({
   bonusTitle: { color: "#f9ca24", fontFamily: "Heebo_900Black", fontSize: 20 },
   bonusSub: { color: "#fff", fontFamily: "Heebo_400Regular" },
   timer: { color: "#fff", fontSize: 28, fontFamily: "Heebo_900Black" },
-  track: { width: "80%", height: 8, backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 8, overflow: "hidden" },
+  track: { width: "80%", height: 8, backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 8 },
   fill: { height: 8, backgroundColor: "#f9ca24" },
-  ltr: { writingDirection: "ltr", textAlign: "left" },
-  ltrRow: { direction: "ltr", writingDirection: "ltr", flexDirection: "row" },
-  rtl: { writingDirection: "rtl", textAlign: "right" },
-  rtlRow: { direction: "rtl", writingDirection: "rtl", flexDirection: "row" },
   emoji: { fontSize: 72, marginVertical: 12 },
   hintHe: {
     fontSize: 22,
@@ -492,6 +563,63 @@ const styles = StyleSheet.create({
     color: "#fff",
     marginBottom: 8,
     textAlign: "center",
+  },
+  qProgress: {
+    width: "100%",
+    maxWidth: 340,
+    alignItems: "center",
+    marginTop: 22,
+    marginBottom: 14,
+  },
+  qTrack: {
+    width: "100%",
+    height: 10,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    borderRadius: 8,
+    alignItems: "flex-end",
+  },
+  qFill: {
+    height: 10,
+    borderRadius: 8,
+  },
+  qDots: {
+    flexDirection: "row-reverse",
+    marginTop: 8,
+  },
+  qDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginHorizontal: 4,
+    backgroundColor: "rgba(255,255,255,0.22)",
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.22)",
+  },
+  qDotDone: {
+    backgroundColor: "#6bcb77",
+    borderColor: "#6bcb77",
+  },
+  qDotBad: {
+    backgroundColor: "#e57373",
+    borderColor: "#e57373",
+  },
+  qDotNow: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+  },
+  qProgressLabel: {
+    color: "#fff",
+    fontFamily: "Heebo_700Bold",
+    fontSize: 13,
+    marginTop: 6,
+    textAlign: "center",
+  },
+  skipWrap: {
+    width: "100%",
+    alignItems: "center",
+    marginTop: 8,
+    marginBottom: 16,
   },
   mathPrompt: {
     fontSize: 32,
@@ -515,15 +643,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "center",
-    gap: 10,
     width: "100%",
     maxWidth: 340,
-    direction: "ltr",
   },
   choiceHalf: {
-    width: "47%",
+    width: "48%",
     maxWidth: 160,
-    marginBottom: 0,
+    marginBottom: 8,
+    marginHorizontal: 4,
   },
   typeWrap: { width: "100%", alignItems: "center" },
   typeBox: {
@@ -543,14 +670,12 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 36,
     fontFamily: "Heebo_900Black",
-    writingDirection: "ltr",
+    textAlign: "center",
   },
   keypad: {
-    direction: "ltr",
     flexDirection: "row",
     flexWrap: "wrap",
     width: 252,
-    gap: 8,
     justifyContent: "center",
     marginTop: 8,
   },
@@ -561,40 +686,39 @@ const styles = StyleSheet.create({
     backgroundColor: "#4D96FF",
     alignItems: "center",
     justifyContent: "center",
+    margin: 4,
   },
   keyDel: { backgroundColor: "#636e72" },
   keyGhost: { width: 76, height: 56 },
   keyText: { color: "#fff", fontSize: 22, fontFamily: "Heebo_900Black" },
   choiceText: { color: "#fff", fontSize: 22, fontFamily: "Heebo_800ExtraBold" },
-  blanks: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8 },
+  blanks: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center" },
   shake: {
-    opacity: 1,
-    borderColor: "#ff6b6b",
-    backgroundColor: "rgba(255,107,107,0.2)",
+    backgroundColor: "rgba(243,180,180,0.28)",
   },
   wrongBanner: {
     width: "100%",
-    backgroundColor: "#ff6b6b",
+    backgroundColor: "#f3b4b4",
     borderRadius: 14,
-    paddingVertical: 12,
+    paddingVertical: 10,
     paddingHorizontal: 16,
     marginBottom: 12,
     alignItems: "center",
   },
   wrongBannerText: {
-    color: "#fff",
-    fontSize: 22,
-    fontFamily: "Heebo_900Black",
+    color: "#5c2b2b",
+    fontSize: 18,
+    fontFamily: "Heebo_800ExtraBold",
     textAlign: "center",
   },
   choiceWrong: {
-    backgroundColor: "#ff6b6b",
+    backgroundColor: "#f3b4b4",
     borderWidth: 2,
-    borderColor: "#fff",
+    borderColor: "#e08a8a",
   },
   typeBoxWrong: {
-    borderColor: "#ff6b6b",
-    backgroundColor: "rgba(255,107,107,0.35)",
+    borderColor: "#e08a8a",
+    backgroundColor: "rgba(243,180,180,0.35)",
   },
   typeBoxCorrect: {
     borderColor: "#6bcb77",
@@ -613,7 +737,6 @@ const styles = StyleSheet.create({
     width: "100%",
     alignItems: "center",
     marginTop: 16,
-    gap: 12,
   },
   correctBanner: {
     width: "100%",
@@ -622,6 +745,16 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     alignItems: "center",
+    marginBottom: 12,
+  },
+  correctExtra: {
+    width: "100%",
+    backgroundColor: "rgba(107,203,119,0.55)",
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    marginBottom: 12,
   },
   correctBannerText: {
     color: "#fff",
@@ -632,7 +765,6 @@ const styles = StyleSheet.create({
   correctStreak: {
     color: "#fff",
     fontFamily: "Heebo_700Bold",
-    marginTop: 4,
     textAlign: "center",
   },
   advanceTrack: {
@@ -640,7 +772,7 @@ const styles = StyleSheet.create({
     height: 10,
     backgroundColor: "rgba(255,255,255,0.18)",
     borderRadius: 8,
-    overflow: "hidden",
+    marginBottom: 12,
   },
   advanceFill: {
     height: 10,
@@ -655,13 +787,14 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
+    margin: 4,
   },
   blankLetter: { color: "#fff", fontSize: 24, fontFamily: "Heebo_900Black" },
-  actions: { flexDirection: "row", gap: 10, marginVertical: 14 },
-  tiles: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8 },
-  tile: { width: 52, height: 56, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  actions: { flexDirection: "row", marginVertical: 14 },
+  tiles: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center" },
+  tile: { width: 52, height: 56, borderRadius: 12, alignItems: "center", justifyContent: "center", margin: 4 },
   tileText: { color: "#fff", fontSize: 24, fontFamily: "Heebo_900Black" },
-  tools: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 16, justifyContent: "center" },
+  tools: { flexDirection: "row", flexWrap: "wrap", marginTop: 16, justifyContent: "center" },
   tool: { backgroundColor: "rgba(255,255,255,0.12)", padding: 10, borderRadius: 14 },
   toolText: { color: "#fff", fontFamily: "Heebo_700Bold" },
   timeout: { color: "#fff", fontSize: 32, fontFamily: "Heebo_900Black", marginTop: 80 },
@@ -671,4 +804,40 @@ const styles = StyleSheet.create({
   streak: { color: "#ff6b6b", fontFamily: "Heebo_800ExtraBold", marginBottom: 8 },
   lbTitle: { color: "#fff", fontFamily: "Heebo_800ExtraBold", marginTop: 20, marginBottom: 4 },
   want: { color: "#fff", fontFamily: "Heebo_800ExtraBold", marginTop: 12 },
+  reportCard: {
+    width: "100%",
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+    alignItems: "flex-end",
+  },
+  reportQ: { color: "#ffd93d", fontFamily: "Heebo_800ExtraBold", marginBottom: 4 },
+  reportPrompt: { color: "#fff", fontSize: 22, fontFamily: "Heebo_900Black", textAlign: "right", marginBottom: 4 },
+  reportHint: { color: "rgba(255,255,255,0.85)", fontFamily: "Heebo_700Bold", textAlign: "right", marginBottom: 6 },
+  reportWrong: { color: "#f3b4b4", fontFamily: "Heebo_700Bold", textAlign: "right" },
+  reportRight: { color: "#6bcb77", fontFamily: "Heebo_800ExtraBold", textAlign: "right", marginTop: 4 },
+  reportTap: {
+    color: "rgba(255,255,255,0.65)",
+    fontFamily: "Heebo_400Regular",
+    fontSize: 13,
+    marginTop: 8,
+    textAlign: "right",
+  },
+  reportWhy: {
+    width: "100%",
+    marginTop: 10,
+    backgroundColor: "#f3b4b4",
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    alignItems: "center",
+  },
+  reportWhyText: {
+    color: "#5c2b2b",
+    fontFamily: "Heebo_700Bold",
+    textAlign: "center",
+    fontSize: 15,
+  },
 });

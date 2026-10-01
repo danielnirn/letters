@@ -30,6 +30,12 @@ export type ProfileDoc = {
   inventory: Record<string, number>;
   theme: ThemeId | null;
   avatar: AvatarLoadout;
+  /** Highest mini-level cleared per `${category}:${difficulty}`. */
+  stageClears: Record<string, number>;
+  /** Best coins earned per `${category}:${difficulty}:${stage}`. */
+  stageCoins: Record<string, number>;
+  /** Perfect clears per `${category}:${difficulty}:${stage}`. */
+  stagePerfect: Record<string, boolean>;
   updatedAt: number;
 };
 

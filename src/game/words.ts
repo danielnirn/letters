@@ -86,5 +86,8 @@ export const WORDS: Record<"easy" | "mid" | "hard", Word[]> = {
     { word: "אוקיינוס", emoji: "🌊" }, { word: "מחשבונים", emoji: "🖩" },
     { word: "היפופוטם", emoji: "🦛" }, { word: "פסנתרים", emoji: "🎹" },
     { word: "מנגינות", emoji: "🎶" }, { word: "תלמידים", emoji: "📖" },
+    { word: "מספריים", emoji: "✂️" }, { word: "משאית", emoji: "🚚" },
+    { word: "מזלגות", emoji: "🍴" }, { word: "חלונות", emoji: "🪟" },
+    { word: "מעבדה", emoji: "🔬" }, { word: "ספרייה", emoji: "📚" },
   ],
 };

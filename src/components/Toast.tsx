@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Animated, StyleSheet, Text } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { colorsFor } from "../theme/colors";
 import { useProgress } from "../context/ProgressContext";
 
@@ -13,18 +13,14 @@ export function useToast() {
 function Toast({ text, onDone }: { text: string; onDone: () => void }) {
   const { active } = useProgress();
   const c = colorsFor(active.theme);
-  const opacity = useState(new Animated.Value(0))[0];
   useEffect(() => {
-    Animated.sequence([
-      Animated.timing(opacity, { toValue: 1, duration: 180, useNativeDriver: true }),
-      Animated.delay(1600),
-      Animated.timing(opacity, { toValue: 0, duration: 280, useNativeDriver: true }),
-    ]).start(() => onDone());
-  }, [opacity, onDone]);
+    const t = setTimeout(onDone, 1800);
+    return () => clearTimeout(t);
+  }, [onDone, text]);
   return (
-    <Animated.View style={[styles.toast, { backgroundColor: c.toast, opacity }]}>
+    <View style={[styles.toast, { backgroundColor: c.toast }]}>
       <Text style={styles.text}>{text}</Text>
-    </Animated.View>
+    </View>
   );
 }
 

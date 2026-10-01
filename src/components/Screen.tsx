@@ -1,6 +1,6 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { type ReactNode } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import { Platform, ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colorsFor } from "../theme/colors";
 import { useProgress } from "../context/ProgressContext";
@@ -8,16 +8,19 @@ import { useProgress } from "../context/ProgressContext";
 export function Screen({ children }: { children: ReactNode }) {
   const { active } = useProgress();
   const c = colorsFor(active.theme);
+  const inner = (
+    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <View style={styles.inner}>{children}</View>
+    </ScrollView>
+  );
+
+  if (Platform.OS === "web") {
+    return <View style={[styles.fill, { backgroundColor: c.bg[0] }]}>{inner}</View>;
+  }
+
   return (
     <LinearGradient colors={c.bg} style={styles.fill}>
-      <SafeAreaView style={styles.fill}>
-        <ScrollView
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
-        >
-          <View style={styles.inner}>{children}</View>
-        </ScrollView>
-      </SafeAreaView>
+      <SafeAreaView style={styles.fill}>{inner}</SafeAreaView>
     </LinearGradient>
   );
 }

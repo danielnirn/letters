@@ -34,6 +34,9 @@ export function defaultProfile(id: string, displayName = ""): ProfileDoc {
     inventory: {},
     theme: null,
     avatar: defaultAvatar(),
+    stageClears: {},
+    stageCoins: {},
+    stagePerfect: {},
     updatedAt: Date.now(),
   };
 }
@@ -48,6 +51,18 @@ function profileFromData(id: string, data: Record<string, unknown>): ProfileDoc 
     inventory: (data.inventory as Record<string, number>) ?? {},
     theme: (data.theme as ProfileDoc["theme"]) ?? null,
     avatar: normalizeAvatar(data.avatar),
+    stageClears:
+      data.stageClears && typeof data.stageClears === "object"
+        ? (data.stageClears as Record<string, number>)
+        : {},
+    stageCoins:
+      data.stageCoins && typeof data.stageCoins === "object"
+        ? (data.stageCoins as Record<string, number>)
+        : {},
+    stagePerfect:
+      data.stagePerfect && typeof data.stagePerfect === "object"
+        ? (data.stagePerfect as Record<string, boolean>)
+        : {},
     updatedAt: typeof data.updatedAt === "number" ? data.updatedAt : 0,
   };
 }
@@ -88,6 +103,9 @@ export async function ensureAccount(
       inventory: {},
       theme: null,
       avatar: defaultAvatar(),
+      stageClears: {},
+      stageCoins: {},
+      stagePerfect: {},
       updatedAt: Date.now(),
     });
     return local;
@@ -120,6 +138,9 @@ export async function loadAccount(uid: string): Promise<CachedProgress> {
       inventory: {},
       theme: null,
       avatar: defaultAvatar(),
+      stageClears: {},
+      stageCoins: {},
+      stagePerfect: {},
       updatedAt: Date.now(),
     });
     profiles.push(p);
@@ -161,6 +182,9 @@ export async function persistProfile(uid: string, profile: ProfileDoc): Promise<
       inventory: profile.inventory,
       theme: profile.theme,
       avatar: profile.avatar,
+      stageClears: profile.stageClears ?? {},
+      stageCoins: profile.stageCoins ?? {},
+      stagePerfect: profile.stagePerfect ?? {},
       updatedAt: profile.updatedAt,
     },
     { merge: true },

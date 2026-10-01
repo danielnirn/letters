@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Screen } from "../src/components/Screen";
 import { GhostButton } from "../src/components/LeaderboardTable";
 import { useAuth } from "../src/context/AuthContext";
@@ -9,18 +9,38 @@ import { he } from "../src/i18n/he";
 import { colorsFor } from "../src/theme/colors";
 import { AvatarPreview } from "../src/components/AvatarPreview";
 import { defaultAvatar } from "../src/game/avatar";
-import type { Category, Difficulty } from "../src/game/config";
+import {
+  CONFIG,
+  clearedStages,
+  isStagePerfectClear,
+  isStageUnlocked,
+  parseCategory,
+  parseDifficulty,
+  type Category,
+  type Difficulty,
+} from "../src/game/config";
 
 export default function HomeScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ category?: string; level?: string }>();
   const { signOut, isLocal } = useAuth();
   const { active, loading } = useProgress();
-  const [category, setCategory] = useState<Category | null>(null);
+  const [category, setCategory] = useState<Category | null>(
+    params.category ? parseCategory(params.category) : null,
+  );
+  const [difficulty, setDifficulty] = useState<Difficulty | null>(
+    params.level ? parseDifficulty(params.level) : null,
+  );
   const c = colorsFor(active.theme);
 
-  const start = (level: Difficulty) => {
-    if (!category) return;
-    router.push({ pathname: "/game", params: { level, category } });
+  useEffect(() => {
+    if (params.category) setCategory(parseCategory(params.category));
+    if (params.level) setDifficulty(parseDifficulty(params.level));
+  }, [params.category, params.level]);
+
+  const start = (stage: number) => {
+    if (!category || !difficulty) return;
+    router.push({ pathname: "/game", params: { level: difficulty, category, stage: String(stage) } });
   };
 
   if (loading) {
@@ -102,7 +122,7 @@ export default function HomeScreen() {
             <Text style={{ color: "rgba(255,255,255,0.5)", fontFamily: "Heebo_700Bold" }}>{he.logout}</Text>
           </Pressable>
         </>
-      ) : (
+      ) : !difficulty ? (
         <>
           <Text style={[styles.section, { color: c.subtitle }]}>
             {categoryLabel(category)} — {he.pickDifficulty}
@@ -114,7 +134,7 @@ export default function HomeScreen() {
               desc={levelDesc(category, "easy")}
               color="#6bcb77"
               stacked
-              onPress={() => start("easy")}
+              onPress={() => setDifficulty("easy")}
             />
             <LevelCard
               emoji="⭐"
@@ -122,7 +142,7 @@ export default function HomeScreen() {
               desc={levelDesc(category, "mid")}
               color="#f9ca24"
               stacked
-              onPress={() => start("mid")}
+              onPress={() => setDifficulty("mid")}
             />
             <LevelCard
               emoji="🔥"
@@ -130,16 +150,87 @@ export default function HomeScreen() {
               desc={levelDesc(category, "hard")}
               color="#ff6b6b"
               stacked
-              onPress={() => start("hard")}
+              onPress={() => setDifficulty("hard")}
             />
           </View>
           <View style={{ marginTop: 16 }}>
-            <GhostButton label={he.back} onPress={() => setCategory(null)} />
+            <GhostButton
+              label={he.back}
+              onPress={() => {
+                setCategory(null);
+                router.replace("/");
+              }}
+            />
+          </View>
+        </>
+      ) : (
+        <>
+          <Text style={[styles.section, { color: c.subtitle }]}>
+            {categoryLabel(category)} · {difficultyLabel(difficulty)}
+          </Text>
+          <Text style={styles.stageHint}>
+            {he.stageProgress(clearedStages(active.stageClears, category, difficulty), CONFIG.miniLevels)}
+          </Text>
+          <View style={styles.stageList}>
+            {Array.from({ length: CONFIG.miniLevels }, (_, i) => i + 1).map((stage) => {
+              const unlocked = isStageUnlocked(active.stageClears, category, difficulty, stage);
+              const done = clearedStages(active.stageClears, category, difficulty) >= stage;
+              const perfect =
+                done &&
+                isStagePerfectClear(active.stagePerfect, active.stageCoins, category, difficulty, stage);
+              return (
+                <Pressable
+                  key={stage}
+                  disabled={!unlocked}
+                  onPress={() => start(stage)}
+                  style={[
+                    styles.stageBtn,
+                    done && styles.stageDone,
+                    perfect && styles.stagePerfect,
+                    !unlocked && styles.stageLocked,
+                  ]}
+                >
+                  <Text style={styles.stageNum}>{done ? (perfect ? "⭐" : "✓") : stage}</Text>
+                  <Text style={styles.stageCap}>
+                    {!unlocked
+                      ? he.stageLocked
+                      : perfect
+                        ? he.stagePerfectBadge
+                        : done
+                          ? he.stagePartialBadge
+                          : he.stageLabel(stage)}
+                  </Text>
+                  {done && !perfect ? (
+                    <Pressable
+                      onPress={() => start(stage)}
+                      style={styles.retryBtn}
+                    >
+                      <Text style={styles.retryText}>{he.stageRetry}</Text>
+                    </Pressable>
+                  ) : null}
+                </Pressable>
+              );
+            })}
+          </View>
+          <View style={{ marginTop: 16 }}>
+            <GhostButton
+              label={he.back}
+              onPress={() => {
+                setDifficulty(null);
+                router.replace({ pathname: "/", params: { category } });
+              }}
+            />
           </View>
         </>
       )}
     </Screen>
   );
+}
+
+function difficultyLabel(d: Difficulty) {
+  if (d === "mid") return he.mid;
+  if (d === "hard") return he.hard;
+  return he.easy;
 }
 
 function categoryLabel(category: Category) {
@@ -248,4 +339,48 @@ const styles = StyleSheet.create({
   cardTitle: { color: "#fff", fontFamily: "Heebo_800ExtraBold", fontSize: 18, marginTop: 6, textAlign: "center" },
   cardDesc: { color: "rgba(255,255,255,0.7)", fontFamily: "Heebo_400Regular", fontSize: 12, textAlign: "center" },
   actions: { flexDirection: "row", gap: 12, marginTop: 24 },
+  stageHint: {
+    color: "rgba(255,255,255,0.85)",
+    fontFamily: "Heebo_700Bold",
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  stageList: {
+    flexDirection: "column",
+    width: "100%",
+    maxWidth: 420,
+    alignSelf: "center",
+  },
+  stageBtn: {
+    width: "100%",
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "flex-start",
+    marginBottom: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: "#4D96FF",
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  stageDone: { borderColor: "#ffd93d", backgroundColor: "rgba(249,202,36,0.18)" },
+  stagePerfect: { borderColor: "#6bcb77", backgroundColor: "rgba(107,203,119,0.2)" },
+  stageLocked: { borderColor: "rgba(255,255,255,0.2)", opacity: 0.45 },
+  stageNum: { color: "#fff", fontSize: 22, fontFamily: "Heebo_900Black", width: 36, textAlign: "center" },
+  stageCap: {
+    color: "rgba(255,255,255,0.9)",
+    fontSize: 16,
+    fontFamily: "Heebo_700Bold",
+    marginHorizontal: 12,
+    flex: 1,
+    textAlign: "right",
+  },
+  retryBtn: {
+    backgroundColor: "#4D96FF",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+  },
+  retryText: { color: "#fff", fontFamily: "Heebo_800ExtraBold", fontSize: 13 },
 });

@@ -1,4 +1,4 @@
-import { CONFIG, TILE_COLORS, isSpellingCategory, type Category, type Difficulty } from "./config";
+import { CONFIG, TILE_COLORS, isSpellingCategory, questionsInStage, type Category, type Difficulty } from "./config";
 import { ENGLISH_WORDS } from "./english";
 import { generateLogicList, LOGIC_WORDS } from "./logic";
 import { generateMathList } from "./math";
@@ -16,11 +16,21 @@ export type Tile = {
 
 export type Placed = { letter: string; fromHint: boolean };
 
-export type Phase = "playing" | "win" | "gameover" | "timeout";
+export type Phase = "playing" | "win" | "timeout" | "complete";
+
+export type Mistake = {
+  index: number;
+  prompt: string;
+  hint: string;
+  answer: string;
+  guess: string;
+  skipped: boolean;
+};
 
 export type GameState = {
   category: Category;
   level: Difficulty;
+  stage: number;
   wordList: Word[];
   wordIndex: number;
   currentWord: string;
@@ -34,16 +44,19 @@ export type GameState = {
   bonusTimeLeft: number;
   streak: number;
   questionType: "spell" | "choice" | "type";
-  lives: number;
   doubleCoins: boolean;
   phase: Phase;
   lastReward: number;
   lastStreakBonus: number;
+  lastFirstTryBonus: number;
+  missedThisWord: boolean;
   choiceWords: string[];
   shaking: boolean;
   currentHint: string;
   typedAnswer: string;
   lastWrongPick: string;
+  questionMarks: Array<"ok" | "bad" | null>;
+  mistakes: Mistake[];
 };
 
 function wordBank(category: Category) {
@@ -53,10 +66,17 @@ function wordBank(category: Category) {
   return WORDS;
 }
 
-function freshWordList(category: Category, level: Difficulty): Word[] {
-  if (category === "math") return generateMathList(level);
-  if (category === "logic") return generateLogicList(level);
-  return shuffle(wordBank(category)[level]).slice(0, CONFIG.wordsPerRun);
+function freshWordList(category: Category, level: Difficulty, count: number): Word[] {
+  if (category === "math") return generateMathList(level, count);
+  if (category === "logic") return generateLogicList(level, count);
+  const bank = wordBank(category)[level] ?? [];
+  const shuffled = shuffle(bank);
+  if (shuffled.length >= count) return shuffled.slice(0, count);
+  const out: Word[] = [];
+  while (out.length < count) {
+    out.push(...shuffle(bank));
+  }
+  return out.slice(0, count);
 }
 
 function numericDistractors(answer: string, count: number): string[] {
@@ -148,23 +168,29 @@ function loadCurrentWord(state: GameState, keepBonus: boolean): GameState {
     typedAnswer: "",
     hints: state.hints,
     isBonus,
-    bonusTimeLeft: isBonus ? CONFIG.bonusSeconds : CONFIG.bonusSeconds,
+    bonusTimeLeft: 0,
     questionType,
     choiceWords,
     phase: "playing",
     shaking: false,
     lastReward: 0,
     lastStreakBonus: 0,
+    lastFirstTryBonus: 0,
     lastWrongPick: "",
+    missedThisWord: false,
   };
 }
 
-export function startGame(level: Difficulty, category: Category = "language"): GameState {
+export function startGame(level: Difficulty, category: Category = "language", stage = 1): GameState {
+  const safeStage = Math.min(CONFIG.miniLevels, Math.max(1, stage));
+  const count = questionsInStage(safeStage);
+  const wordList = freshWordList(category, level, count);
   return loadCurrentWord(
     {
       category,
       level,
-      wordList: freshWordList(category, level),
+      stage: safeStage,
+      wordList,
       wordIndex: 0,
       currentWord: "",
       currentEmoji: "",
@@ -175,18 +201,21 @@ export function startGame(level: Difficulty, category: Category = "language"): G
       score: 0,
       wordsCompleted: 0,
       isBonus: false,
-      bonusTimeLeft: CONFIG.bonusSeconds,
+      bonusTimeLeft: 0,
       streak: 0,
       questionType: "spell",
-      lives: CONFIG.lives,
       doubleCoins: false,
       phase: "playing",
       lastReward: 0,
       lastStreakBonus: 0,
+      lastFirstTryBonus: 0,
+      missedThisWord: false,
       choiceWords: [],
       shaking: false,
       typedAnswer: "",
       lastWrongPick: "",
+      questionMarks: wordList.map(() => null),
+      mistakes: [],
     },
     false,
   );
@@ -254,9 +283,23 @@ function evaluateSpell(state: GameState): GameState {
   return markWrong(state);
 }
 
+function setMark(state: GameState, mark: "ok" | "bad"): GameState {
+  const questionMarks = state.questionMarks.slice();
+  if (!questionMarks.length) {
+    return { ...state, questionMarks: state.wordList.map((_, i) => (i === state.wordIndex ? mark : null)) };
+  }
+  questionMarks[state.wordIndex] = mark;
+  return { ...state, questionMarks };
+}
+
 function markCorrect(state: GameState): GameState {
-  const base = state.isBonus ? CONFIG.coinsBonus : CONFIG.coinsCorrect;
-  const reward = state.doubleCoins ? base * 2 : base;
+  const base = CONFIG.coinsCorrect;
+  const firstTryBonus = !state.missedThisWord
+    ? state.doubleCoins
+      ? CONFIG.firstTryBonus * 2
+      : CONFIG.firstTryBonus
+    : 0;
+  const reward = (state.doubleCoins ? base * 2 : base) + firstTryBonus;
   let streak = state.streak + 1;
   let lastStreakBonus = 0;
   if (streak >= CONFIG.streakEvery) {
@@ -264,39 +307,45 @@ function markCorrect(state: GameState): GameState {
     streak = 0;
   }
   return {
-    ...state,
-    score: state.score + reward,
+    ...setMark(state, "ok"),
+    score: state.score + reward + lastStreakBonus,
     wordsCompleted: state.wordsCompleted + 1,
     streak,
     lastReward: reward,
     lastStreakBonus,
+    lastFirstTryBonus: firstTryBonus,
     phase: "win",
     isBonus: false,
   };
 }
 
+function addMistake(state: GameState, guess: string, skipped: boolean): GameState {
+  return {
+    ...state,
+    mistakes: [
+      ...state.mistakes,
+      {
+        index: state.wordIndex,
+        prompt: state.currentEmoji,
+        hint: state.currentHint,
+        answer: state.currentWord,
+        guess,
+        skipped,
+      },
+    ],
+  };
+}
+
 function markWrong(state: GameState): GameState {
-  const lives = state.lives - 1;
-  if (lives <= 0) {
-    return { ...state, lives: 0, streak: 0, phase: "gameover", shaking: true, typedAnswer: "" };
-  }
-  if (state.questionType === "type") {
-    return { ...state, lives, streak: 0, typedAnswer: "", shaking: true };
-  }
-  if (state.questionType === "choice") {
-    return { ...state, lives, streak: 0, shaking: true };
-  }
-  const letters = state.currentWord.split("");
-  const hintCount = state.placed.filter((p) => p.fromHint).length;
-  const placed: Placed[] = letters.slice(0, hintCount).map((letter) => ({
-    letter,
-    fromHint: true,
-  }));
-  const tiles = state.tiles.map((t) => ({
-    ...t,
-    used: t.fromHint,
-  }));
-  return { ...state, lives, streak: 0, placed, tiles, shaking: true };
+  const guess =
+    state.lastWrongPick ||
+    (state.questionType === "spell" ? state.placed.map((p) => p.letter).join("") : state.typedAnswer);
+  return {
+    ...setMark(addMistake(state, guess, false), "bad"),
+    missedThisWord: true,
+    streak: 0,
+    shaking: true,
+  };
 }
 
 export function typeDigit(state: GameState, digit: string): GameState {
@@ -310,55 +359,62 @@ export function submitTyped(state: GameState): GameState {
   if (state.phase !== "playing" || state.questionType !== "type") return state;
   if (!state.typedAnswer) return state;
   if (state.typedAnswer === state.currentWord) return markCorrect(state);
-  return markWrong(state);
+  return markWrong({ ...state, lastWrongPick: state.typedAnswer });
 }
 
 export function answerChoice(state: GameState, word: string): GameState {
-  if (state.phase !== "playing" || state.questionType !== "choice") return state;
+  if (state.phase !== "playing" || state.questionType !== "choice" || state.shaking) return state;
   if (word === state.currentWord) return markCorrect(state);
   return markWrong({ ...state, lastWrongPick: word });
 }
 
-export function nextWord(state: GameState): GameState {
-  let wordIndex = state.wordIndex + 1;
-  let wordList = state.wordList;
-  if (wordIndex >= wordList.length) {
-    wordList = freshWordList(state.category, state.level);
-    wordIndex = 0;
-  }
-  const isBonus =
-    state.wordsCompleted > 0 && state.wordsCompleted % CONFIG.bonusEveryN === 0;
-  return loadCurrentWord(
-    {
+function advanceQuestion(state: GameState, extra: Partial<GameState>): GameState {
+  const wordIndex = state.wordIndex + 1;
+  if (wordIndex >= state.wordList.length) {
+    return {
       ...state,
-      wordList,
-      wordIndex,
-      hints: CONFIG.hintsPerWord,
-      doubleCoins: false,
-      isBonus,
-    },
-    true,
-  );
-}
-
-export function skipWord(state: GameState): GameState {
-  let wordIndex = state.wordIndex + 1;
-  let wordList = state.wordList;
-  if (wordIndex >= wordList.length) {
-    wordList = freshWordList(state.category, state.level);
-    wordIndex = 0;
-  }
-  return loadCurrentWord(
-    {
-      ...state,
-      wordList,
-      wordIndex,
-      hints: CONFIG.hintsPerWord,
+      ...extra,
+      phase: "complete",
+      shaking: false,
       isBonus: false,
-      streak: 0,
+    };
+  }
+  return loadCurrentWord(
+    {
+      ...state,
+      ...extra,
+      wordList: state.wordList,
+      wordIndex,
+      hints: CONFIG.hintsPerWord,
+      doubleCoins: extra.doubleCoins ?? false,
+      isBonus: false,
     },
     false,
   );
+}
+
+export function nextWord(state: GameState): GameState {
+  return advanceQuestion(state, {});
+}
+
+export function stageIsPerfect(state: GameState): boolean {
+  return state.questionMarks.length > 0 && state.questionMarks.every((m) => m === "ok");
+}
+
+export function stageCoinReward(state: GameState): number {
+  const n = Math.max(1, state.wordList.length);
+  const full = n * CONFIG.coinsCorrect;
+  const base = stageIsPerfect(state) ? full : Math.floor(full / 2);
+  return state.doubleCoins ? base * 2 : base;
+}
+
+export function skipWord(state: GameState): GameState {
+  if (state.phase !== "playing" || state.shaking) return state;
+  return advanceQuestion(setMark(addMistake(state, "", true), "bad"), {
+    streak: 0,
+    isBonus: false,
+    shaking: false,
+  });
 }
 
 export function tickBonus(state: GameState): GameState {
@@ -371,7 +427,10 @@ export function tickBonus(state: GameState): GameState {
 }
 
 export function afterTimeout(state: GameState): GameState {
-  return nextWord({ ...state, wordsCompleted: state.wordsCompleted + 1, isBonus: false });
+  return advanceQuestion(
+    { ...state, wordsCompleted: state.wordsCompleted + 1 },
+    { isBonus: false, streak: 0 },
+  );
 }
 
 export function extraHints(state: GameState): GameState {
@@ -380,10 +439,6 @@ export function extraHints(state: GameState): GameState {
 
 export function enableDoubleCoins(state: GameState): GameState {
   return { ...state, doubleCoins: true };
-}
-
-export function revive(state: GameState): GameState {
-  return loadCurrentWord({ ...state, lives: 1, phase: "playing" }, true);
 }
 
 export function clearShake(state: GameState): GameState {

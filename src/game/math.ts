@@ -1,4 +1,4 @@
-import { CONFIG, type Difficulty } from "./config";
+import { questionsInStage, type Difficulty } from "./config";
 import { shuffle } from "./shuffle";
 import type { Word } from "./words";
 
@@ -70,9 +70,8 @@ function hardProblem(): Word {
   return makeProblem(a, "+", b, a + b);
 }
 
-export function generateMathList(level: Difficulty): Word[] {
-  const n = CONFIG.wordsPerRun;
-  if (level === "easy") return shuffle(uniqueProblems(easyProblem, n));
-  if (level === "mid") return shuffle(uniqueProblems(midProblem, n));
-  return shuffle(uniqueProblems(hardProblem, n));
+export function generateMathList(level: Difficulty, count = questionsInStage(1)): Word[] {
+  if (level === "easy") return shuffle(uniqueProblems(easyProblem, count));
+  if (level === "mid") return shuffle(uniqueProblems(midProblem, count));
+  return shuffle(uniqueProblems(hardProblem, count));
 }

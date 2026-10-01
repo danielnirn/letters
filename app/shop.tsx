@@ -58,7 +58,7 @@ export default function ShopScreen() {
     <View style={styles.grid}>
       {items.map((item) => {
         const owned = isOwned(progress.active.purchases, item);
-        const locked = Boolean(item.locked) || item.category === "coming";
+        const locked = Boolean(item.locked);
         const isActiveTheme = item.type === "theme" && progress.active.theme === item.id;
         const equipped =
           item.section === "avatar" && item.slot
@@ -176,8 +176,6 @@ export default function ShopScreen() {
               </Text>
             </Pressable>
           ) : null}
-          <Text style={styles.section}>{he.coming}</Text>
-          {renderGrid(SHOP_ITEMS.filter((it) => it.section === "enhance" && it.category === "coming"))}
           <Text style={styles.section}>{he.myInventory}</Text>
           {invItems.length === 0 ? (
             <Text style={styles.empty}>{he.emptyInventory}</Text>
@@ -193,7 +191,7 @@ export default function ShopScreen() {
               </View>
             ))
           )}
-          <Text style={styles.notice}>{he.shopNotice(CONFIG.coinsCorrect, CONFIG.coinsBonus)}</Text>
+          <Text style={styles.notice}>{he.shopNotice(CONFIG.coinsCorrect)}</Text>
         </>
       ) : (
         <>

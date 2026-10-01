@@ -1,4 +1,4 @@
-import { CONFIG, type Difficulty } from "./config";
+import { type Difficulty } from "./config";
 import { shuffle } from "./shuffle";
 import type { Word } from "./words";
 
@@ -84,8 +84,7 @@ export const LOGIC_WORDS: Record<Difficulty, Word[]> = {
   ],
 };
 
-export function generateLogicList(level: Difficulty): Word[] {
-  const n = CONFIG.wordsPerRun;
+export function generateLogicList(level: Difficulty, count: number): Word[] {
   const generated: Word[] = [];
   const seen = new Set<string>();
   let guard = 0;
@@ -97,5 +96,5 @@ export function generateLogicList(level: Difficulty): Word[] {
     seen.add(key);
     generated.push(p);
   }
-  return shuffle([...LOGIC_WORDS[level], ...generated]).slice(0, n);
+  return shuffle([...LOGIC_WORDS[level], ...generated]).slice(0, count);
 }
