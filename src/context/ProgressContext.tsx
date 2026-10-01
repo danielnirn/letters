@@ -19,6 +19,7 @@ import {
   persistProfile,
   persistUser,
   submitGlobalScore,
+  syncLeaderboardLook,
   watchGlobalLeaderboard,
   watchProfile,
 } from "../firebase/repository";
@@ -180,16 +181,31 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     data?.profiles[0] ??
     defaultProfile("default");
 
-  const patchActive = async (fn: (p: ProfileDoc) => ProfileDoc) => {
+  const patchActive = async (fn: (p: ProfileDoc) => ProfileDoc): Promise<ProfileDoc | null> => {
     const current = dataRef.current;
-    if (!current) return false;
+    if (!current) return null;
     const currentActive =
       current.profiles.find((p) => p.id === current.user.activeProfileId) ?? current.profiles[0];
     const profiles = current.profiles.map((p) =>
       p.id === currentActive.id ? { ...fn(p), updatedAt: Date.now() } : p,
     );
-    return persist({ ...current, profiles });
+    const nextProfile = profiles.find((p) => p.id === currentActive.id) ?? null;
+    const ok = await persist({ ...current, profiles });
+    return ok ? nextProfile : null;
   };
+
+  const publishLook = useCallback(async (profile: ProfileDoc) => {
+    if (!uid || isLocal) return;
+    try {
+      await syncLeaderboardLook(uid, {
+        name: profile.displayName,
+        avatar: profile.avatar ?? defaultAvatar(),
+        gender: profile.gender,
+      });
+    } catch {
+      setCloudError("cloud");
+    }
+  }, [uid, isLocal]);
 
   const value = useMemo<ProgressValue>(() => {
     const loadingVal = loading || !data;
@@ -203,10 +219,12 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       setActiveName: async (name: string) => {
         const trimmed = name.trim();
         if (!trimmed) return;
-        await patchActive((p) => ({ ...p, displayName: trimmed, nameChosen: true }));
+        const next = await patchActive((p) => ({ ...p, displayName: trimmed, nameChosen: true }));
+        if (next) await publishLook(next);
       },
       setGender: async (gender) => {
-        await patchActive((p) => ({ ...p, gender }));
+        const next = await patchActive((p) => ({ ...p, gender }));
+        if (next) await publishLook(next);
       },
       addCoins: async (amount: number) => {
         await patchActive((p) => ({ ...p, coins: p.coins + amount }));
@@ -259,6 +277,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
           }
         }
         if (!isLocal && !saved) return "fail";
+        if (saved && item.section === "avatar") await publishLook(saved);
         return "ok";
       },
       activateTheme: async (themeId) => {
@@ -268,7 +287,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
         }));
       },
       equipAvatar: async (slot, itemId) => {
-        await patchActive((p) => {
+        const next = await patchActive((p) => {
           if (itemId && itemId !== "avatar_base_kid" && !p.purchases.includes(itemId)) {
             return p;
           }
@@ -277,6 +296,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
             avatar: withEquipped(p.avatar ?? defaultAvatar(), slot, itemId),
           };
         });
+        if (next) await publishLook(next);
       },
       useInventory: async (itemId: string) => {
         const current = dataRef.current;
@@ -325,6 +345,8 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
           score,
           level,
           ts: Date.now(),
+          avatar: currentActive.avatar ?? defaultAvatar(),
+          gender: currentActive.gender,
         };
         const scores = [...current.scores, entry].slice(-200);
         await persist({ ...current, scores });
@@ -348,7 +370,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
         }
       },
     };
-  }, [data, loading, active, uid, isLocal, persist, cloudError, globalScores]);
+  }, [data, loading, active, uid, isLocal, persist, cloudError, globalScores, publishLook]);
 
   return <ProgressContext.Provider value={value}>{children}</ProgressContext.Provider>;
 }

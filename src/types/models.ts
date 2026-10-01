@@ -49,6 +49,9 @@ export type ScoreEntry = {
   score: number;
   level: string;
   ts: number;
+  /** Dressed character at the time of the score. Missing on older rows. */
+  avatar?: AvatarLoadout;
+  gender?: Gender | null;
 };
 
 export type CachedProgress = {

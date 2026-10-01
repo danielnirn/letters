@@ -222,6 +222,7 @@ export const he = {
   comingSoonPlain: "בקרוב",
   resetThemePlain: "חזרה לעיצוב הרגיל",
   leaderboardPlain: "טבלת השיאים",
+  leaderboardAvatar: (name: string) => `הדמות של ${name}`,
   gearTitle: (name: string) => `הציוד של ${name}`,
   emptyBag: "התיק ריק עדיין",
   emptyBagHint: "אפשר לקנות כלי עזר בחנות",

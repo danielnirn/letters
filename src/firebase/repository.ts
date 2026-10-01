@@ -13,7 +13,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import type { Firestore } from "firebase/firestore";
-import type { CachedProgress, ProfileDoc, ScoreEntry, UserDoc } from "../types/models";
+import type { AvatarLoadout, CachedProgress, Gender, ProfileDoc, ScoreEntry, UserDoc } from "../types/models";
 import { defaultAvatar, normalizeAvatar } from "../game/avatar";
 import { getFirebase } from "./app";
 
@@ -256,18 +256,44 @@ export async function clearScoresRemote(uid: string, profiles: ProfileDoc[]): Pr
   }
 }
 
+function leaderboardLook(entry: ScoreEntry) {
+  return {
+    avatar: entry.avatar ?? defaultAvatar(),
+    gender: entry.gender === "boy" || entry.gender === "girl" ? entry.gender : null,
+  };
+}
+
 export async function submitGlobalScore(uid: string, entry: ScoreEntry): Promise<void> {
   const fb = getFirebase();
   if (!fb) return;
   const ref = doc(fb.db, "leaderboard", uid);
   const snap = await getDoc(ref);
   const prev = snap.data();
-  if (prev && typeof prev.score === "number" && prev.score >= entry.score) return;
+  const prevScore = typeof prev?.score === "number" ? prev.score : null;
+  const keep = prevScore !== null && prevScore >= entry.score;
   await setDoc(ref, {
     name: entry.name,
-    score: entry.score,
-    level: entry.level,
-    ts: entry.ts,
+    score: keep ? prevScore : entry.score,
+    level: keep && typeof prev?.level === "string" ? prev.level : entry.level,
+    ts: keep && typeof prev?.ts === "number" ? prev.ts : entry.ts,
+    ...leaderboardLook(entry),
+  });
+}
+
+/** Refresh name and clothes on an existing row without changing the score. */
+export async function syncLeaderboardLook(
+  uid: string,
+  look: { name: string; avatar: AvatarLoadout; gender: Gender | null },
+): Promise<void> {
+  const fb = getFirebase();
+  if (!fb) return;
+  const ref = doc(fb.db, "leaderboard", uid);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return;
+  await updateDoc(ref, {
+    name: look.name,
+    avatar: look.avatar,
+    gender: look.gender,
   });
 }
 
@@ -290,6 +316,8 @@ export function watchGlobalLeaderboard(
             score: data.score ?? 0,
             level: data.level ?? "easy",
             ts: data.ts ?? 0,
+            avatar: data.avatar ? normalizeAvatar(data.avatar) : undefined,
+            gender: data.gender === "girl" || data.gender === "boy" ? data.gender : null,
           };
         }),
       );

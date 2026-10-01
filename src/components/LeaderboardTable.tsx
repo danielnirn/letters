@@ -1,8 +1,10 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { he } from "../i18n/he";
+import { defaultAvatar } from "../game/avatar";
 import { BAD, GOLD, OK, font } from "../theme/colors";
 import type { ScoreEntry } from "../types/models";
 import { Star } from "./Art";
+import { AvatarFigure } from "./AvatarArt";
 import { useColors } from "./ui";
 
 const LEVEL: Record<string, string> = {
@@ -40,10 +42,12 @@ export function LeaderboardTable({
   scores,
   highlightName,
   highlightScore,
+  onSelect,
 }: {
   scores: ScoreEntry[];
   highlightName?: string;
   highlightScore?: number;
+  onSelect?: (entry: ScoreEntry) => void;
 }) {
   const c = useColors();
   if (scores.length === 0) {
@@ -55,11 +59,19 @@ export function LeaderboardTable({
         const mine = entry.name === highlightName && (highlightScore == null || entry.score === highlightScore);
         const medal = MEDAL[i];
         return (
-          <View
+          <Pressable
             key={entry.id}
-            style={[
+            accessibilityRole="button"
+            accessibilityLabel={he.leaderboardAvatar(entry.name)}
+            onPress={() => onSelect?.(entry)}
+            style={({ pressed }) => [
               styles.row,
-              { backgroundColor: mine ? c.primaryTint : c.surface, borderBottomColor: c.line },
+              {
+                backgroundColor: mine ? c.primaryTint : c.surface,
+                borderBottomColor: c.line,
+                borderBottomWidth: pressed ? 2 : 4,
+                marginTop: pressed ? 2 : 0,
+              },
             ]}
           >
             <View
@@ -71,6 +83,14 @@ export function LeaderboardTable({
               ]}
             >
               <Text style={[styles.rankText, { color: medal ? "#fff" : c.soft }]}>{i + 1}</Text>
+            </View>
+            <View style={[styles.face, { backgroundColor: c.ground }]}>
+              <AvatarFigure
+                loadout={entry.avatar ?? defaultAvatar()}
+                gender={entry.gender === "boy" ? "boy" : "girl"}
+                height={44}
+                head
+              />
             </View>
             <View style={styles.who}>
               <Text style={[styles.name, { color: c.ink }]} numberOfLines={1}>
@@ -84,7 +104,7 @@ export function LeaderboardTable({
               <Star size={18} />
               <Text style={[styles.scoreText, { color: c.ink }]}>{entry.score}</Text>
             </View>
-          </View>
+          </Pressable>
         );
       })}
     </View>
@@ -126,6 +146,14 @@ const styles = StyleSheet.create({
   },
   rank: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   rankText: { fontFamily: font.black, fontSize: 16 },
+  face: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "flex-end",
+    overflow: "hidden",
+  },
   who: { flex: 1, alignItems: "flex-end" },
   name: { fontFamily: font.heavy, fontSize: 17, textAlign: "right" },
   level: { fontFamily: font.medium, fontSize: 12, textAlign: "right" },
