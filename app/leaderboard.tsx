@@ -4,11 +4,13 @@ import { useRouter } from "expo-router";
 import { Screen } from "../src/components/Screen";
 import { LeaderboardTable } from "../src/components/LeaderboardTable";
 import { Icon } from "../src/components/Art";
+import { VillageScene } from "../src/components/VillageArt";
 import { AvatarFigure } from "../src/components/AvatarArt";
 import { PrimaryButton } from "../src/components/PrimaryButton";
 import { TopBar, useColors } from "../src/components/ui";
 import { useProgress } from "../src/context/ProgressContext";
 import { defaultAvatar } from "../src/game/avatar";
+import { CATEGORIES, type Category } from "../src/game/config";
 import { he } from "../src/i18n/he";
 import { BAD, GOLD, font } from "../src/theme/colors";
 import type { ScoreEntry } from "../src/types/models";
@@ -18,6 +20,9 @@ export default function LeaderboardScreen() {
   const { topScores, active, cloudError } = useProgress();
   const c = useColors();
   const [picked, setPicked] = useState<ScoreEntry | null>(null);
+  const [sceneWidth, setSceneWidth] = useState(0);
+  const levels = Object.fromEntries(CATEGORIES.map((cat) => [cat, picked?.village?.[cat] ?? 0])) as Record<Category, number>;
+  const built = CATEGORIES.filter((cat) => levels[cat] > 0).length;
 
   return (
     <>
@@ -39,10 +44,15 @@ export default function LeaderboardScreen() {
               <AvatarFigure
                 loadout={picked.avatar ?? defaultAvatar()}
                 gender={picked.gender === "boy" ? "boy" : "girl"}
-                height={240}
+                height={170}
               />
-              <Text style={[styles.sheetName, { color: c.ink }]}>{he.leaderboardAvatar(picked.name)}</Text>
-              <Text style={[styles.sheetScore, { color: c.soft }]}>{picked.score}</Text>
+              <Text style={[styles.sheetName, { color: c.ink }]}>{he.villageTitle(picked.name)}</Text>
+              <View style={styles.scene} onLayout={(e) => setSceneWidth(e.nativeEvent.layout.width)}>
+                {sceneWidth > 0 ? <VillageScene levels={levels} width={sceneWidth} aspect={0.55} /> : null}
+              </View>
+              <Text style={[styles.sheetScore, { color: c.soft }]}>
+                {picked.village ? he.leaderboardVillageStats(picked.stars ?? 0, built) : he.leaderboardNoVillage}
+              </Text>
               <PrimaryButton label={he.closeReport} variant="soft" onPress={() => setPicked(null)} />
             </View>
           ) : null}
@@ -81,5 +91,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sheetName: { fontFamily: font.black, fontSize: 22, textAlign: "center", marginTop: 4 },
-  sheetScore: { fontFamily: font.heavy, fontSize: 16, marginBottom: 8 },
+  sheetScore: { fontFamily: font.heavy, fontSize: 15, textAlign: "center", marginBottom: 8 },
+  scene: { alignSelf: "stretch" },
 });

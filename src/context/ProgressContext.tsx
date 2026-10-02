@@ -27,6 +27,7 @@ import type { CachedProgress, Gender, ProfileDoc, ScoreEntry, AvatarSlot } from 
 import { isFirebaseConfigured } from "../firebase/app";
 import { useAuth } from "./AuthContext";
 import { stageProgressKey, stageCoinsKey, type Category, type Difficulty } from "../game/config";
+import { totalStars, villageLevels } from "../game/village";
 
 type ProgressValue = {
   loading: boolean;
@@ -202,6 +203,8 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
         name: profile.displayName,
         avatar: profile.avatar ?? defaultAvatar(),
         gender: profile.gender,
+        village: villageLevels(profile),
+        stars: totalStars(profile),
       });
     } catch {
       setCloudError("cloud");
@@ -350,6 +353,8 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
           ts: Date.now(),
           avatar: currentActive.avatar ?? defaultAvatar(),
           gender: currentActive.gender,
+          village: villageLevels(currentActive),
+          stars: totalStars(currentActive),
         };
         const scores = [...current.scores, entry].slice(-200);
         await persist({ ...current, scores });

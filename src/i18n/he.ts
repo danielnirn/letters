@@ -251,6 +251,8 @@ export const he = {
   resetThemePlain: "חזרה לעיצוב הרגיל",
   leaderboardPlain: "טבלת השיאים",
   leaderboardAvatar: (name: string) => `הדמות של ${name}`,
+  leaderboardVillageStats: (stars: number, built: number) => `⭐ ${stars} כוכבים · ${built}/6 בניינים`,
+  leaderboardNoVillage: "הכפר יופיע אחרי השלב הבא שישחקו",
   gearTitle: (name: string) => `הציוד של ${name}`,
   emptyBag: "התיק ריק עדיין",
   emptyBagHint: "אפשר לקנות כלי עזר בחנות",

@@ -3,7 +3,7 @@ import { he } from "../i18n/he";
 import { defaultAvatar } from "../game/avatar";
 import { BAD, GOLD, OK, font } from "../theme/colors";
 import type { ScoreEntry } from "../types/models";
-import { Star } from "./Art";
+import { Coin } from "./Art";
 import { AvatarFigure } from "./AvatarArt";
 import { useColors } from "./ui";
 
@@ -101,7 +101,7 @@ export function LeaderboardTable({
               </Text>
             </View>
             <View style={styles.score}>
-              <Star size={18} />
+              <Coin size={20} />
               <Text style={[styles.scoreText, { color: c.ink }]}>{entry.score}</Text>
             </View>
           </Pressable>

@@ -1,4 +1,4 @@
-import type { ThemeId } from "../game/config";
+import type { Category, ThemeId } from "../game/config";
 
 export type Plan = "free" | "plus";
 
@@ -54,6 +54,19 @@ export type ScoreEntry = {
   /** Dressed character at the time of the score. Missing on older rows. */
   avatar?: AvatarLoadout;
   gender?: Gender | null;
+  /** Building level (0–4) per subject. Missing on older rows. */
+  village?: Partial<Record<Category, number>>;
+  /** Total village stars. */
+  stars?: number;
+};
+
+/** What other players see on the leaderboard. */
+export type LeaderboardLook = {
+  name: string;
+  avatar: AvatarLoadout;
+  gender: Gender | null;
+  village: Record<Category, number>;
+  stars: number;
 };
 
 export type CachedProgress = {

@@ -13,7 +13,8 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import type { Firestore } from "firebase/firestore";
-import type { AvatarLoadout, CachedProgress, Gender, ProfileDoc, ScoreEntry, UserDoc } from "../types/models";
+import type { CachedProgress, LeaderboardLook, ProfileDoc, ScoreEntry, UserDoc } from "../types/models";
+import { CATEGORIES, type Category } from "../game/config";
 import { defaultAvatar, normalizeAvatar } from "../game/avatar";
 import { getFirebase } from "./app";
 
@@ -268,7 +269,19 @@ function leaderboardLook(entry: ScoreEntry) {
   return {
     avatar: entry.avatar ?? defaultAvatar(),
     gender: entry.gender === "boy" || entry.gender === "girl" ? entry.gender : null,
+    ...(entry.village ? { village: entry.village } : {}),
+    ...(typeof entry.stars === "number" ? { stars: entry.stars } : {}),
   };
+}
+
+function villageFromData(raw: unknown): Partial<Record<Category, number>> | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const out: Partial<Record<Category, number>> = {};
+  for (const cat of CATEGORIES) {
+    const v = (raw as Record<string, unknown>)[cat];
+    if (typeof v === "number") out[cat] = Math.max(0, Math.min(4, Math.round(v)));
+  }
+  return out;
 }
 
 export async function submitGlobalScore(uid: string, entry: ScoreEntry): Promise<void> {
@@ -288,11 +301,8 @@ export async function submitGlobalScore(uid: string, entry: ScoreEntry): Promise
   });
 }
 
-/** Refresh name and clothes on an existing row without changing the score. */
-export async function syncLeaderboardLook(
-  uid: string,
-  look: { name: string; avatar: AvatarLoadout; gender: Gender | null },
-): Promise<void> {
+/** Refresh name, clothes and village on an existing row without changing the score. */
+export async function syncLeaderboardLook(uid: string, look: LeaderboardLook): Promise<void> {
   const fb = getFirebase();
   if (!fb) return;
   const ref = doc(fb.db, "leaderboard", uid);
@@ -302,6 +312,8 @@ export async function syncLeaderboardLook(
     name: look.name,
     avatar: look.avatar,
     gender: look.gender,
+    village: look.village,
+    stars: look.stars,
   });
 }
 
@@ -326,6 +338,8 @@ export function watchGlobalLeaderboard(
             ts: data.ts ?? 0,
             avatar: data.avatar ? normalizeAvatar(data.avatar) : undefined,
             gender: data.gender === "girl" || data.gender === "boy" ? data.gender : null,
+            village: villageFromData(data.village),
+            stars: typeof data.stars === "number" ? data.stars : undefined,
           };
         }),
       );
