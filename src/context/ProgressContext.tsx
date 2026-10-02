@@ -49,6 +49,7 @@ type ProgressValue = {
     stage: number,
     coins: number,
     perfect: boolean,
+    stars: number,
   ) => Promise<void>;
   clearScores: () => Promise<void>;
   cloudError: boolean;
@@ -315,7 +316,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
         }));
         return true;
       },
-      completeStage: async (category, difficulty, stage, coins, perfect) => {
+      completeStage: async (category, difficulty, stage, coins, perfect, stars) => {
         const key = stageProgressKey(category, difficulty);
         const coinKey = stageCoinsKey(category, difficulty, stage);
         const earned = Math.max(0, coins);
@@ -323,6 +324,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
           const prev = p.stageClears ?? {};
           const prevCoins = p.stageCoins ?? {};
           const prevPerfect = p.stagePerfect ?? {};
+          const prevStars = p.stageStars ?? {};
           const best = Math.max(prev[key] ?? 0, stage);
           return {
             ...p,
@@ -330,6 +332,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
             stageClears: { ...prev, [key]: best },
             stageCoins: { ...prevCoins, [coinKey]: Math.max(prevCoins[coinKey] ?? 0, earned) },
             stagePerfect: { ...prevPerfect, [coinKey]: Boolean(prevPerfect[coinKey] || perfect) },
+            stageStars: { ...prevStars, [coinKey]: Math.max(prevStars[coinKey] ?? 0, stars) },
           };
         });
       },

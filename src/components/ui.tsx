@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } fro
 import { useProgress } from "../context/ProgressContext";
 import { colorsFor, font } from "../theme/colors";
 import type { Gender } from "../types/models";
-import { Coin, Icon, Mascot, type IconName } from "./Art";
+import { Coin, Icon, Mascot, Star, type IconName } from "./Art";
 
 export function useColors() {
   const { active } = useProgress();
@@ -28,6 +28,21 @@ export function CoinPill({ coins, onPress }: { coins: number; onPress?: () => vo
     >
       <Coin size={24} />
       <Text style={[styles.pillText, { color: c.ink }]}>{coins}</Text>
+    </Pressable>
+  );
+}
+
+/** Village stars, same chip as CoinPill. */
+export function StarPill({ stars, onPress }: { stars: number; onPress?: () => void }) {
+  const c = useColors();
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      style={[styles.pill, { backgroundColor: c.surface, borderBottomColor: c.line }]}
+    >
+      <Star size={22} />
+      <Text style={[styles.pillText, { color: c.ink }]}>{stars}</Text>
     </Pressable>
   );
 }

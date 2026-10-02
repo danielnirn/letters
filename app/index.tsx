@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Screen } from "../src/components/Screen";
@@ -7,8 +7,19 @@ import { useProgress } from "../src/context/ProgressContext";
 import { he } from "../src/i18n/he";
 import { CATEGORY_COLORS, DIFFICULTY_COLORS, GOLD, OK, font } from "../src/theme/colors";
 import { AvatarPreview } from "../src/components/AvatarPreview";
-import { CategoryTile, DifficultyTile, Icon, Star, type IconName } from "../src/components/Art";
-import { Buddy, Card, CoinPill, ProgressBar, TopBar, useColors } from "../src/components/ui";
+import { CategoryTile, Coin, DifficultyTile, Icon, Star, type IconName } from "../src/components/Art";
+import { PrimaryButton } from "../src/components/PrimaryButton";
+import { Buddy, Card, CoinPill, ProgressBar, StarPill, TopBar, useColors } from "../src/components/ui";
+import { Building, buildingName, VillageScene } from "../src/components/VillageArt";
+import {
+  buildingLevel,
+  categoryStars,
+  LEVEL_STARS,
+  nextGoal,
+  nextLevelStars,
+  totalStars,
+  villageLevels,
+} from "../src/game/village";
 import { defaultAvatar } from "../src/game/avatar";
 import {
   CONFIG,
@@ -36,6 +47,7 @@ export default function HomeScreen() {
     params.level ? parseDifficulty(params.level) : null,
   );
   const c = useColors();
+  const [sceneWidth, setSceneWidth] = useState(0);
 
   useEffect(() => {
     setCategory(params.category ? parseCategory(params.category) : null);
@@ -59,54 +71,83 @@ export default function HomeScreen() {
   }
 
   if (!category) {
-    const total = DIFFICULTIES.length * CONFIG.miniLevels;
-    const done = (cat: Category) =>
-      DIFFICULTIES.reduce((sum, d) => sum + clearedStages(active.stageClears, cat, d), 0);
+    const goal = nextGoal(active);
     return (
       <Screen>
         <View style={styles.helloBar}>
           <Pressable onPress={() => router.push("/profile")} style={styles.helloWho}>
-            <AvatarPreview loadout={active.avatar ?? defaultAvatar()} size={50} showGear={false} />
-            <View style={{ alignItems: "flex-end" }}>
-              <Text style={[styles.helloSmall, { color: c.soft }]}>{he.hello}</Text>
-              <Text style={[styles.helloName, { color: c.ink }]} numberOfLines={1}>
-                {active.displayName}
-              </Text>
-            </View>
+            <Text style={[styles.helloSmall, { color: c.soft }]}>{he.hello}</Text>
+            <Text style={[styles.helloName, { color: c.ink }]} numberOfLines={1}>
+              {active.displayName}
+            </Text>
           </Pressable>
-          {coinPill}
+          <View style={styles.pills}>
+            <StarPill stars={totalStars(active)} onPress={() => router.push("/village")} />
+            {coinPill}
+          </View>
         </View>
 
-        <View style={[styles.hero, { backgroundColor: c.primary, borderBottomColor: c.primaryLip }]}>
-          <View style={[styles.heroBlob, { backgroundColor: c.heroBlob }]} />
-          <View style={styles.heroMascot}>
-            <Buddy size={104} />
-          </View>
-          <View style={styles.heroStar}>
-            <Star size={18} fill="#FFC23D" stroke="#FFC23D" />
-          </View>
-          <View style={styles.heroCopy}>
-            <Text style={styles.heroTitle}>{he.appName}</Text>
-            <Text style={[styles.heroSub, { color: c.primaryTint }]}>{he.appSubtitle}</Text>
-            {isLocal ? (
-              <View style={styles.heroChip}>
-                <Text style={[styles.heroChipText, { color: c.primary }]}>{he.guestBadge}</Text>
+        <View style={[styles.homeCard, { backgroundColor: c.surface, borderBottomColor: c.line }]}>
+          <View style={styles.meRow}>
+            <Pressable
+              onPress={() => router.push({ pathname: "/shop", params: { section: "avatar" } })}
+              style={({ pressed }) => [styles.meAvatar, pressed && { opacity: 0.8 }]}
+            >
+              <AvatarPreview loadout={active.avatar ?? defaultAvatar()} size={62} />
+              <View style={[styles.dressPill, { backgroundColor: c.primaryTint }]}>
+                <Icon name="bag" size={14} color={c.primary} />
+                <Text style={[styles.dressText, { color: c.primary }]}>{he.homeDress}</Text>
               </View>
-            ) : null}
+            </Pressable>
+            <View style={[styles.bubble, { backgroundColor: c.ground }]}>
+              <View style={[styles.bubbleTail, { borderLeftColor: c.ground }]} />
+              {goal ? (
+                <>
+                  <View style={styles.goalHead}>
+                    <Building category={goal.category} level={goal.level} size={44} />
+                    <Text style={[styles.goalTitle, { color: c.ink }]}>{he.homeGoalTitle(buildingName(goal.category))}</Text>
+                  </View>
+                  <Text style={[styles.goalText, { color: CATEGORY_COLORS[goal.category].deep }]}>
+                    {he.homeGoal(goal.need, he.buildingLevels[goal.level])}
+                  </Text>
+                  <PrimaryButton
+                    label={he.homeBuildCta}
+                    color={CATEGORY_COLORS[goal.category].base}
+                    onPress={() => setCategory(goal.category)}
+                    style={styles.goalBtn}
+                  />
+                </>
+              ) : (
+                <Text style={[styles.goalTitle, { color: c.ink }]}>{he.homeGoalDone}</Text>
+              )}
+            </View>
+          </View>
+
+          <Pressable
+            onPress={() => router.push("/village")}
+            onLayout={(e) => setSceneWidth(e.nativeEvent.layout.width)}
+            style={({ pressed }) => [styles.scene, pressed && { opacity: 0.85 }]}
+          >
+            {sceneWidth > 0 ? <VillageScene levels={villageLevels(active)} width={sceneWidth} aspect={0.5} /> : null}
+            <View style={[styles.sceneChip, { backgroundColor: c.surface, borderBottomColor: c.line }]}>
+              <Text style={[styles.sceneChipText, { color: c.ink }]}>{he.villageMine} ←</Text>
+            </View>
+          </Pressable>
+
+          <View style={styles.loop}>
+            <LoopStep icon={<CategoryTile category="reading" size={26} />} label={he.loopLearn} />
+            <Text style={[styles.loopArrow, { color: c.soft }]}>←</Text>
+            <LoopStep icon={<Star size={24} />} label={he.loopBuild} />
+            <Text style={[styles.loopArrow, { color: c.soft }]}>←</Text>
+            <LoopStep icon={<Coin size={24} />} label={he.loopDress} />
           </View>
         </View>
         {isLocal ? <Text style={[styles.localHint, { color: c.soft }]}>{he.coinsLocalOnly}</Text> : null}
 
-        <Text style={[styles.section, { color: c.ink }]}>{he.pickCategory}</Text>
+        <Text style={[styles.section, { color: c.ink }]}>{he.pickBuild}</Text>
         <View style={styles.grid}>
           {CATEGORIES.map((cat) => (
-            <SubjectCard
-              key={cat}
-              category={cat}
-              done={done(cat)}
-              total={total}
-              onPress={() => setCategory(cat)}
-            />
+            <SubjectCard key={cat} category={cat} stars={categoryStars(active, cat)} onPress={() => setCategory(cat)} />
           ))}
         </View>
 
@@ -322,28 +363,18 @@ function StageNode({
   );
 }
 
-function SubjectCard({
-  category,
-  done,
-  total,
-  wide,
-  onPress,
-}: {
-  category: Category;
-  done: number;
-  total: number;
-  wide?: boolean;
-  onPress: () => void;
-}) {
+function SubjectCard({ category, stars, onPress }: { category: Category; stars: number; onPress: () => void }) {
   const c = useColors();
   const sw = CATEGORY_COLORS[category];
-  const bar = <ProgressBar pct={(done / total) * 100} color={sw.base} />;
+  const level = buildingLevel(stars);
+  const next = nextLevelStars(stars);
+  const from = level === 0 ? 0 : LEVEL_STARS[level - 1];
+  const pct = next == null ? 100 : ((stars - from) / (next - from)) * 100;
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.subject,
-        wide ? styles.subjectWide : styles.subjectHalf,
         {
           backgroundColor: c.surface,
           borderBottomColor: c.line,
@@ -352,18 +383,36 @@ function SubjectCard({
         },
       ]}
     >
-      <CategoryTile category={category} size={56} />
-      <View style={wide ? styles.subjectCopyWide : styles.subjectCopy}>
-        <Text style={[styles.cardTitle, { color: c.ink }]}>{categoryLabel(category)}</Text>
-        <Text style={[styles.cardDesc, { color: c.soft }]} numberOfLines={2}>
-          {categoryDesc(category)}
+      <View style={styles.subjectHead}>
+        <CategoryTile category={category} size={40} />
+        <Text style={[styles.cardTitle, { color: c.ink }]} numberOfLines={1}>
+          {categoryLabel(category)}
         </Text>
       </View>
-      <View style={wide ? styles.subjectBarWide : styles.subjectBar}>
-        <Text style={[styles.fraction, { color: c.soft }]}>{he.fraction(done, total)}</Text>
-        <View style={{ flex: 1 }}>{bar}</View>
+      <View style={[styles.subjectArt, { backgroundColor: sw.tint }]}>
+        <Building category={category} level={level} size={68} />
+      </View>
+      <Text style={[styles.subjectBuilding, { color: sw.deep }]} numberOfLines={1}>
+        {buildingName(category)} · {he.buildingLevels[level]}
+      </Text>
+      <View style={styles.subjectBar}>
+        <Star size={14} />
+        <Text style={[styles.fraction, { color: c.soft }]}>{next == null ? stars : `${stars}/${next}`}</Text>
+        <View style={{ flex: 1 }}>
+          <ProgressBar pct={pct} color={next == null ? OK.base : GOLD.base} />
+        </View>
       </View>
     </Pressable>
+  );
+}
+
+function LoopStep({ icon, label }: { icon: ReactNode; label: string }) {
+  const c = useColors();
+  return (
+    <View style={styles.loopStep}>
+      {icon}
+      <Text style={[styles.loopText, { color: c.soft }]}>{label}</Text>
+    </View>
   );
 }
 
@@ -402,15 +451,6 @@ function categoryLabel(category: Category) {
   if (category === "science") return he.categoryScience;
   if (category === "reading") return he.categoryReading;
   return he.categoryLanguage;
-}
-
-function categoryDesc(category: Category) {
-  if (category === "math") return he.categoryMathDesc;
-  if (category === "english") return he.categoryEnglishDesc;
-  if (category === "logic") return he.categoryLogicDesc;
-  if (category === "science") return he.categoryScienceDesc;
-  if (category === "reading") return he.categoryReadingDesc;
-  return he.categoryLanguageDesc;
 }
 
 function levelDesc(category: Category, level: Difficulty) {
@@ -453,34 +493,54 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 16,
   },
-  helloWho: { flexDirection: "row-reverse", alignItems: "center", gap: 10, flexShrink: 1 },
+  helloWho: { alignItems: "flex-end", flexShrink: 1 },
   helloSmall: { fontSize: 13, fontFamily: font.medium },
-  helloName: { fontSize: 21, fontFamily: font.heavy, maxWidth: 180, textAlign: "right" },
-  hero: {
-    width: "100%",
-    borderRadius: 28,
-    borderBottomWidth: 6,
-    minHeight: 132,
-    paddingVertical: 22,
-    paddingRight: 22,
-    paddingLeft: 128,
-    overflow: "hidden",
-    justifyContent: "center",
-  },
-  heroBlob: { position: "absolute", left: -18, top: -26, width: 150, height: 150, borderRadius: 75 },
-  heroMascot: { position: "absolute", left: 14, bottom: -8 },
-  heroStar: { position: "absolute", left: 112, top: 16 },
-  heroCopy: { alignItems: "flex-end" },
-  heroTitle: { color: "#fff", fontSize: 27, fontFamily: font.black, textAlign: "right" },
-  heroSub: { fontSize: 15, fontFamily: font.medium, textAlign: "right", marginTop: 4 },
-  heroChip: {
-    marginTop: 10,
-    backgroundColor: "#fff",
+  helloName: { fontSize: 22, fontFamily: font.heavy, maxWidth: 160, textAlign: "right" },
+  pills: { flexDirection: "row-reverse", alignItems: "center", gap: 8 },
+  homeCard: { width: "100%", borderRadius: 28, borderBottomWidth: 6, padding: 14, gap: 12 },
+  meRow: { flexDirection: "row-reverse", alignItems: "center", gap: 12 },
+  meAvatar: { alignItems: "center", gap: 4 },
+  dressPill: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 4,
     borderRadius: 999,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+  },
+  dressText: { fontFamily: font.heavy, fontSize: 13 },
+  bubble: { flex: 1, borderRadius: 20, padding: 12, alignItems: "flex-end", gap: 4 },
+  bubbleTail: {
+    position: "absolute",
+    right: -10,
+    top: 30,
+    width: 0,
+    height: 0,
+    borderTopWidth: 10,
+    borderBottomWidth: 10,
+    borderLeftWidth: 12,
+    borderTopColor: "transparent",
+    borderBottomColor: "transparent",
+  },
+  goalHead: { flexDirection: "row-reverse", alignItems: "center", gap: 6 },
+  goalTitle: { fontFamily: font.heavy, fontSize: 16, textAlign: "right", flexShrink: 1 },
+  goalText: { fontFamily: font.bold, fontSize: 14, textAlign: "right" },
+  goalBtn: { alignSelf: "stretch", marginTop: 6 },
+  scene: { width: "100%" },
+  sceneChip: {
+    position: "absolute",
+    right: 10,
+    top: 10,
+    borderRadius: 999,
+    borderBottomWidth: 3,
     paddingVertical: 5,
     paddingHorizontal: 12,
   },
-  heroChipText: { fontFamily: font.heavy, fontSize: 13 },
+  sceneChipText: { fontFamily: font.heavy, fontSize: 14 },
+  loop: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between" },
+  loopStep: { flex: 1, alignItems: "center", gap: 4 },
+  loopText: { fontFamily: font.bold, fontSize: 12, textAlign: "center" },
+  loopArrow: { fontFamily: font.heavy, fontSize: 16 },
   localHint: { fontFamily: font.medium, fontSize: 13, textAlign: "center", marginTop: 10 },
   section: {
     alignSelf: "stretch",
@@ -492,13 +552,11 @@ const styles = StyleSheet.create({
   },
   sectionCenter: { textAlign: "center", marginTop: 6 },
   grid: { width: "100%", flexDirection: "row-reverse", flexWrap: "wrap", justifyContent: "space-between" },
-  subject: { borderRadius: 24, padding: 14, marginBottom: 14 },
-  subjectHalf: { width: "48%", minHeight: 176, alignItems: "flex-end", gap: 10 },
-  subjectWide: { width: "100%", flexDirection: "row-reverse", alignItems: "center", gap: 14 },
-  subjectCopy: { alignSelf: "stretch", alignItems: "flex-end", gap: 3 },
-  subjectCopyWide: { flex: 1, alignItems: "flex-end", gap: 3 },
-  subjectBar: { alignSelf: "stretch", flexDirection: "row-reverse", alignItems: "center", gap: 8, marginTop: "auto" },
-  subjectBarWide: { width: 96, flexDirection: "row-reverse", alignItems: "center", gap: 6 },
+  subject: { width: "48%", borderRadius: 24, padding: 12, marginBottom: 14, alignItems: "flex-end", gap: 8 },
+  subjectHead: { alignSelf: "stretch", flexDirection: "row-reverse", alignItems: "center", gap: 8 },
+  subjectArt: { alignSelf: "stretch", borderRadius: 18, alignItems: "center", paddingVertical: 4 },
+  subjectBuilding: { fontFamily: font.bold, fontSize: 13, textAlign: "right" },
+  subjectBar: { alignSelf: "stretch", flexDirection: "row-reverse", alignItems: "center", gap: 5 },
   cardTitle: { fontSize: 19, fontFamily: font.heavy, textAlign: "right" },
   cardDesc: { fontSize: 13, fontFamily: font.medium, textAlign: "right", lineHeight: 18 },
   fraction: { fontSize: 12, fontFamily: font.bold },

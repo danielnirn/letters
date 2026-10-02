@@ -29,8 +29,10 @@ import {
 } from "../src/game/session";
 import { he } from "../src/i18n/he";
 import { BAD, CATEGORY_COLORS, GOLD, OK, TILE_SWATCHES, font } from "../src/theme/colors";
-import { Coin, Icon } from "../src/components/Art";
+import { Coin, Icon, Star } from "../src/components/Art";
 import { Buddy, Card, RoundButton, useColors } from "../src/components/ui";
+import { Building, buildingName } from "../src/components/VillageArt";
+import { buildingLevel, categoryStars, runStars, stageStars, STARS_PER_STAGE } from "../src/game/village";
 
 const LEVEL_LABEL: Record<Difficulty, string> = {
   easy: he.easy,
@@ -57,6 +59,8 @@ function GameRun() {
   const progress = useProgress();
   const completeStageRef = useRef(progress.completeStage);
   const saveScoreRef = useRef(progress.saveScore);
+  const activeRef = useRef(progress.active);
+  activeRef.current = progress.active;
   completeStageRef.current = progress.completeStage;
   saveScoreRef.current = progress.saveScore;
   const c = useColors();
@@ -66,6 +70,7 @@ function GameRun() {
   const skipAdvance = useRef(false);
   const [showReport, setShowReport] = useState(false);
   const [openMistake, setOpenMistake] = useState<number | null>(null);
+  const [village, setVillage] = useState<{ earned: number; gained: number; levelUp: number | null } | null>(null);
 
   const backToStages = () => {
     router.replace({ pathname: "/", params: { category: cat, level: difficulty } });
@@ -107,6 +112,12 @@ function GameRun() {
     if (settled.current) return;
     settled.current = true;
     const coins = stageCoinReward(state);
+    const earned = runStars(state);
+    const before = categoryStars(activeRef.current, state.category);
+    const gained = Math.max(0, earned - stageStars(activeRef.current, state.category, state.level, state.stage));
+    const newLevel = buildingLevel(before + gained);
+    const levelUp = newLevel > buildingLevel(before) ? newLevel : null;
+    setVillage({ earned, gained, levelUp });
     void (async () => {
       await completeStageRef.current(
         state.category,
@@ -114,10 +125,12 @@ function GameRun() {
         state.stage,
         coins,
         stageIsPerfect(state),
+        earned,
       );
       await saveScoreRef.current(coins, `${state.category}:${state.level}:${state.stage}`);
     })();
-    if (stageIsPerfect(state)) {
+    // A village upgrade is worth staying on the screen for.
+    if (stageIsPerfect(state) && levelUp == null) {
       const t = setTimeout(backToStages, CONFIG.stageCompleteHoldMs);
       return () => clearTimeout(t);
     }
@@ -262,6 +275,24 @@ function GameRun() {
           <Text style={[styles.resultLine, { color: perfect ? OK.deep : GOLD.deep }]}>
             {perfect ? he.stagePerfect : he.stageHadMistakes} · {he.correctOf(okCount, state.wordList.length)}
           </Text>
+          {village ? (
+            <>
+              <View style={styles.runStars}>
+                {Array.from({ length: STARS_PER_STAGE }, (_, i) => (
+                  <View key={i} style={i === 1 ? styles.runStarMid : null}>
+                    <Star
+                      size={i === 1 ? 46 : 36}
+                      fill={i < village.earned ? GOLD.base : c.line}
+                      stroke={i < village.earned ? GOLD.lip : c.line}
+                    />
+                  </View>
+                ))}
+              </View>
+              <Text style={[styles.starsLine, { color: village.gained > 0 ? GOLD.deep : c.soft }]}>
+                {village.gained > 0 ? he.starsGained(village.gained, buildingName(state.category)) : he.starsAlready}
+              </Text>
+            </>
+          ) : null}
           <View style={[styles.statsRow, { borderTopColor: c.line }]}>
             <View style={styles.stat}>
               <View style={styles.statValueRow}>
@@ -279,6 +310,24 @@ function GameRun() {
             </View>
           </View>
         </Card>
+
+        {village?.levelUp != null ? (
+          <Pressable
+            onPress={() => router.replace("/village")}
+            style={[styles.upgrade, { backgroundColor: c.surface, borderColor: GOLD.base, borderBottomColor: GOLD.lip }]}
+          >
+            <View style={[styles.upgradeArt, { backgroundColor: CATEGORY_COLORS[state.category].tint }]}>
+              <Building category={state.category} level={village.levelUp} size={84} />
+            </View>
+            <View style={{ flex: 1, alignItems: "flex-end", gap: 4 }}>
+              <Text style={[styles.upgradeTitle, { color: GOLD.deep }]}>{he.villageUpgrade}</Text>
+              <Text style={[styles.upgradeSub, { color: c.ink }]}>
+                {buildingName(state.category)} · {he.buildingLevels[village.levelUp]}
+              </Text>
+              <Text style={[styles.upgradeLink, { color: c.primary }]}>{he.toVillage} ←</Text>
+            </View>
+          </Pressable>
+        ) : null}
 
         <View style={styles.stackButtons}>
           {state.mistakes.length > 0 ? (
@@ -879,6 +928,24 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   resultLine: { fontFamily: font.heavy, fontSize: 17, marginTop: 12, textAlign: "center" },
+  runStars: { flexDirection: "row-reverse", alignItems: "flex-end", gap: 6, marginTop: 14 },
+  runStarMid: { marginBottom: 6 },
+  starsLine: { fontFamily: font.heavy, fontSize: 15, marginTop: 6, textAlign: "center" },
+  upgrade: {
+    width: "100%",
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 14,
+    borderRadius: 24,
+    borderWidth: 3,
+    borderBottomWidth: 6,
+    padding: 12,
+    marginTop: 14,
+  },
+  upgradeArt: { width: 96, height: 96, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  upgradeTitle: { fontFamily: font.black, fontSize: 20, textAlign: "right" },
+  upgradeSub: { fontFamily: font.heavy, fontSize: 16, textAlign: "right" },
+  upgradeLink: { fontFamily: font.heavy, fontSize: 14, textAlign: "right" },
   statsRow: {
     alignSelf: "stretch",
     flexDirection: "row-reverse",

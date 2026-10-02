@@ -38,6 +38,7 @@ export function defaultProfile(id: string, displayName = ""): ProfileDoc {
     stageClears: {},
     stageCoins: {},
     stagePerfect: {},
+    stageStars: {},
     updatedAt: Date.now(),
   };
 }
@@ -64,6 +65,10 @@ function profileFromData(id: string, data: Record<string, unknown>): ProfileDoc 
     stagePerfect:
       data.stagePerfect && typeof data.stagePerfect === "object"
         ? (data.stagePerfect as Record<string, boolean>)
+        : {},
+    stageStars:
+      data.stageStars && typeof data.stageStars === "object"
+        ? (data.stageStars as Record<string, number>)
         : {},
     updatedAt: typeof data.updatedAt === "number" ? data.updatedAt : 0,
   };
@@ -109,6 +114,7 @@ export async function ensureAccount(
       stageClears: {},
       stageCoins: {},
       stagePerfect: {},
+      stageStars: {},
       updatedAt: Date.now(),
     });
     return local;
@@ -145,6 +151,7 @@ export async function loadAccount(uid: string): Promise<CachedProgress> {
       stageClears: {},
       stageCoins: {},
       stagePerfect: {},
+      stageStars: {},
       updatedAt: Date.now(),
     });
     profiles.push(p);
@@ -190,6 +197,7 @@ export async function persistProfile(uid: string, profile: ProfileDoc): Promise<
       stageClears: profile.stageClears ?? {},
       stageCoins: profile.stageCoins ?? {},
       stagePerfect: profile.stagePerfect ?? {},
+      stageStars: profile.stageStars ?? {},
       updatedAt: profile.updatedAt,
     },
     { merge: true },

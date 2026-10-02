@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Screen } from "../src/components/Screen";
 import { AvatarFigure, ItemThumb } from "../src/components/AvatarArt";
 import { useToast } from "../src/components/Toast";
@@ -40,7 +40,8 @@ export default function ShopScreen() {
   const progress = useProgress();
   const { show, node } = useToast();
   const c = useColors();
-  const [section, setSection] = useState<ShopSection>("enhance");
+  const params = useLocalSearchParams<{ section?: string }>();
+  const [section, setSection] = useState<ShopSection>(params.section === "avatar" ? "avatar" : "enhance");
   const avatar = progress.active.avatar ?? defaultAvatar();
 
   const onBuy = async (item: ShopItem) => {

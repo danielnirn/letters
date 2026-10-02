@@ -40,6 +40,8 @@ export type ProfileDoc = {
   stageCoins: Record<string, number>;
   /** Perfect clears per `${category}:${difficulty}:${stage}`. */
   stagePerfect: Record<string, boolean>;
+  /** Best stars (1–3) per `${category}:${difficulty}:${stage}` — they build the village. */
+  stageStars: Record<string, number>;
   updatedAt: number;
 };
 
