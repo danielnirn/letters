@@ -12,6 +12,8 @@ import { CategoryTile, DifficultyTile, Icon, Star } from "../src/components/Art"
 import { PrimaryButton } from "../src/components/PrimaryButton";
 import { Buddy, Card, CoinPill, ProgressBar, StarPill, TopBar, useColors } from "../src/components/ui";
 import { Building, buildingName, VillageScene } from "../src/components/VillageArt";
+import { guideSteps, type GuideId, type GuideState } from "../src/game/path";
+import type { ProfileDoc } from "../src/types/models";
 import {
   categoryStars,
   lookFor,
@@ -38,6 +40,79 @@ import {
 const DIFFICULTIES: Difficulty[] = ["easy", "mid", "hard"];
 const HOME_TABS = ["questions", "village", "scores", "avatar"] as const;
 type HomeTab = (typeof HOME_TABS)[number];
+
+const GUIDE_COPY: Record<GuideId, { title: string; body: string }> = {
+  learn: { title: he.startLearn, body: he.startLearnBody },
+  reward: { title: he.startReward, body: he.startRewardBody },
+  build: { title: he.startBuild, body: he.startBuildBody },
+};
+
+function GuideCard({ profile, onPlay }: { profile: ProfileDoc; onPlay: (category: Category) => void }) {
+  const c = useColors();
+  const steps = guideSteps(profile);
+  const current = steps.find((step) => step.state === "now");
+  const goal = nextGoal(profile);
+
+  if (!current) {
+    return (
+      <View style={[styles.homeCard, { backgroundColor: c.surface, borderBottomColor: c.line }]}>
+        <Text style={[styles.guideTitle, { color: c.ink }]}>{he.objectiveTitle}</Text>
+        {goal ? (
+          <>
+            <Text style={[styles.guideBody, { color: c.ink }]}>{he.homeGoalTitle(buildingName(goal.category))}</Text>
+            <Text style={[styles.guideBody, { color: CATEGORY_COLORS[goal.category].deep }]}>
+              {he.homeGoal(goal.need, he.milestoneName[goal.id])}
+            </Text>
+            <Text style={[styles.guideHint, { color: c.soft }]}>{he.milestoneBonus[goal.id]}</Text>
+            <PrimaryButton
+              label={he.homeBuildCta}
+              color={CATEGORY_COLORS[goal.category].base}
+              onPress={() => onPlay(goal.category)}
+              style={styles.goalBtn}
+            />
+          </>
+        ) : (
+          <Text style={[styles.guideBody, { color: c.ink }]}>{he.homeGoalDone}</Text>
+        )}
+      </View>
+    );
+  }
+
+  const playCategory = current.id === "build" && goal ? goal.category : "language";
+  return (
+    <View style={[styles.homeCard, { backgroundColor: c.surface, borderBottomColor: c.line }]}>
+      <Text style={[styles.guideTitle, { color: c.ink }]}>{he.startTitle}</Text>
+      <Text style={[styles.guideHint, { color: c.soft }]}>{he.startLead}</Text>
+      {steps.map((step) => (
+        <GuideRow key={step.id} n={step.n} state={step.state} title={GUIDE_COPY[step.id].title} body={GUIDE_COPY[step.id].body} />
+      ))}
+      <PrimaryButton
+        label={current.id === "learn" ? he.startCta : he.homeBuildCta}
+        onPress={() => onPlay(playCategory)}
+        style={styles.goalBtn}
+      />
+    </View>
+  );
+}
+
+function GuideRow({ n, state, title, body }: { n: number; state: GuideState; title: string; body: string }) {
+  const c = useColors();
+  const done = state === "done";
+  const now = state === "now";
+  const dot = done ? OK.base : now ? c.primary : c.line;
+  const fg = done || now ? "#fff" : c.soft;
+  return (
+    <View style={[styles.guideStep, now && { backgroundColor: c.primaryTint }]}>
+      <View style={{ flex: 1, alignItems: "flex-end" }}>
+        <Text style={[styles.guideStepTitle, { color: now || done ? c.ink : c.soft }]}>{title}</Text>
+        <Text style={[styles.guideHint, { color: c.soft }]}>{body}</Text>
+      </View>
+      <View style={[styles.guideDot, { backgroundColor: dot }]}>
+        {done ? <Icon name="check" size={16} color={fg} /> : <Text style={[styles.guideNum, { color: fg }]}>{n}</Text>}
+      </View>
+    </View>
+  );
+}
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -130,6 +205,7 @@ export default function HomeScreen() {
 
         {tab === "questions" ? (
           <>
+            <GuideCard profile={active} onPlay={setCategory} />
             <Text style={[styles.section, { color: c.ink }]}>{he.pickCategory}</Text>
             <View style={styles.grid}>
               {CATEGORIES.map((cat) => {
@@ -524,6 +600,13 @@ const styles = StyleSheet.create({
   tab: { flex: 1, minHeight: 44, borderRadius: 999, alignItems: "center", justifyContent: "center" },
   tabText: { fontFamily: font.heavy, fontSize: 14, textAlign: "center" },
   homeCard: { width: "100%", borderRadius: 28, borderBottomWidth: 6, padding: 14, gap: 12 },
+  guideTitle: { fontFamily: font.heavy, fontSize: 20, textAlign: "right" },
+  guideBody: { fontFamily: font.medium, fontSize: 15, textAlign: "right" },
+  guideHint: { fontFamily: font.medium, fontSize: 13, textAlign: "right" },
+  guideStep: { flexDirection: "row", alignItems: "center", gap: 10, borderRadius: 16, paddingVertical: 6, paddingHorizontal: 8 },
+  guideStepTitle: { fontFamily: font.heavy, fontSize: 16, textAlign: "right" },
+  guideDot: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  guideNum: { fontFamily: font.heavy, fontSize: 14 },
   avatarCard: { width: "100%", borderRadius: 28, borderBottomWidth: 6, padding: 18, alignItems: "center", marginTop: 8 },
   avatarName: { fontFamily: font.black, fontSize: 26, marginTop: 8, marginBottom: 12, textAlign: "center" },
   wish: { flexDirection: "row-reverse", alignItems: "center", gap: 10, borderRadius: 18, padding: 8 },
