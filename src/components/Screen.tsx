@@ -2,11 +2,9 @@ import { type ReactNode } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colorsFor } from "../theme/colors";
-import { useProgress } from "../context/ProgressContext";
 
 export function Screen({ children }: { children: ReactNode }) {
-  const { active } = useProgress();
-  const c = colorsFor(active.theme);
+  const c = colorsFor();
   return (
     <View style={[styles.fill, { backgroundColor: c.ground }]}>
       <SafeAreaView style={styles.fill}>

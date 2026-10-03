@@ -24,8 +24,6 @@ export const TILE_COLORS = [
   "#6ab04c",
 ];
 
-export const THEME_IDS = ["theme_space", "theme_jungle", "theme_unicorn"] as const;
-export type ThemeId = (typeof THEME_IDS)[number];
 export type Difficulty = "easy" | "mid" | "hard";
 export type Category = "language" | "math" | "english" | "logic" | "science" | "reading";
 

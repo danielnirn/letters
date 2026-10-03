@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Screen } from "../src/components/Screen";
@@ -7,18 +7,20 @@ import { useProgress } from "../src/context/ProgressContext";
 import { he } from "../src/i18n/he";
 import { CATEGORY_COLORS, DIFFICULTY_COLORS, GOLD, OK, font } from "../src/theme/colors";
 import { AvatarPreview } from "../src/components/AvatarPreview";
-import { CategoryTile, Coin, DifficultyTile, Icon, Star, type IconName } from "../src/components/Art";
+import { LeaderboardBoard } from "./leaderboard";
+import { CategoryTile, DifficultyTile, Icon, Star } from "../src/components/Art";
 import { PrimaryButton } from "../src/components/PrimaryButton";
 import { Buddy, Card, CoinPill, ProgressBar, StarPill, TopBar, useColors } from "../src/components/ui";
 import { Building, buildingName, VillageScene } from "../src/components/VillageArt";
 import {
-  buildingLevel,
   categoryStars,
-  LEVEL_STARS,
+  lookFor,
   nextGoal,
-  nextLevelStars,
   totalStars,
+  villageDetails,
   villageLevels,
+  wishCategory,
+  wishDoneToday,
 } from "../src/game/village";
 import { defaultAvatar } from "../src/game/avatar";
 import {
@@ -34,6 +36,8 @@ import {
 } from "../src/game/config";
 
 const DIFFICULTIES: Difficulty[] = ["easy", "mid", "hard"];
+const HOME_TABS = ["questions", "village", "scores", "avatar"] as const;
+type HomeTab = (typeof HOME_TABS)[number];
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -48,6 +52,7 @@ export default function HomeScreen() {
   );
   const c = useColors();
   const [sceneWidth, setSceneWidth] = useState(0);
+  const [tab, setTab] = useState<HomeTab>("questions");
 
   useEffect(() => {
     setCategory(params.category ? parseCategory(params.category) : null);
@@ -72,44 +77,106 @@ export default function HomeScreen() {
 
   if (!category) {
     const goal = nextGoal(active);
+    const wishCat = wishCategory(active.id);
+    const wished = wishDoneToday(active);
+    const wishLook = lookFor(categoryStars(active, wishCat));
+    const tabLabel: Record<HomeTab, string> = {
+      questions: he.homeQuestions,
+      village: he.homeVillage,
+      scores: he.navLeaderboard,
+      avatar: he.homeAvatar,
+    };
     return (
       <Screen>
         <View style={styles.helloBar}>
-          <Pressable onPress={() => router.push("/profile")} style={styles.helloWho}>
-            <Text style={[styles.helloSmall, { color: c.soft }]}>{he.hello}</Text>
-            <Text style={[styles.helloName, { color: c.ink }]} numberOfLines={1}>
-              {active.displayName}
-            </Text>
-          </Pressable>
-          <View style={styles.pills}>
-            <StarPill stars={totalStars(active)} onPress={() => router.push("/village")} />
-            {coinPill}
+          <View style={styles.helloLeft}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={he.navProfile}
+              onPress={() => router.push("/profile")}
+              style={({ pressed }) => [pressed && { opacity: 0.8 }]}
+            >
+              <AvatarPreview loadout={active.avatar ?? defaultAvatar()} size={52} showGear={false} />
+            </Pressable>
+            {tab === "avatar" ? coinPill : null}
+          </View>
+          <View style={styles.helloRight}>
+            {tab === "village" ? <StarPill stars={totalStars(active)} onPress={() => router.push("/village")} /> : null}
+            <View style={styles.helloWho}>
+              <Text style={[styles.helloSmall, { color: c.soft }]}>{he.hello}</Text>
+              <Text style={[styles.helloName, { color: c.ink }]} numberOfLines={1}>
+                {active.displayName}
+              </Text>
+            </View>
           </View>
         </View>
 
-        <View style={[styles.homeCard, { backgroundColor: c.surface, borderBottomColor: c.line }]}>
-          <View style={styles.meRow}>
+        <View style={[styles.tabs, { backgroundColor: c.line }]}>
+          {HOME_TABS.map((id) => {
+            const on = tab === id;
+            return (
+              <Pressable
+                key={id}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: on }}
+                onPress={() => setTab(id)}
+                style={[styles.tab, on && { backgroundColor: c.surface }]}
+              >
+                <Text style={[styles.tabText, { color: on ? c.ink : c.soft }]}>{tabLabel[id]}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {tab === "questions" ? (
+          <>
+            <Text style={[styles.section, { color: c.ink }]}>{he.pickCategory}</Text>
+            <View style={styles.grid}>
+              {CATEGORIES.map((cat) => {
+                const done = DIFFICULTIES.reduce((sum, d) => sum + clearedStages(active.stageClears, cat, d), 0);
+                return (
+                  <SubjectCard
+                    key={cat}
+                    category={cat}
+                    done={done}
+                    total={CONFIG.miniLevels * DIFFICULTIES.length}
+                    onPress={() => setCategory(cat)}
+                  />
+                );
+              })}
+            </View>
+          </>
+        ) : null}
+
+        {tab === "village" ? (
+          <View style={[styles.homeCard, { backgroundColor: c.surface, borderBottomColor: c.line }]}>
             <Pressable
-              onPress={() => router.push({ pathname: "/shop", params: { section: "avatar" } })}
-              style={({ pressed }) => [styles.meAvatar, pressed && { opacity: 0.8 }]}
+              onPress={() => {
+                if (!wished) setCategory(wishCat);
+              }}
+              style={[styles.wish, { backgroundColor: wished ? OK.tint : CATEGORY_COLORS[wishCat].tint }]}
             >
-              <AvatarPreview loadout={active.avatar ?? defaultAvatar()} size={62} />
-              <View style={[styles.dressPill, { backgroundColor: c.primaryTint }]}>
-                <Icon name="bag" size={14} color={c.primary} />
-                <Text style={[styles.dressText, { color: c.primary }]}>{he.homeDress}</Text>
+              <Building category={wishCat} level={wishLook.level} detail={wishLook.detail} lit={wished} size={52} />
+              <View style={{ flex: 1, alignItems: "flex-end" }}>
+                <Text style={[styles.wishText, { color: c.ink }]}>
+                  {wished ? he.wishDone : he.wishAsk(buildingName(wishCat))}
+                </Text>
+                {wished ? null : (
+                  <Text style={[styles.wishCta, { color: CATEGORY_COLORS[wishCat].deep }]}>{he.wishCta}</Text>
+                )}
               </View>
             </Pressable>
             <View style={[styles.bubble, { backgroundColor: c.ground }]}>
-              <View style={[styles.bubbleTail, { borderLeftColor: c.ground }]} />
               {goal ? (
                 <>
                   <View style={styles.goalHead}>
-                    <Building category={goal.category} level={goal.level} size={44} />
+                    <Building category={goal.category} level={goal.look.level} detail={goal.look.detail} size={44} />
                     <Text style={[styles.goalTitle, { color: c.ink }]}>{he.homeGoalTitle(buildingName(goal.category))}</Text>
                   </View>
                   <Text style={[styles.goalText, { color: CATEGORY_COLORS[goal.category].deep }]}>
-                    {he.homeGoal(goal.need, he.buildingLevels[goal.level])}
+                    {he.homeGoal(goal.need, he.milestoneName[goal.id])}
                   </Text>
+                  <Text style={[styles.goalText, { color: c.soft }]}>{he.milestoneBonus[goal.id]}</Text>
                   <PrimaryButton
                     label={he.homeBuildCta}
                     color={CATEGORY_COLORS[goal.category].base}
@@ -121,47 +188,44 @@ export default function HomeScreen() {
                 <Text style={[styles.goalTitle, { color: c.ink }]}>{he.homeGoalDone}</Text>
               )}
             </View>
+            <Pressable
+              onPress={() => router.push("/village")}
+              onLayout={(e) => setSceneWidth(e.nativeEvent.layout.width)}
+              style={({ pressed }) => [styles.scene, pressed && { opacity: 0.85 }]}
+            >
+              {sceneWidth > 0 ? (
+                <VillageScene
+                  levels={villageLevels(active)}
+                  details={villageDetails(active)}
+                  blooms={active.villageBlooms ?? 0}
+                  litCategory={wished ? wishCat : null}
+                  width={sceneWidth}
+                  aspect={0.5}
+                />
+              ) : null}
+              <View style={[styles.sceneChip, { backgroundColor: c.surface, borderBottomColor: c.line }]}>
+                <Text style={[styles.sceneChipText, { color: c.ink }]}>{he.villageMine} ←</Text>
+              </View>
+            </Pressable>
           </View>
+        ) : null}
 
-          <Pressable
-            onPress={() => router.push("/village")}
-            onLayout={(e) => setSceneWidth(e.nativeEvent.layout.width)}
-            style={({ pressed }) => [styles.scene, pressed && { opacity: 0.85 }]}
-          >
-            {sceneWidth > 0 ? <VillageScene levels={villageLevels(active)} width={sceneWidth} aspect={0.5} /> : null}
-            <View style={[styles.sceneChip, { backgroundColor: c.surface, borderBottomColor: c.line }]}>
-              <Text style={[styles.sceneChipText, { color: c.ink }]}>{he.villageMine} ←</Text>
+        {tab === "scores" ? <LeaderboardBoard /> : null}
+
+        {tab === "avatar" ? (
+          <>
+            <View style={[styles.avatarCard, { backgroundColor: c.surface, borderBottomColor: c.line }]}>
+              <AvatarPreview loadout={active.avatar ?? defaultAvatar()} size={170} />
+              <Text style={[styles.avatarName, { color: c.ink }]}>{active.displayName}</Text>
+              <PrimaryButton label={he.homeDress} icon="bag" onPress={() => router.push("/shop")} style={styles.goalBtn} />
             </View>
-          </Pressable>
-
-          <View style={styles.loop}>
-            <LoopStep icon={<CategoryTile category="reading" size={26} />} label={he.loopLearn} />
-            <Text style={[styles.loopArrow, { color: c.soft }]}>←</Text>
-            <LoopStep icon={<Star size={24} />} label={he.loopBuild} />
-            <Text style={[styles.loopArrow, { color: c.soft }]}>←</Text>
-            <LoopStep icon={<Coin size={24} />} label={he.loopDress} />
-          </View>
-        </View>
-        {isLocal ? <Text style={[styles.localHint, { color: c.soft }]}>{he.coinsLocalOnly}</Text> : null}
-
-        <Text style={[styles.section, { color: c.ink }]}>{he.pickBuild}</Text>
-        <View style={styles.grid}>
-          {CATEGORIES.map((cat) => (
-            <SubjectCard key={cat} category={cat} stars={categoryStars(active, cat)} onPress={() => setCategory(cat)} />
-          ))}
-        </View>
-
-        <View style={[styles.dock, { backgroundColor: c.surface, borderBottomColor: c.line }]}>
-          <DockItem icon="bag" label={he.navShop} tint={CATEGORY_COLORS.language.tint} onPress={() => router.push("/shop")} />
-          <DockItem icon="backpack" label={he.navGear} tint={CATEGORY_COLORS.english.tint} onPress={() => router.push("/inventory")} />
-          <DockItem icon="trophy" label={he.navLeaderboard} tint={GOLD.tint} onPress={() => router.push("/leaderboard")} />
-          <DockItem icon="user" label={he.navProfile} tint={CATEGORY_COLORS.logic.tint} onPress={() => router.push("/profile")} />
-        </View>
-
-        <Pressable onPress={() => signOut()} style={styles.logout}>
-          <Icon name="logout" size={18} color={c.soft} />
-          <Text style={[styles.logoutText, { color: c.soft }]}>{he.logout}</Text>
-        </Pressable>
+            {isLocal ? <Text style={[styles.localHint, { color: c.soft }]}>{he.coinsLocalOnly}</Text> : null}
+            <Pressable onPress={() => signOut()} style={styles.logout}>
+              <Icon name="logout" size={18} color={c.soft} />
+              <Text style={[styles.logoutText, { color: c.soft }]}>{he.logout}</Text>
+            </Pressable>
+          </>
+        ) : null}
       </Screen>
     );
   }
@@ -363,77 +427,36 @@ function StageNode({
   );
 }
 
-function SubjectCard({ category, stars, onPress }: { category: Category; stars: number; onPress: () => void }) {
-  const c = useColors();
+function SubjectCard({
+  category,
+  done,
+  total,
+  onPress,
+}: {
+  category: Category;
+  done: number;
+  total: number;
+  onPress: () => void;
+}) {
   const sw = CATEGORY_COLORS[category];
-  const level = buildingLevel(stars);
-  const next = nextLevelStars(stars);
-  const from = level === 0 ? 0 : LEVEL_STARS[level - 1];
-  const pct = next == null ? 100 : ((stars - from) / (next - from)) * 100;
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.subject,
         {
-          backgroundColor: c.surface,
-          borderBottomColor: c.line,
+          backgroundColor: sw.tint,
+          borderBottomColor: sw.lip,
           borderBottomWidth: pressed ? 2 : 5,
           marginTop: pressed ? 3 : 0,
         },
       ]}
     >
-      <View style={styles.subjectHead}>
-        <CategoryTile category={category} size={40} />
-        <Text style={[styles.cardTitle, { color: c.ink }]} numberOfLines={1}>
-          {categoryLabel(category)}
-        </Text>
-      </View>
-      <View style={[styles.subjectArt, { backgroundColor: sw.tint }]}>
-        <Building category={category} level={level} size={68} />
-      </View>
-      <Text style={[styles.subjectBuilding, { color: sw.deep }]} numberOfLines={1}>
-        {buildingName(category)} · {he.buildingLevels[level]}
+      <CategoryTile category={category} size={52} />
+      <Text style={[styles.cardTitle, { color: sw.deep, textAlign: "center" }]} numberOfLines={1}>
+        {categoryLabel(category)}
       </Text>
-      <View style={styles.subjectBar}>
-        <Star size={14} />
-        <Text style={[styles.fraction, { color: c.soft }]}>{next == null ? stars : `${stars}/${next}`}</Text>
-        <View style={{ flex: 1 }}>
-          <ProgressBar pct={pct} color={next == null ? OK.base : GOLD.base} />
-        </View>
-      </View>
-    </Pressable>
-  );
-}
-
-function LoopStep({ icon, label }: { icon: ReactNode; label: string }) {
-  const c = useColors();
-  return (
-    <View style={styles.loopStep}>
-      {icon}
-      <Text style={[styles.loopText, { color: c.soft }]}>{label}</Text>
-    </View>
-  );
-}
-
-function DockItem({
-  icon,
-  label,
-  tint,
-  onPress,
-}: {
-  icon: IconName;
-  label: string;
-  tint: string;
-  onPress: () => void;
-}) {
-  const c = useColors();
-  return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.dockItem, pressed && { opacity: 0.7 }]}>
-      <View style={[styles.dockIcon, { backgroundColor: tint }]}>
-        <Icon name={icon} size={22} color={c.ink} />
-      </View>
-      <Text style={[styles.dockLabel, { color: c.ink }]}>{label}</Text>
+      <Text style={[styles.fraction, { color: sw.deep, textAlign: "center" }]}>{he.stagesDone(done, total)}</Text>
     </Pressable>
   );
 }
@@ -488,16 +511,24 @@ const styles = StyleSheet.create({
   loading: { fontSize: 28, fontFamily: font.black, marginTop: 16 },
   helloBar: {
     width: "100%",
-    flexDirection: "row-reverse",
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     marginBottom: 16,
   },
+  helloLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
+  helloRight: { marginLeft: "auto", flexDirection: "row", alignItems: "center", gap: 10 },
   helloWho: { alignItems: "flex-end", flexShrink: 1 },
   helloSmall: { fontSize: 13, fontFamily: font.medium },
-  helloName: { fontSize: 22, fontFamily: font.heavy, maxWidth: 160, textAlign: "right" },
-  pills: { flexDirection: "row-reverse", alignItems: "center", gap: 8 },
+  helloName: { fontSize: 22, fontFamily: font.heavy, maxWidth: 180, textAlign: "right" },
+  tabs: { flexDirection: "row-reverse", width: "100%", borderRadius: 999, padding: 4, marginBottom: 8 },
+  tab: { flex: 1, minHeight: 44, borderRadius: 999, alignItems: "center", justifyContent: "center" },
+  tabText: { fontFamily: font.heavy, fontSize: 14, textAlign: "center" },
   homeCard: { width: "100%", borderRadius: 28, borderBottomWidth: 6, padding: 14, gap: 12 },
+  avatarCard: { width: "100%", borderRadius: 28, borderBottomWidth: 6, padding: 18, alignItems: "center", marginTop: 8 },
+  avatarName: { fontFamily: font.black, fontSize: 26, marginTop: 8, marginBottom: 12, textAlign: "center" },
+  wish: { flexDirection: "row-reverse", alignItems: "center", gap: 10, borderRadius: 18, padding: 8 },
+  wishText: { fontFamily: font.heavy, fontSize: 15, textAlign: "right" },
+  wishCta: { fontFamily: font.bold, fontSize: 13, textAlign: "right", marginTop: 2 },
   meRow: { flexDirection: "row-reverse", alignItems: "center", gap: 12 },
   meAvatar: { alignItems: "center", gap: 4 },
   dressPill: {
@@ -537,10 +568,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   sceneChipText: { fontFamily: font.heavy, fontSize: 14 },
-  loop: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between" },
-  loopStep: { flex: 1, alignItems: "center", gap: 4 },
-  loopText: { fontFamily: font.bold, fontSize: 12, textAlign: "center" },
-  loopArrow: { fontFamily: font.heavy, fontSize: 16 },
   localHint: { fontFamily: font.medium, fontSize: 13, textAlign: "center", marginTop: 10 },
   section: {
     alignSelf: "stretch",
@@ -552,26 +579,18 @@ const styles = StyleSheet.create({
   },
   sectionCenter: { textAlign: "center", marginTop: 6 },
   grid: { width: "100%", flexDirection: "row-reverse", flexWrap: "wrap", justifyContent: "space-between" },
-  subject: { width: "48%", borderRadius: 24, padding: 12, marginBottom: 14, alignItems: "flex-end", gap: 8 },
-  subjectHead: { alignSelf: "stretch", flexDirection: "row-reverse", alignItems: "center", gap: 8 },
-  subjectArt: { alignSelf: "stretch", borderRadius: 18, alignItems: "center", paddingVertical: 4 },
-  subjectBuilding: { fontFamily: font.bold, fontSize: 13, textAlign: "right" },
-  subjectBar: { alignSelf: "stretch", flexDirection: "row-reverse", alignItems: "center", gap: 5 },
+  subject: {
+    width: "48%",
+    borderRadius: 24,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    marginBottom: 14,
+    alignItems: "center",
+    gap: 8,
+  },
   cardTitle: { fontSize: 19, fontFamily: font.heavy, textAlign: "right" },
   cardDesc: { fontSize: 13, fontFamily: font.medium, textAlign: "right", lineHeight: 18 },
   fraction: { fontSize: 12, fontFamily: font.bold },
-  dock: {
-    width: "100%",
-    flexDirection: "row-reverse",
-    borderRadius: 24,
-    borderBottomWidth: 5,
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-    marginTop: 6,
-  },
-  dockItem: { flex: 1, alignItems: "center", gap: 5, paddingVertical: 6, minHeight: 44 },
-  dockIcon: { width: 42, height: 42, borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  dockLabel: { fontSize: 12, fontFamily: font.bold, textAlign: "center" },
   logout: { flexDirection: "row-reverse", alignItems: "center", gap: 6, marginTop: 22, padding: 10 },
   logoutText: { fontFamily: font.bold, fontSize: 14 },
   chip: {

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { colorsFor, font } from "../theme/colors";
-import { useProgress } from "../context/ProgressContext";
 
 export function useToast() {
   const [msg, setMsg] = useState<string | null>(null);
@@ -11,8 +10,7 @@ export function useToast() {
 }
 
 function Toast({ text, onDone }: { text: string; onDone: () => void }) {
-  const { active } = useProgress();
-  const c = colorsFor(active.theme);
+  const c = colorsFor();
   useEffect(() => {
     const t = setTimeout(onDone, 1800);
     return () => clearTimeout(t);

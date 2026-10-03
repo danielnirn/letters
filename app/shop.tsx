@@ -1,14 +1,13 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { Screen } from "../src/components/Screen";
 import { AvatarFigure, ItemThumb } from "../src/components/AvatarArt";
 import { useToast } from "../src/components/Toast";
 import { useAuth } from "../src/context/AuthContext";
 import { useProgress } from "../src/context/ProgressContext";
 import { AVATAR_SLOTS, defaultAvatar, equippedId, withEquipped } from "../src/game/avatar";
-import { SHOP_ITEMS, type ShopItem, type ShopSection } from "../src/game/shop";
-import { CONFIG } from "../src/game/config";
+import { SHOP_ITEMS, type ShopItem } from "../src/game/shop";
 import { he } from "../src/i18n/he";
 import { GOLD, OK, font } from "../src/theme/colors";
 import { Coin, Icon } from "../src/components/Art";
@@ -40,9 +39,6 @@ export default function ShopScreen() {
   const progress = useProgress();
   const { show, node } = useToast();
   const c = useColors();
-  const params = useLocalSearchParams<{ section?: string }>();
-  const [section, setSection] = useState<ShopSection>(params.section === "avatar" ? "avatar" : "enhance");
-  const avatar = progress.active.avatar ?? defaultAvatar();
 
   const onBuy = async (item: ShopItem) => {
     const result = await progress.buyItem(item);
@@ -55,77 +51,8 @@ export default function ShopScreen() {
       return;
     }
     const extra = isLocal ? he.coinsLocalOnly : he.savedToCloud;
-    if (item.consumable) show(`${he.addedToBag(item.name)}\n${extra}`);
-    else if (item.type === "theme") show(`${he.themeOn(item.name)}\n${extra}`);
-    else show(`${he.purchased(item.name)}\n${extra}`);
+    show(`${he.purchased(item.name)}\n${extra}`);
   };
-
-  const renderGrid = (items: ShopItem[]) => (
-    <View style={styles.grid}>
-      {items.map((item) => {
-        const owned = isOwned(progress.active.purchases, item);
-        const isActiveTheme = item.type === "theme" && progress.active.theme === item.id;
-        const equipped =
-          item.section === "avatar" && item.slot
-            ? equippedId(avatar, item.slot) === item.id
-            : false;
-        const canAfford = progress.active.coins >= item.cost;
-        const highlight = isActiveTheme || equipped;
-        return (
-          <View
-            key={item.id}
-            style={[
-              styles.card,
-              {
-                backgroundColor: c.surface,
-                borderColor: highlight ? c.primary : "transparent",
-                borderBottomColor: highlight ? c.primaryLip : c.line,
-              },
-            ]}
-          >
-            <View style={[styles.emojiWrap, { backgroundColor: highlight ? c.primaryTint : c.ground }]}>
-              <Text style={styles.emoji}>{item.emoji}</Text>
-            </View>
-            {item.slot ? <Text style={[styles.slot, { color: c.soft }]}>{SLOT_LABEL[item.slot]}</Text> : null}
-            <Text style={[styles.name, { color: c.ink }]}>{item.name}</Text>
-            <Text style={[styles.desc, { color: c.soft }]}>{item.desc}</Text>
-            <View style={styles.cardFoot}>
-              {owned && item.type === "theme" ? (
-                isActiveTheme ? (
-                  <Tag label={he.activePlain} bg={c.primaryTint} fg={c.primary} />
-                ) : (
-                  <SmallButton label={he.activate} color={c.primary} lip={c.primaryLip} onPress={() => progress.activateTheme(item.id)} />
-                )
-              ) : owned && item.section === "avatar" && item.slot ? (
-                equipped ? (
-                  <>
-                    <Tag label={he.equipped} bg={c.primaryTint} fg={c.primary} />
-                    {item.slot !== "base" ? (
-                      <SmallButton label={he.avatarUnequip} soft onPress={() => progress.equipAvatar(item.slot!, null)} />
-                    ) : null}
-                  </>
-                ) : (
-                  <SmallButton label={he.activate} color={c.primary} lip={c.primaryLip} onPress={() => progress.equipAvatar(item.slot!, item.id)} />
-                )
-              ) : owned && !item.consumable ? (
-                <Tag label={he.ownedPlain} bg={OK.tint} fg={OK.deep} />
-              ) : (
-                <SmallButton
-                  label={String(item.cost)}
-                  coin
-                  color={OK.base}
-                  lip={OK.lip}
-                  disabled={!canAfford && !owned}
-                  onPress={() => onBuy(item)}
-                  accessibilityLabel={`${owned && item.consumable ? he.buyAgain : he.buy} · ${item.cost}`}
-                />
-              )}
-            </View>
-          </View>
-        );
-      })}
-    </View>
-  );
 
   return (
     <Screen>
@@ -136,44 +63,7 @@ export default function ShopScreen() {
         center={<Text style={[styles.title, { color: c.ink }]}>{he.navShop}</Text>}
         trailing={<CoinPill coins={progress.active.coins} />}
       />
-
-      <View style={[styles.tabs, { backgroundColor: c.line }]}>
-        {(["enhance", "avatar"] as ShopSection[]).map((s) => {
-          const on = section === s;
-          return (
-            <Pressable
-              key={s}
-              onPress={() => setSection(s)}
-              style={[styles.tab, on && { backgroundColor: c.surface }]}
-            >
-              <Text style={[styles.tabText, { color: on ? c.ink : c.soft }]}>
-                {s === "enhance" ? he.tabEnhance : he.tabAvatar}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      {section === "enhance" ? (
-        <>
-          <Text style={[styles.section, { color: c.ink }]}>{he.shopThemes}</Text>
-          {renderGrid(SHOP_ITEMS.filter((it) => it.section === "enhance" && it.category === "cosmetics"))}
-          {progress.active.theme ? (
-            <Pressable
-              style={styles.reset}
-              onPress={async () => {
-                await progress.activateTheme(null);
-                show(he.themeReset);
-              }}
-            >
-              <Text style={[styles.resetText, { color: c.primary }]}>{he.resetThemePlain}</Text>
-            </Pressable>
-          ) : null}
-          <Text style={[styles.notice, { color: c.soft }]}>{he.shopNotice(CONFIG.coinsCorrect)}</Text>
-        </>
-      ) : (
-        <DressingRoom onBuy={onBuy} />
-      )}
+      <DressingRoom onBuy={onBuy} />
     </Screen>
   );
 }
@@ -188,7 +78,7 @@ function DressingRoom({ onBuy }: { onBuy: (item: ShopItem) => Promise<void> }) {
   const gender = progress.active.gender ?? "girl";
   const avatar = progress.active.avatar ?? defaultAvatar();
   const shown = trying?.slot ? withEquipped(avatar, trying.slot, trying.id) : avatar;
-  const items = SHOP_ITEMS.filter((it) => it.section === "avatar" && it.slot === slot);
+  const items = SHOP_ITEMS.filter((it) => it.slot === slot);
   const tryingOwned = trying ? isOwned(purchases, trying) : true;
   const missing = trying ? Math.max(0, trying.cost - coins) : 0;
 
@@ -379,26 +269,8 @@ function SmallButton({
 
 const styles = StyleSheet.create({
   title: { fontSize: 22, fontFamily: font.black },
-  tabs: { flexDirection: "row-reverse", width: "100%", borderRadius: 999, padding: 4, marginBottom: 4 },
-  tab: { flex: 1, minHeight: 44, borderRadius: 999, alignItems: "center", justifyContent: "center" },
-  tabText: { fontFamily: font.heavy, fontSize: 15, textAlign: "center" },
   section: { alignSelf: "stretch", fontFamily: font.heavy, fontSize: 18, textAlign: "right", marginTop: 18, marginBottom: 10 },
   grid: { width: "100%", flexDirection: "row-reverse", flexWrap: "wrap", justifyContent: "space-between" },
-  card: {
-    width: "48%",
-    borderRadius: 22,
-    borderWidth: 2,
-    borderBottomWidth: 5,
-    padding: 12,
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  emojiWrap: { width: 64, height: 64, borderRadius: 20, alignItems: "center", justifyContent: "center", marginBottom: 6 },
-  emoji: { fontSize: 34 },
-  slot: { fontFamily: font.medium, fontSize: 11 },
-  name: { fontFamily: font.heavy, fontSize: 15, textAlign: "center" },
-  desc: { fontFamily: font.regular, fontSize: 12, textAlign: "center", marginTop: 2, lineHeight: 16 },
-  cardFoot: { marginTop: "auto", paddingTop: 10, alignItems: "center", gap: 6 },
   tag: { borderRadius: 999, paddingVertical: 6, paddingHorizontal: 12 },
   tagText: { fontFamily: font.heavy, fontSize: 13 },
   small: {
@@ -411,9 +283,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   smallText: { fontFamily: font.heavy, fontSize: 15 },
-  reset: { alignSelf: "center", padding: 10 },
-  resetText: { fontFamily: font.bold, fontSize: 14 },
-  notice: { textAlign: "center", marginVertical: 16, fontFamily: font.medium, fontSize: 13 },
   stage: {
     width: "100%",
     borderRadius: 28,

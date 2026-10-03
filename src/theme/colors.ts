@@ -1,4 +1,4 @@
-import type { Category, Difficulty, ThemeId } from "../game/config";
+import type { Category, Difficulty } from "../game/config";
 
 export type ThemeColors = {
   ground: string;
@@ -26,41 +26,7 @@ export const defaultTheme: ThemeColors = {
   toast: "#1F2A44",
 };
 
-const themes: Record<ThemeId, ThemeColors> = {
-  theme_space: {
-    ...defaultTheme,
-    ground: "#E6E4FF",
-    line: "#D2CDF5",
-    primary: "#5B4BD6",
-    primaryLip: "#3E2FAE",
-    primaryTint: "#E3DEFF",
-    heroBlob: "#7364E6",
-    toast: "#221B4A",
-  },
-  theme_jungle: {
-    ...defaultTheme,
-    ground: "#E3F6E6",
-    line: "#C5E6CB",
-    primary: "#1E9457",
-    primaryLip: "#13703F",
-    primaryTint: "#D5F5E5",
-    heroBlob: "#33AD6C",
-    toast: "#123A24",
-  },
-  theme_unicorn: {
-    ...defaultTheme,
-    ground: "#FFE9F6",
-    line: "#F5CDE4",
-    primary: "#C9379A",
-    primaryLip: "#9C2276",
-    primaryTint: "#FFDDF1",
-    heroBlob: "#DB55AF",
-    toast: "#4A1739",
-  },
-};
-
-export function colorsFor(themeId: string | null): ThemeColors {
-  if (themeId && themeId in themes) return themes[themeId as ThemeId];
+export function colorsFor(): ThemeColors {
   return defaultTheme;
 }
 

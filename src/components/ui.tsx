@@ -6,8 +6,7 @@ import type { Gender } from "../types/models";
 import { Coin, Icon, Mascot, Star, type IconName } from "./Art";
 
 export function useColors() {
-  const { active } = useProgress();
-  return colorsFor(active.theme);
+  return colorsFor();
 }
 
 /** White rounded surface with a soft lip. */

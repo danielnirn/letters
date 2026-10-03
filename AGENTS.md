@@ -27,7 +27,7 @@ app/
   _layout.tsx        Rubik, Auth+Progress, Gate, light ground
   index.tsx          hero + category grid + dock → difficulty → 10 stages
   game.tsx           play + complete + mistake report
-  login / name / shop / inventory / profile / leaderboard
+  login / name / shop / profile / leaderboard
 src/theme/colors.ts  ThemeColors, CATEGORY_COLORS, DIFFICULTY_COLORS, OK/BAD/GOLD, font
 src/components/ui.tsx     Card, CoinPill, RoundButton, TopBar, ProgressBar, ScreenTitle, useColors
 src/components/Art.tsx    Mascot (גמדה), Coin, Star, Icon, CategoryTile, DifficultyTile
@@ -46,13 +46,12 @@ Toy-box look: **light ground**, **white cards**, **chunky 3D lip** (`borderBotto
 Tokens (`src/theme/colors.ts`):
 
 - Theme: `ground`, `surface`, `ink`, `soft`, `line`, `primary`, `primaryLip`, `primaryTint`, `heroBlob`, `toast`
-- Shop themes (`theme_space` / `jungle` / `unicorn`) retint the whole app
 - Fixed: `CATEGORY_COLORS`, `DIFFICULTY_COLORS`, `OK` green, `BAD` coral, `GOLD` amber
 - Type: `font.regular | medium | bold | heavy | black` → Rubik
 
 Building blocks:
 
-- `useColors()` — always theme-aware
+- `useColors()` — app palette (`defaultTheme`)
 - `Card`, `CoinPill` (SVG coin, not 🪙), `TopBar` (RTL: back on the **right**, `row-reverse`), `RoundButton`, `ProgressBar` (fill from the right)
 - `PrimaryButton` `variant="solid" | "soft"` + optional `icon`
 - `Mascot` = gnome girl; shirt color `body` (default / theme primary). Default avatar `avatar_base_kid` **is** this mascot
@@ -84,7 +83,7 @@ Do **not** restore dark navy, Heebo, LinearGradient shells, or emoji-only nav as
 
 ## Persistence (logged-in only)
 
-`users/{uid}/profiles/{id}`: `coins`, `purchases`, `inventory`, `theme`, `avatar`, `stageClears`, `stageCoins`, `stagePerfect`.
+`users/{uid}/profiles/{id}`: `coins`, `purchases`, `inventory`, `avatar`, `stageClears`, `stageCoins`, `stagePerfect`.
 
 `completeStage(category, difficulty, stage, coins, perfect)` adds coins and updates maps. Guests (`isLocal`) skip Firestore.
 
@@ -98,7 +97,7 @@ Do **not** restore dark navy, Heebo, LinearGradient shells, or emoji-only nav as
 
 ## Conventions
 
-- Copy only in `src/i18n/he.ts`. Prefer toy-box keys for new UI (`appName`, `navShop`, `wrongTitle`, `tabEnhance`, …).
+- Copy only in `src/i18n/he.ts`. Prefer toy-box keys for new UI (`appName`, `navShop`, `wrongTitle`, …).
 - New UI: compose `ui.tsx` + `Art.tsx` + `colors.ts`. Do not invent a second palette.
 - Engine: `session.ts` + `config.ts`. Banks: `words.ts` / `english.ts` / `math.ts` / `logic.ts` / `science.ts`.
 - Do not commit `.env`. Do not commit unless asked.

@@ -15,8 +15,7 @@ import { he } from "../src/i18n/he";
 import { BAD, GOLD, font } from "../src/theme/colors";
 import type { ScoreEntry } from "../src/types/models";
 
-export default function LeaderboardScreen() {
-  const router = useRouter();
+export function LeaderboardBoard() {
   const { topScores, active, cloudError } = useProgress();
   const c = useColors();
   const [picked, setPicked] = useState<ScoreEntry | null>(null);
@@ -26,16 +25,8 @@ export default function LeaderboardScreen() {
 
   return (
     <>
-      <Screen>
-        <TopBar onBack={() => router.back()} backLabel={he.backLabel} />
-        <View style={[styles.trophy, { backgroundColor: GOLD.base, borderBottomColor: GOLD.lip }]}>
-          <Icon name="trophy" size={44} color="#fff" weight={2.4} />
-        </View>
-        <Text style={[styles.title, { color: c.ink }]}>{he.leaderboardPlain}</Text>
-        <Text style={[styles.sub, { color: c.soft }]}>{he.leaderboardSub}</Text>
-        {cloudError ? <Text style={[styles.err, { color: BAD.deep }]}>{he.cloudError}</Text> : null}
-        <LeaderboardTable scores={topScores} highlightName={active.displayName} onSelect={setPicked} />
-      </Screen>
+      {cloudError ? <Text style={[styles.err, { color: BAD.deep }]}>{he.cloudError}</Text> : null}
+      <LeaderboardTable scores={topScores} highlightName={active.displayName} onSelect={setPicked} />
       <Modal visible={picked != null} transparent animationType="fade" onRequestClose={() => setPicked(null)}>
         <View style={styles.backdrop}>
           <Pressable accessibilityLabel={he.closeReport} style={StyleSheet.absoluteFill} onPress={() => setPicked(null)} />
@@ -59,6 +50,23 @@ export default function LeaderboardScreen() {
         </View>
       </Modal>
     </>
+  );
+}
+
+export default function LeaderboardScreen() {
+  const router = useRouter();
+  const c = useColors();
+
+  return (
+    <Screen>
+      <TopBar onBack={() => router.back()} backLabel={he.backLabel} />
+      <View style={[styles.trophy, { backgroundColor: GOLD.base, borderBottomColor: GOLD.lip }]}>
+        <Icon name="trophy" size={44} color="#fff" weight={2.4} />
+      </View>
+      <Text style={[styles.title, { color: c.ink }]}>{he.leaderboardPlain}</Text>
+      <Text style={[styles.sub, { color: c.soft }]}>{he.leaderboardSub}</Text>
+      <LeaderboardBoard />
+    </Screen>
   );
 }
 

@@ -24,7 +24,7 @@ npx expo start
 ### מבנה נתונים
 
 - `users/{uid}` — `email`, `createdAt`, `plan` (`free` לעתיד מנוי), `activeProfileId`
-- `users/{uid}/profiles/{profileId}` — `displayName`, `coins`, `purchases`, `inventory`, `theme`
+- `users/{uid}/profiles/{profileId}` — `displayName`, `coins`, `purchases`, `inventory`, `avatar`
 - `users/{uid}/profiles/{profileId}/scores/{id}` — `name`, `score`, `level`, `ts`
 
 ההורה מתחבר ב-Google/Apple. הילד הוא פרופיל עם שם, לא חשבון נפרד.

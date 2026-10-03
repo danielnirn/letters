@@ -91,8 +91,64 @@ function House({ category, sw }: { category: Category; sw: Swatch }) {
   );
 }
 
-/** One subject's building. Level 0 = empty plot … 4 = fancy house with a tower. */
-export function Building({ category, level, size }: { category: Category; level: number; size: number }) {
+function Ornaments({ level, detail }: { level: number; detail: number }) {
+  if (detail <= 0 || level <= 0 || level >= 4) return null;
+  return (
+    <>
+      {level === 1 && detail >= 1 ? (
+        <>
+          <Rect x={8} y={78} width={3} height={20} rx={1} fill={WOOD_LIP} />
+          <Circle cx={9.5} cy={74} r={5} fill={GOLD.base} stroke={STRAW_LIP} strokeWidth={1.5} />
+        </>
+      ) : null}
+      {level === 1 && detail >= 2 ? (
+        <>
+          <Rect x={18} y={96} width={3} height={8} rx={1} fill={WOOD_LIP} />
+          <Rect x={100} y={96} width={3} height={8} rx={1} fill={WOOD_LIP} />
+          <Path d="M20 98H100" stroke={WOOD} strokeWidth={2} strokeLinecap="round" />
+        </>
+      ) : null}
+      {level === 2 && detail >= 1 ? (
+        <>
+          <Circle cx={22} cy={100} r={3} fill="#FF6FB0" />
+          <Circle cx={30} cy={102} r={2.4} fill={GOLD.base} />
+          <Circle cx={96} cy={101} r={3} fill="#FF6FB0" />
+        </>
+      ) : null}
+      {level === 2 && detail >= 2 ? (
+        <>
+          <Rect x={78} y={40} width={8} height={14} rx={2} fill="#8C9BB5" />
+          <Circle cx={82} cy={36} r={3.5} fill="#E7EEF8" />
+          <Circle cx={86} cy={33} r={2.5} fill="#E7EEF8" />
+        </>
+      ) : null}
+      {level === 3 && detail >= 1 ? (
+        <>
+          <Rect x={8} y={78} width={4} height={20} rx={2} fill={WOOD_LIP} />
+          <Circle cx={10} cy={72} r={9} fill={GRASS} stroke={GRASS_LIP} strokeWidth={2} />
+        </>
+      ) : null}
+      {level === 3 && detail >= 2 ? (
+        <Path d="M28 104Q60 96 92 104" stroke={DIRT} strokeWidth={5} strokeLinecap="round" />
+      ) : null}
+    </>
+  );
+}
+
+/** One subject's building. Level 0 = empty plot … 4 = fancy house with a tower. `detail` adds a small piece. */
+export function Building({
+  category,
+  level,
+  size,
+  detail = 0,
+  lit = false,
+}: {
+  category: Category;
+  level: number;
+  size: number;
+  detail?: number;
+  lit?: boolean;
+}) {
   const sw = CATEGORY_COLORS[category];
   let body: ReactNode;
   if (level <= 0) {
@@ -174,6 +230,8 @@ export function Building({ category, level, size }: { category: Category; level:
   return (
     <Svg width={size} height={size} viewBox="0 -10 120 120">
       {body}
+      <Ornaments level={level} detail={detail} />
+      {lit ? <Circle cx={60} cy={108} r={4} fill={GOLD.base} /> : null}
     </Svg>
   );
 }
@@ -183,10 +241,16 @@ export function VillageScene({
   levels,
   width,
   aspect = 0.66,
+  details,
+  blooms = 0,
+  litCategory = null,
 }: {
   levels: Record<Category, number>;
   width: number;
   aspect?: number;
+  details?: Record<Category, number>;
+  blooms?: number;
+  litCategory?: Category | null;
 }) {
   const height = width * aspect;
   const back = height * 0.45;
@@ -201,15 +265,18 @@ export function VillageScene({
         <Ellipse cx={80} cy={6} rx={7} ry={2.6} fill="#fff" />
         <Path d="M0 30Q25 18 50 26T100 24V66H0Z" fill="#CDEFB8" />
         <Path d="M0 50Q30 40 60 46T100 43V66H0Z" fill="#B4E39A" />
+        {Array.from({ length: Math.min(8, blooms) }, (_, i) => (
+          <Circle key={i} cx={8 + (i % 8) * 11} cy={60 + (i % 2)} r={1.3} fill={i % 2 ? "#FF6FB0" : GOLD.base} />
+        ))}
       </Svg>
       {VILLAGE_ORDER.slice(0, 3).map((cat, i) => (
         <View key={cat} style={{ position: "absolute", left: width * backCenter[i] - back / 2, top: height * 0.06 }}>
-          <Building category={cat} level={levels[cat]} size={back} />
+          <Building category={cat} level={levels[cat]} detail={details?.[cat] ?? 0} lit={litCategory === cat} size={back} />
         </View>
       ))}
       {VILLAGE_ORDER.slice(3).map((cat, i) => (
         <View key={cat} style={{ position: "absolute", left: width * frontCenter[i] - front / 2, top: height - front - height * 0.01 }}>
-          <Building category={cat} level={levels[cat]} size={front} />
+          <Building category={cat} level={levels[cat]} detail={details?.[cat] ?? 0} lit={litCategory === cat} size={front} />
         </View>
       ))}
     </View>

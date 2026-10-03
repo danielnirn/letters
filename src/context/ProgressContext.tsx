@@ -27,7 +27,7 @@ import type { CachedProgress, Gender, ProfileDoc, ScoreEntry, AvatarSlot } from 
 import { isFirebaseConfigured } from "../firebase/app";
 import { useAuth } from "./AuthContext";
 import { stageProgressKey, stageCoinsKey, type Category, type Difficulty } from "../game/config";
-import { totalStars, villageLevels } from "../game/village";
+import { todayKey, totalStars, villageLevels, wishCategory } from "../game/village";
 
 type ProgressValue = {
   loading: boolean;
@@ -40,7 +40,6 @@ type ProgressValue = {
   addCoins: (amount: number) => Promise<void>;
   spendCoins: (amount: number) => Promise<boolean>;
   buyItem: (item: ShopItem) => Promise<"ok" | "funds" | "fail">;
-  activateTheme: (themeId: string | null) => Promise<void>;
   equipAvatar: (slot: AvatarSlot, itemId: string | null) => Promise<void>;
   useInventory: (itemId: string) => Promise<boolean>;
   saveScore: (score: number, level: string) => Promise<void>;
@@ -252,43 +251,26 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
         if (p.coins < item.cost) return "funds";
         const saved = await patchActive((prev) => {
           const coins = prev.coins - item.cost;
-          if (item.consumable) {
-            const inventory = {
-              ...prev.inventory,
-              [item.id]: (prev.inventory[item.id] || 0) + 1,
-            };
-            return { ...prev, coins, inventory };
-          }
           const purchases = prev.purchases.includes(item.id)
             ? prev.purchases
             : [...prev.purchases, item.id];
-          const theme = item.type === "theme" ? (item.id as ProfileDoc["theme"]) : prev.theme;
-          let avatar = prev.avatar ?? defaultAvatar();
-          if (item.section === "avatar" && item.slot) {
-            avatar = withEquipped(avatar, item.slot, item.id);
-          }
-          return { ...prev, coins, purchases, theme, avatar };
+          const avatar = withEquipped(prev.avatar ?? defaultAvatar(), item.slot, item.id);
+          return { ...prev, coins, purchases, avatar };
         });
         if (!isLocal && uid) {
           try {
             await appendPurchaseRemote(uid, p.id, {
               itemId: item.id,
               cost: item.cost,
-              consumable: Boolean(item.consumable),
+              consumable: false,
             });
           } catch {
             setCloudError("cloud");
           }
         }
         if (!isLocal && !saved) return "fail";
-        if (saved && item.section === "avatar") await publishLook(saved);
+        if (saved) await publishLook(saved);
         return "ok";
-      },
-      activateTheme: async (themeId) => {
-        await patchActive((p) => ({
-          ...p,
-          theme: themeId as ProfileDoc["theme"],
-        }));
       },
       equipAvatar: async (slot, itemId) => {
         const next = await patchActive((p) => {
@@ -329,6 +311,8 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
           const prevPerfect = p.stagePerfect ?? {};
           const prevStars = p.stageStars ?? {};
           const best = Math.max(prev[key] ?? 0, stage);
+          const day = todayKey();
+          const fulfill = category === wishCategory(p.id, day) && !(p.wishDay === day && p.wishDone);
           return {
             ...p,
             coins: p.coins + earned,
@@ -336,6 +320,9 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
             stageCoins: { ...prevCoins, [coinKey]: Math.max(prevCoins[coinKey] ?? 0, earned) },
             stagePerfect: { ...prevPerfect, [coinKey]: Boolean(prevPerfect[coinKey] || perfect) },
             stageStars: { ...prevStars, [coinKey]: Math.max(prevStars[coinKey] ?? 0, stars) },
+            villageBlooms: (p.villageBlooms ?? 0) + (fulfill ? 1 : 0),
+            wishDay: fulfill ? day : (p.wishDay ?? null),
+            wishDone: fulfill ? true : p.wishDay === day ? p.wishDone === true : false,
           };
         });
       },

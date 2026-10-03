@@ -40,6 +40,10 @@ export type GameState = {
   tiles: Tile[];
   placed: Placed[];
   hints: number;
+  /** Hints each spelling or typing question starts with. */
+  hintBudget: number;
+  /** Village clues on a multiple-choice question. 0 hides the button. */
+  bonusHints: number;
   score: number;
   wordsCompleted: number;
   isBonus: boolean;
@@ -171,7 +175,7 @@ function loadCurrentWord(state: GameState, keepBonus: boolean): GameState {
     tiles: questionType === "spell" ? makeTiles(letters) : [],
     placed: [],
     typedAnswer: "",
-    hints: state.hints,
+    hints: questionType === "choice" ? state.bonusHints : state.hintBudget,
     isBonus,
     bonusTimeLeft: 0,
     questionType,
@@ -186,10 +190,11 @@ function loadCurrentWord(state: GameState, keepBonus: boolean): GameState {
   };
 }
 
-export function startGame(level: Difficulty, category: Category = "language", stage = 1): GameState {
+export function startGame(level: Difficulty, category: Category = "language", stage = 1, extraHints = 0): GameState {
   const safeStage = Math.min(CONFIG.miniLevels, Math.max(1, stage));
   const count = questionsInStage(safeStage);
   const wordList = freshWordList(category, level, count);
+  const bonusHints = Math.max(0, extraHints);
   return loadCurrentWord(
     {
       category,
@@ -203,7 +208,9 @@ export function startGame(level: Difficulty, category: Category = "language", st
       currentStory: "",
       tiles: [],
       placed: [],
-      hints: CONFIG.hintsPerWord,
+      hints: 0,
+      hintBudget: CONFIG.hintsPerWord + bonusHints,
+      bonusHints,
       score: 0,
       wordsCompleted: 0,
       isBonus: false,
@@ -261,7 +268,17 @@ export function deleteLast(state: GameState): GameState {
 }
 
 export function useHint(state: GameState): GameState {
-  if (state.hints <= 0) return state;
+  if (state.hints <= 0 || state.phase !== "playing") return state;
+  if (state.questionType === "choice") {
+    const wrong = state.choiceWords.filter((w) => w !== state.currentWord);
+    if (wrong.length <= 1) return state;
+    const drop = wrong[0];
+    return {
+      ...state,
+      choiceWords: state.choiceWords.filter((w) => w !== drop),
+      hints: state.hints - 1,
+    };
+  }
   if (state.questionType === "type") {
     const next = state.currentWord.slice(0, state.typedAnswer.length + 1);
     return { ...state, typedAnswer: next, hints: state.hints - 1, shaking: false };
@@ -392,7 +409,6 @@ function advanceQuestion(state: GameState, extra: Partial<GameState>): GameState
       ...extra,
       wordList: state.wordList,
       wordIndex,
-      hints: CONFIG.hintsPerWord,
       doubleCoins: extra.doubleCoins ?? false,
       isBonus: false,
     },

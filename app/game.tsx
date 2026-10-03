@@ -32,7 +32,18 @@ import { BAD, CATEGORY_COLORS, GOLD, OK, TILE_SWATCHES, font } from "../src/them
 import { Coin, Icon, Star } from "../src/components/Art";
 import { Buddy, Card, RoundButton, useColors } from "../src/components/ui";
 import { Building, buildingName } from "../src/components/VillageArt";
-import { buildingLevel, categoryStars, runStars, stageStars, STARS_PER_STAGE } from "../src/game/village";
+import {
+  awardedStars,
+  categoryStars,
+  milestoneIndex,
+  MILESTONES,
+  perksFor,
+  runStars,
+  stageStars,
+  STARS_PER_STAGE,
+  wishCategory,
+  wishDoneToday,
+} from "../src/game/village";
 
 const LEVEL_LABEL: Record<Difficulty, string> = {
   easy: he.easy,
@@ -64,13 +75,23 @@ function GameRun() {
   completeStageRef.current = progress.completeStage;
   saveScoreRef.current = progress.saveScore;
   const c = useColors();
-  const [state, setState] = useState<GameState>(() => startGame(difficulty, cat, miniLevel));
+  const [state, setState] = useState<GameState>(() =>
+    startGame(difficulty, cat, miniLevel, perksFor(categoryStars(progress.active, cat)).hints),
+  );
   const settled = useRef(false);
   const [advancePct, setAdvancePct] = useState(0);
   const skipAdvance = useRef(false);
   const [showReport, setShowReport] = useState(false);
   const [openMistake, setOpenMistake] = useState<number | null>(null);
-  const [village, setVillage] = useState<{ earned: number; gained: number; levelUp: number | null } | null>(null);
+  const [village, setVillage] = useState<{
+    earned: number;
+    gained: number;
+    step: (typeof MILESTONES)[number] | null;
+    wish: boolean;
+    coins: number;
+    giftStars: number;
+    giftCoins: number;
+  } | null>(null);
 
   const backToStages = () => {
     router.replace({ pathname: "/", params: { category: cat, level: difficulty } });
@@ -111,13 +132,17 @@ function GameRun() {
     if (state.phase !== "complete") return;
     if (settled.current) return;
     settled.current = true;
-    const coins = stageCoinReward(state);
-    const earned = runStars(state);
     const before = categoryStars(activeRef.current, state.category);
+    const perks = perksFor(before);
+    const plain = runStars(state);
+    const earned = awardedStars(state, perks);
+    const coins = stageCoinReward(state) + perks.coins;
     const gained = Math.max(0, earned - stageStars(activeRef.current, state.category, state.level, state.stage));
-    const newLevel = buildingLevel(before + gained);
-    const levelUp = newLevel > buildingLevel(before) ? newLevel : null;
-    setVillage({ earned, gained, levelUp });
+    const beforeStep = milestoneIndex(before);
+    const afterStep = milestoneIndex(before + gained);
+    const step = afterStep > beforeStep ? MILESTONES[afterStep] : null;
+    const wish = state.category === wishCategory(activeRef.current.id) && !wishDoneToday(activeRef.current);
+    setVillage({ earned, gained, step, wish, coins, giftStars: Math.max(0, earned - plain), giftCoins: perks.coins });
     void (async () => {
       await completeStageRef.current(
         state.category,
@@ -130,7 +155,7 @@ function GameRun() {
       await saveScoreRef.current(coins, `${state.category}:${state.level}:${state.stage}`);
     })();
     // A village upgrade is worth staying on the screen for.
-    if (stageIsPerfect(state) && levelUp == null) {
+    if (stageIsPerfect(state) && step == null && !wish) {
       const t = setTimeout(backToStages, CONFIG.stageCompleteHoldMs);
       return () => clearTimeout(t);
     }
@@ -291,13 +316,19 @@ function GameRun() {
               <Text style={[styles.starsLine, { color: village.gained > 0 ? GOLD.deep : c.soft }]}>
                 {village.gained > 0 ? he.starsGained(village.gained, buildingName(state.category)) : he.starsAlready}
               </Text>
+              {village.giftStars > 0 ? (
+                <Text style={[styles.starsLine, { color: GOLD.deep }]}>{he.villageStarGift(village.giftStars)}</Text>
+              ) : null}
+              {village.giftCoins > 0 ? (
+                <Text style={[styles.starsLine, { color: GOLD.deep }]}>{he.villageCoinGift(village.giftCoins)}</Text>
+              ) : null}
             </>
           ) : null}
           <View style={[styles.statsRow, { borderTopColor: c.line }]}>
             <View style={styles.stat}>
               <View style={styles.statValueRow}>
                 <Coin size={28} />
-                <Text style={[styles.statValue, { color: c.ink }]}>+{stageCoinReward(state)}</Text>
+                <Text style={[styles.statValue, { color: c.ink }]}>+{village?.coins ?? stageCoinReward(state)}</Text>
               </View>
               <Text style={[styles.statLabel, { color: c.soft }]}>{he.coinsLabel}</Text>
             </View>
@@ -311,22 +342,26 @@ function GameRun() {
           </View>
         </Card>
 
-        {village?.levelUp != null ? (
+        {village?.step ? (
           <Pressable
             onPress={() => router.replace("/village")}
             style={[styles.upgrade, { backgroundColor: c.surface, borderColor: GOLD.base, borderBottomColor: GOLD.lip }]}
           >
             <View style={[styles.upgradeArt, { backgroundColor: CATEGORY_COLORS[state.category].tint }]}>
-              <Building category={state.category} level={village.levelUp} size={84} />
+              <Building category={state.category} level={village.step.level} detail={village.step.detail} size={84} />
             </View>
             <View style={{ flex: 1, alignItems: "flex-end", gap: 4 }}>
               <Text style={[styles.upgradeTitle, { color: GOLD.deep }]}>{he.villageUpgrade}</Text>
               <Text style={[styles.upgradeSub, { color: c.ink }]}>
-                {buildingName(state.category)} · {he.buildingLevels[village.levelUp]}
+                {buildingName(state.category)} · {he.milestoneName[village.step.id]}
               </Text>
+              <Text style={[styles.upgradeSub, { color: c.soft }]}>{he.bonusFromNow(he.milestoneBonus[village.step.id])}</Text>
               <Text style={[styles.upgradeLink, { color: c.primary }]}>{he.toVillage} ←</Text>
             </View>
           </Pressable>
+        ) : null}
+        {village?.wish ? (
+          <Text style={[styles.starsLine, { color: OK.deep, marginTop: 8 }]}>{he.wishBloom}</Text>
         ) : null}
 
         <View style={styles.stackButtons}>
@@ -428,6 +463,7 @@ function GameRun() {
       ) : null}
 
       {state.questionType === "choice" ? (
+        <>
         <View style={styles.choiceGrid}>
           {state.choiceWords.map((w, i) => {
             const isWrong = wrong && w === state.lastWrongPick;
@@ -469,6 +505,17 @@ function GameRun() {
             );
           })}
         </View>
+          {state.bonusHints > 0 && !won ? (
+            <View style={styles.choiceHint}>
+              <SoftAction
+                icon="bulb"
+                label={he.hintCount(state.hints)}
+                disabled={state.hints <= 0}
+                onPress={() => setState((s) => useHint(s))}
+              />
+            </View>
+          ) : null}
+        </>
       ) : state.questionType === "type" ? (
         <View style={styles.typeWrap}>
           <View
@@ -781,6 +828,7 @@ const styles = StyleSheet.create({
   feedbackIcon: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   feedbackTitle: { fontFamily: font.black, fontSize: 19 },
   feedbackSub: { fontFamily: font.medium, fontSize: 14, marginTop: 2 },
+  choiceHint: { alignSelf: "center", marginTop: 8 },
   choiceGrid: {
     flexDirection: "row-reverse",
     flexWrap: "wrap",

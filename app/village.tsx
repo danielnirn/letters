@@ -8,13 +8,19 @@ import { ProgressBar, StarPill, TopBar, useColors } from "../src/components/ui";
 import { useProgress } from "../src/context/ProgressContext";
 import type { Category } from "../src/game/config";
 import {
-  buildingLevel,
   categoryStars,
-  LEVEL_STARS,
-  nextLevelStars,
+  lookFor,
+  milestoneIndex,
+  MILESTONES,
+  nextMilestone,
+  perksFor,
+  prevMilestoneStars,
   totalStars,
-  VILLAGE_ORDER,
+  villageDetails,
   villageLevels,
+  VILLAGE_ORDER,
+  wishCategory,
+  wishDoneToday,
 } from "../src/game/village";
 import { he } from "../src/i18n/he";
 import { CATEGORY_COLORS, GOLD, OK, font } from "../src/theme/colors";
@@ -25,6 +31,8 @@ export default function VillageScreen() {
   const c = useColors();
   const [width, setWidth] = useState(0);
   const levels = villageLevels(active);
+  const wishCat = wishCategory(active.id);
+  const wished = wishDoneToday(active);
 
   return (
     <Screen>
@@ -40,16 +48,31 @@ export default function VillageScreen() {
       />
 
       <View style={styles.sceneWrap} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
-        {width > 0 ? <VillageScene levels={levels} width={width} /> : null}
+        {width > 0 ? (
+          <VillageScene
+            levels={levels}
+            details={villageDetails(active)}
+            blooms={active.villageBlooms ?? 0}
+            litCategory={wished ? wishCat : null}
+            width={width}
+          />
+        ) : null}
       </View>
-      <Text style={[styles.hint, { color: c.soft }]}>{he.villageHint}</Text>
+      <Text style={[styles.hint, { color: wished ? OK.deep : c.soft }]}>
+        {wished ? he.wishDone : he.wishAsk(buildingName(wishCat))}
+      </Text>
+      <Text style={[styles.hint, { color: c.soft, marginTop: 0 }]}>{he.villageHint}</Text>
 
       {VILLAGE_ORDER.map((cat) => {
         const stars = categoryStars(active, cat);
-        const level = buildingLevel(stars);
-        const next = nextLevelStars(stars);
-        const from = level === 0 ? 0 : LEVEL_STARS[level - 1];
-        const pct = next == null ? 100 : ((stars - from) / (next - from)) * 100;
+        const look = lookFor(stars);
+        const next = nextMilestone(stars);
+        const from = prevMilestoneStars(stars);
+        const step = milestoneIndex(stars);
+        const stepName = step < 0 ? he.buildingLevels[0] : he.milestoneName[MILESTONES[step].id];
+        const pct = next == null ? 100 : ((stars - from) / (next.stars - from)) * 100;
+        const perks = perksFor(stars);
+        const perksText = he.perkLine(perks.hints, perks.stars, perks.coins, perks.twoStarAt < 0.7);
         const sw = CATEGORY_COLORS[cat];
         return (
           <Pressable
@@ -66,28 +89,29 @@ export default function VillageScreen() {
             ]}
           >
             <View style={[styles.art, { backgroundColor: sw.tint }]}>
-              <Building category={cat} level={level} size={78} />
+              <Building category={cat} level={look.level} detail={look.detail} lit={wished && cat === wishCat} size={78} />
             </View>
             <View style={styles.copy}>
               <View style={styles.nameRow}>
                 <Text style={[styles.name, { color: c.ink }]}>{buildingName(cat)}</Text>
                 <View style={[styles.levelChip, { backgroundColor: sw.tint }]}>
-                  <Text style={[styles.levelChipText, { color: sw.deep }]}>{he.buildingLevels[level]}</Text>
+                  <Text style={[styles.levelChipText, { color: sw.deep }]}>{stepName}</Text>
                 </View>
               </View>
               <View style={styles.barRow}>
                 <View style={styles.starCount}>
                   <Star size={14} />
                   <Text style={[styles.starCountText, { color: c.soft }]}>
-                    {next == null ? stars : `${stars}/${next}`}
+                    {next == null ? stars : `${stars}/${next.stars}`}
                   </Text>
                 </View>
                 <View style={{ flex: 1 }}>
                   <ProgressBar pct={pct} color={next == null ? OK.base : GOLD.base} height={10} />
                 </View>
               </View>
+              {perksText ? <Text style={[styles.perks, { color: c.soft }]}>{perksText}</Text> : null}
               <Text style={[styles.next, { color: next == null ? OK.deep : sw.deep }]}>
-                {next == null ? he.buildingDone : `${he.starsToNext(next - stars)} · ${he.playToBuild}`}
+                {next == null ? he.buildingDone : `${he.starsToNext(next.stars - stars)} · ${he.milestoneBonus[next.id]}`}
               </Text>
             </View>
           </Pressable>
@@ -116,6 +140,7 @@ const styles = StyleSheet.create({
   name: { fontFamily: font.heavy, fontSize: 19, textAlign: "right" },
   levelChip: { borderRadius: 999, paddingVertical: 3, paddingHorizontal: 10 },
   levelChipText: { fontFamily: font.bold, fontSize: 12 },
+  perks: { fontFamily: font.medium, fontSize: 12, textAlign: "right" },
   barRow: { alignSelf: "stretch", flexDirection: "row-reverse", alignItems: "center", gap: 8 },
   starCount: { flexDirection: "row-reverse", alignItems: "center", gap: 3 },
   starCountText: { fontFamily: font.bold, fontSize: 13 },

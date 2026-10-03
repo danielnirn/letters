@@ -1,5 +1,4 @@
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
-import { useProgress } from "../context/ProgressContext";
 import { colorsFor, font } from "../theme/colors";
 import { Icon, type IconName } from "./Art";
 
@@ -34,8 +33,7 @@ export function PrimaryButton({
   icon?: IconName;
   style?: StyleProp<ViewStyle>;
 }) {
-  const { active } = useProgress();
-  const c = colorsFor(active.theme);
+  const c = colorsFor();
   const soft = variant === "soft";
   const bg = soft ? c.surface : color ?? c.primary;
   const lip = soft ? c.line : color ? shade(color) : c.primaryLip;

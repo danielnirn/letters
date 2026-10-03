@@ -1,4 +1,4 @@
-import type { Category, ThemeId } from "../game/config";
+import type { Category } from "../game/config";
 
 export type Plan = "free" | "plus";
 
@@ -32,7 +32,6 @@ export type ProfileDoc = {
   coins: number;
   purchases: string[];
   inventory: Record<string, number>;
-  theme: ThemeId | null;
   avatar: AvatarLoadout;
   /** Highest mini-level cleared per `${category}:${difficulty}`. */
   stageClears: Record<string, number>;
@@ -42,6 +41,11 @@ export type ProfileDoc = {
   stagePerfect: Record<string, boolean>;
   /** Best stars (1–3) per `${category}:${difficulty}:${stage}` — they build the village. */
   stageStars: Record<string, number>;
+  /** Flowers planted by finishing the daily building wish. */
+  villageBlooms: number;
+  /** `YYYY-MM-DD` of the last fulfilled wish. */
+  wishDay: string | null;
+  wishDone: boolean;
   updatedAt: number;
 };
 

@@ -34,12 +34,14 @@ export function defaultProfile(id: string, displayName = ""): ProfileDoc {
     coins: 0,
     purchases: [],
     inventory: {},
-    theme: null,
     avatar: defaultAvatar(),
     stageClears: {},
     stageCoins: {},
     stagePerfect: {},
     stageStars: {},
+    villageBlooms: 0,
+    wishDay: null,
+    wishDone: false,
     updatedAt: Date.now(),
   };
 }
@@ -53,7 +55,6 @@ function profileFromData(id: string, data: Record<string, unknown>): ProfileDoc 
     coins: typeof data.coins === "number" ? data.coins : 0,
     purchases: Array.isArray(data.purchases) ? (data.purchases as string[]) : [],
     inventory: (data.inventory as Record<string, number>) ?? {},
-    theme: (data.theme as ProfileDoc["theme"]) ?? null,
     avatar: normalizeAvatar(data.avatar),
     stageClears:
       data.stageClears && typeof data.stageClears === "object"
@@ -71,6 +72,9 @@ function profileFromData(id: string, data: Record<string, unknown>): ProfileDoc 
       data.stageStars && typeof data.stageStars === "object"
         ? (data.stageStars as Record<string, number>)
         : {},
+    villageBlooms: typeof data.villageBlooms === "number" ? data.villageBlooms : 0,
+    wishDay: typeof data.wishDay === "string" ? data.wishDay : null,
+    wishDone: data.wishDone === true,
     updatedAt: typeof data.updatedAt === "number" ? data.updatedAt : 0,
   };
 }
@@ -110,12 +114,14 @@ export async function ensureAccount(
       coins: 0,
       purchases: [],
       inventory: {},
-      theme: null,
       avatar: defaultAvatar(),
       stageClears: {},
       stageCoins: {},
       stagePerfect: {},
       stageStars: {},
+      villageBlooms: 0,
+      wishDay: null,
+      wishDone: false,
       updatedAt: Date.now(),
     });
     return local;
@@ -147,12 +153,14 @@ export async function loadAccount(uid: string): Promise<CachedProgress> {
       coins: 0,
       purchases: [],
       inventory: {},
-      theme: null,
       avatar: defaultAvatar(),
       stageClears: {},
       stageCoins: {},
       stagePerfect: {},
       stageStars: {},
+      villageBlooms: 0,
+      wishDay: null,
+      wishDone: false,
       updatedAt: Date.now(),
     });
     profiles.push(p);
@@ -193,12 +201,14 @@ export async function persistProfile(uid: string, profile: ProfileDoc): Promise<
       coins: profile.coins,
       purchases: profile.purchases,
       inventory: profile.inventory,
-      theme: profile.theme,
       avatar: profile.avatar,
       stageClears: profile.stageClears ?? {},
       stageCoins: profile.stageCoins ?? {},
       stagePerfect: profile.stagePerfect ?? {},
       stageStars: profile.stageStars ?? {},
+      villageBlooms: profile.villageBlooms ?? 0,
+      wishDay: profile.wishDay ?? null,
+      wishDone: profile.wishDone === true,
       updatedAt: profile.updatedAt,
     },
     { merge: true },
