@@ -9,6 +9,7 @@ import {
 import { MathErrorCard, FadeIn } from "../src/components/MathErrorCard";
 import { PrimaryButton } from "../src/components/PrimaryButton";
 import { Screen } from "../src/components/Screen";
+import { Pic, PicText } from "../src/components/Pic";
 import { useProgress } from "../src/context/ProgressContext";
 import { CONFIG, parseCategory, parseDifficulty, parseStage, type Category, type Difficulty } from "../src/game/config";
 import {
@@ -419,7 +420,7 @@ function GameRun() {
             </View>
           </View>
         ) : state.category === "logic" ? (
-          <Text style={[styles.logicPrompt, { color: c.ink }]}>{state.currentEmoji}</Text>
+          <PicText text={state.currentEmoji} size={48} textStyle={{ ...styles.logicPrompt, color: c.ink }} />
         ) : state.category === "reading" ? (
           <>
             <View style={styles.storyHead}>
@@ -436,7 +437,13 @@ function GameRun() {
             </View>
           </>
         ) : (
-          <Text style={styles.emoji}>{state.currentEmoji}</Text>
+          <View style={styles.pic}>
+            {state.category === "science" ? (
+              <PicText text={state.currentEmoji} size={112} textStyle={styles.sciencePrompt} />
+            ) : (
+              <Pic emoji={state.currentEmoji} size={112} />
+            )}
+          </View>
         )}
         {state.currentHint ? <Text style={[styles.hintHe, { color: c.ink }]}>{state.currentHint}</Text> : null}
         {state.questionType !== "spell" && state.category !== "math" && state.category !== "reading" ? (
@@ -786,7 +793,7 @@ const styles = StyleSheet.create({
   segmentNow: { height: 16, borderRadius: 8 },
   crumb: { fontFamily: font.bold, fontSize: 14, textAlign: "center", marginTop: 10, marginBottom: 12 },
   promptCard: { alignItems: "center", paddingVertical: 22, marginBottom: 14 },
-  emoji: { fontSize: 96, lineHeight: 116 },
+  pic: { marginVertical: 2 },
   storyHead: { flexDirection: "row-reverse", alignItems: "center", gap: 10, alignSelf: "stretch", justifyContent: "center" },
   storyEmoji: { fontSize: 40, lineHeight: 50 },
   storyBox: {
@@ -811,6 +818,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  sciencePrompt: { fontSize: 92, lineHeight: 112 },
   logicPrompt: { fontFamily: font.black, fontSize: 34, textAlign: "center", lineHeight: 46 },
   hintHe: { fontSize: 22, fontFamily: font.heavy, marginTop: 8, textAlign: "center" },
   prompt: { fontFamily: font.bold, fontSize: 16, marginTop: 8, textAlign: "center" },
