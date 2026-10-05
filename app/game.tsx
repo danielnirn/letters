@@ -424,7 +424,7 @@ function GameRun() {
         ) : state.category === "reading" ? (
           <>
             <View style={styles.storyHead}>
-              <Text style={styles.storyEmoji}>{state.currentEmoji}</Text>
+              <Pic emoji={state.currentEmoji} size={40} />
               <Text style={[styles.prompt, { color: c.soft, marginTop: 0 }]}>{he.promptReading}</Text>
             </View>
             <View
@@ -795,7 +795,6 @@ const styles = StyleSheet.create({
   promptCard: { alignItems: "center", paddingVertical: 22, marginBottom: 14 },
   pic: { marginVertical: 2 },
   storyHead: { flexDirection: "row-reverse", alignItems: "center", gap: 10, alignSelf: "stretch", justifyContent: "center" },
-  storyEmoji: { fontSize: 40, lineHeight: 50 },
   storyBox: {
     alignSelf: "stretch",
     borderRadius: 18,
