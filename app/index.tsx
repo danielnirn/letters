@@ -16,6 +16,7 @@ import { guideSteps, type GuideId, type GuideState } from "../src/game/path";
 import type { ProfileDoc } from "../src/types/models";
 import {
   categoryStars,
+  LEVEL_STARS,
   lookFor,
   nextGoal,
   totalStars,
@@ -38,7 +39,7 @@ import {
 } from "../src/game/config";
 
 const DIFFICULTIES: Difficulty[] = ["easy", "mid", "hard"];
-const HOME_TABS = ["questions", "village", "scores", "avatar"] as const;
+const HOME_TABS = ["questions", "objectives", "village", "scores", "avatar"] as const;
 type HomeTab = (typeof HOME_TABS)[number];
 
 const GUIDE_COPY: Record<GuideId, { title: string; body: string }> = {
@@ -114,6 +115,58 @@ function GuideRow({ n, state, title, body }: { n: number; state: GuideState; tit
   );
 }
 
+const HOUSE_STEPS = [
+  { level: 1, id: "tent" },
+  { level: 2, id: "hut" },
+  { level: 3, id: "house" },
+  { level: 4, id: "fancy" },
+] as const;
+
+function VillageGrow({
+  category,
+  selected,
+  onSelect,
+}: {
+  category: Category;
+  selected: number;
+  onSelect: (level: number) => void;
+}) {
+  const c = useColors();
+  return (
+    <View style={[styles.grow, { backgroundColor: c.ground }]}>
+      <Text style={[styles.growTitle, { color: c.ink }]}>{he.villageGrowTitle}</Text>
+      <View style={styles.growRow}>
+        {HOUSE_STEPS.map((step) => {
+          const on = step.level === selected;
+          return (
+            <Pressable
+              key={step.id}
+              accessibilityRole="button"
+              accessibilityState={{ selected: on }}
+              accessibilityLabel={he.milestoneName[step.id]}
+              onPress={() => onSelect(step.level)}
+              style={({ pressed }) => [
+                styles.growStep,
+                on && { backgroundColor: c.primaryTint },
+                pressed && { opacity: 0.75 },
+              ]}
+            >
+              <Building category={category} level={step.level} size={44} />
+              <Text style={[styles.growName, { color: on ? c.ink : c.soft }]} numberOfLines={2}>
+                {he.milestoneName[step.id]}
+              </Text>
+              <View style={styles.growStars}>
+                <Star size={12} />
+                <Text style={[styles.growStarText, { color: c.ink }]}>{LEVEL_STARS[step.level - 1]}</Text>
+              </View>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 export default function HomeScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ category?: string; level?: string }>();
@@ -128,6 +181,7 @@ export default function HomeScreen() {
   const c = useColors();
   const [sceneWidth, setSceneWidth] = useState(0);
   const [tab, setTab] = useState<HomeTab>("questions");
+  const [growLevel, setGrowLevel] = useState<number | null>(null);
 
   useEffect(() => {
     setCategory(params.category ? parseCategory(params.category) : null);
@@ -152,11 +206,17 @@ export default function HomeScreen() {
 
   if (!category) {
     const goal = nextGoal(active);
+    const selectedLevel = growLevel ?? goal?.look.level ?? HOUSE_STEPS[HOUSE_STEPS.length - 1].level;
+    const selectedStep = HOUSE_STEPS.find((step) => step.level === selectedLevel) ?? HOUSE_STEPS[0];
+    const showingNext = goal != null && goal.look.level === selectedStep.level;
+    const needFirst = HOUSE_STEPS.find((step) => step.level === selectedStep.level - 1);
+    const locked = goal != null && selectedStep.level > goal.look.level && needFirst != null;
     const wishCat = wishCategory(active.id);
     const wished = wishDoneToday(active);
     const wishLook = lookFor(categoryStars(active, wishCat));
     const tabLabel: Record<HomeTab, string> = {
       questions: he.homeQuestions,
+      objectives: he.homeObjectives,
       village: he.homeVillage,
       scores: he.navLeaderboard,
       avatar: he.homeAvatar,
@@ -197,7 +257,9 @@ export default function HomeScreen() {
                 onPress={() => setTab(id)}
                 style={[styles.tab, on && { backgroundColor: c.surface }]}
               >
-                <Text style={[styles.tabText, { color: on ? c.ink : c.soft }]}>{tabLabel[id]}</Text>
+                <Text style={[styles.tabText, { color: on ? c.ink : c.soft }]} numberOfLines={1}>
+                  {tabLabel[id]}
+                </Text>
               </Pressable>
             );
           })}
@@ -205,7 +267,6 @@ export default function HomeScreen() {
 
         {tab === "questions" ? (
           <>
-            <GuideCard profile={active} onPlay={setCategory} />
             <Text style={[styles.section, { color: c.ink }]}>{he.pickCategory}</Text>
             <View style={styles.grid}>
               {CATEGORIES.map((cat) => {
@@ -224,35 +285,56 @@ export default function HomeScreen() {
           </>
         ) : null}
 
+        {tab === "objectives" ? (
+          <>
+            <GuideCard profile={active} onPlay={setCategory} />
+            <View style={[styles.homeCard, { backgroundColor: c.surface, borderBottomColor: c.line, marginTop: 12 }]}>
+              <Text style={[styles.guideTitle, { color: c.ink }]}>{he.homeDailyObjective}</Text>
+              <Pressable
+                onPress={() => {
+                  if (!wished) setCategory(wishCat);
+                }}
+                style={[styles.wish, { backgroundColor: wished ? OK.tint : CATEGORY_COLORS[wishCat].tint }]}
+              >
+                <Building category={wishCat} level={wishLook.level} detail={wishLook.detail} lit={wished} size={52} />
+                <View style={{ flex: 1, alignItems: "flex-end" }}>
+                  <Text style={[styles.wishText, { color: c.ink }]}>
+                    {wished ? he.wishDone : he.wishAsk(buildingName(wishCat))}
+                  </Text>
+                  {wished ? null : (
+                    <Text style={[styles.wishCta, { color: CATEGORY_COLORS[wishCat].deep }]}>{he.wishCta}</Text>
+                  )}
+                </View>
+              </Pressable>
+            </View>
+          </>
+        ) : null}
+
         {tab === "village" ? (
           <View style={[styles.homeCard, { backgroundColor: c.surface, borderBottomColor: c.line }]}>
-            <Pressable
-              onPress={() => {
-                if (!wished) setCategory(wishCat);
-              }}
-              style={[styles.wish, { backgroundColor: wished ? OK.tint : CATEGORY_COLORS[wishCat].tint }]}
-            >
-              <Building category={wishCat} level={wishLook.level} detail={wishLook.detail} lit={wished} size={52} />
-              <View style={{ flex: 1, alignItems: "flex-end" }}>
-                <Text style={[styles.wishText, { color: c.ink }]}>
-                  {wished ? he.wishDone : he.wishAsk(buildingName(wishCat))}
-                </Text>
-                {wished ? null : (
-                  <Text style={[styles.wishCta, { color: CATEGORY_COLORS[wishCat].deep }]}>{he.wishCta}</Text>
-                )}
-              </View>
-            </Pressable>
+            <VillageGrow
+              category={goal?.category ?? "language"}
+              selected={selectedStep.level}
+              onSelect={setGrowLevel}
+            />
             <View style={[styles.bubble, { backgroundColor: c.ground }]}>
-              {goal ? (
+              <View style={styles.goalHead}>
+                <Building category={goal?.category ?? "language"} level={selectedStep.level} size={44} />
+                <Text style={[styles.goalTitle, { color: c.ink }]}>
+                  {showingNext && goal ? he.homeGoalTitle(buildingName(goal.category)) : he.milestoneName[selectedStep.id]}
+                </Text>
+              </View>
+              <Text style={[styles.goalText, { color: goal ? CATEGORY_COLORS[goal.category].deep : c.ink }]}>
+                {he.milestoneBonus[selectedStep.id]}
+              </Text>
+              {locked && needFirst ? (
+                <Text style={[styles.goalText, { color: c.soft }]}>{he.growNeedFirst(he.milestoneName[needFirst.id])}</Text>
+              ) : null}
+              {showingNext && goal ? (
                 <>
-                  <View style={styles.goalHead}>
-                    <Building category={goal.category} level={goal.look.level} detail={goal.look.detail} size={44} />
-                    <Text style={[styles.goalTitle, { color: c.ink }]}>{he.homeGoalTitle(buildingName(goal.category))}</Text>
-                  </View>
-                  <Text style={[styles.goalText, { color: CATEGORY_COLORS[goal.category].deep }]}>
+                  <Text style={[styles.goalText, { color: c.soft }]}>
                     {he.homeGoal(goal.need, he.milestoneName[goal.id])}
                   </Text>
-                  <Text style={[styles.goalText, { color: c.soft }]}>{he.milestoneBonus[goal.id]}</Text>
                   <PrimaryButton
                     label={he.homeBuildCta}
                     color={CATEGORY_COLORS[goal.category].base}
@@ -260,8 +342,8 @@ export default function HomeScreen() {
                     style={styles.goalBtn}
                   />
                 </>
-              ) : (
-                <Text style={[styles.goalTitle, { color: c.ink }]}>{he.homeGoalDone}</Text>
+              ) : goal ? null : (
+                <Text style={[styles.goalText, { color: c.soft }]}>{he.homeGoalDone}</Text>
               )}
             </View>
             <Pressable
@@ -598,7 +680,7 @@ const styles = StyleSheet.create({
   helloName: { fontSize: 22, fontFamily: font.heavy, maxWidth: 180, textAlign: "right" },
   tabs: { flexDirection: "row-reverse", width: "100%", borderRadius: 999, padding: 4, marginBottom: 8 },
   tab: { flex: 1, minHeight: 44, borderRadius: 999, alignItems: "center", justifyContent: "center" },
-  tabText: { fontFamily: font.heavy, fontSize: 14, textAlign: "center" },
+  tabText: { fontFamily: font.heavy, fontSize: 12, textAlign: "center" },
   homeCard: { width: "100%", borderRadius: 28, borderBottomWidth: 6, padding: 14, gap: 12 },
   guideTitle: { fontFamily: font.heavy, fontSize: 20, textAlign: "right" },
   guideBody: { fontFamily: font.medium, fontSize: 15, textAlign: "right" },
@@ -636,6 +718,13 @@ const styles = StyleSheet.create({
     borderTopColor: "transparent",
     borderBottomColor: "transparent",
   },
+  grow: { width: "100%", borderRadius: 18, padding: 12, gap: 8, overflow: "hidden" },
+  growTitle: { fontFamily: font.heavy, fontSize: 16, textAlign: "right" },
+  growRow: { width: "100%", flexDirection: "row-reverse", justifyContent: "space-between", minWidth: 0 },
+  growStep: { flex: 1, minWidth: 0, alignItems: "center", borderRadius: 16, paddingVertical: 4, paddingHorizontal: 2, overflow: "hidden" },
+  growName: { width: "100%", fontFamily: font.heavy, fontSize: 11, textAlign: "center", marginTop: 2 },
+  growStars: { flexDirection: "row", alignItems: "center", gap: 2 },
+  growStarText: { fontFamily: font.bold, fontSize: 12 },
   goalHead: { flexDirection: "row-reverse", alignItems: "center", gap: 6 },
   goalTitle: { fontFamily: font.heavy, fontSize: 16, textAlign: "right", flexShrink: 1 },
   goalText: { fontFamily: font.bold, fontSize: 14, textAlign: "right" },
