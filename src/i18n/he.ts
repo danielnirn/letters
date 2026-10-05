@@ -246,6 +246,16 @@ export const he = {
   },
   villageStarGift: (n: number) => (n === 1 ? "כוכב נוסף מהבניין" : `${n} כוכבים נוספים מהבניין`),
   villageCoinGift: (n: number) => `עוד ${n} מטבעות מהכפר`,
+  villageRewardLine: (stars: number, building: string, extraStars: number, extraCoins: number) => {
+    const got = stars === 1 ? `קיבלת כוכב אחד ל${building}` : `קיבלת ${stars} כוכבים ל${building}`;
+    const extras: string[] = [];
+    if (extraStars === 1) extras.push("+1 כוכב");
+    else if (extraStars > 1) extras.push(`+${extraStars} כוכבים`);
+    if (extraCoins > 0) extras.push(`+${extraCoins} מטבעות`);
+    return `${got}, עוד ${extras.join(" ועוד ")} מהבונוסים של הכפר`;
+  },
+  villageCoinsOnly: (n: number) => `עוד +${n} מטבעות מהבונוסים של הכפר`,
+  coinsWithVillage: (n: number) => `מטבעות, +${n} מהכפר`,
   wishAsk: (name: string) => `היום ${name} רוצה שלב אחד`,
   wishCta: "לשחק עכשיו",
   wishDone: "הפרח נשתל. מחר בניין אחר יבקש",

@@ -315,13 +315,19 @@ function GameRun() {
                 ))}
               </View>
               <Text style={[styles.starsLine, { color: village.gained > 0 ? GOLD.deep : c.soft }]}>
-                {village.gained > 0 ? he.starsGained(village.gained, buildingName(state.category)) : he.starsAlready}
+                {village.gained > 0 && (village.giftStars > 0 || village.giftCoins > 0)
+                  ? he.villageRewardLine(
+                      village.earned - village.giftStars,
+                      buildingName(state.category),
+                      village.giftStars,
+                      village.giftCoins,
+                    )
+                  : village.gained > 0
+                    ? he.starsGained(village.gained, buildingName(state.category))
+                    : he.starsAlready}
               </Text>
-              {village.giftStars > 0 ? (
-                <Text style={[styles.starsLine, { color: GOLD.deep }]}>{he.villageStarGift(village.giftStars)}</Text>
-              ) : null}
-              {village.giftCoins > 0 ? (
-                <Text style={[styles.starsLine, { color: GOLD.deep }]}>{he.villageCoinGift(village.giftCoins)}</Text>
+              {village.gained === 0 && village.giftCoins > 0 ? (
+                <Text style={[styles.starsLine, { color: GOLD.deep }]}>{he.villageCoinsOnly(village.giftCoins)}</Text>
               ) : null}
             </>
           ) : null}
@@ -331,7 +337,9 @@ function GameRun() {
                 <Coin size={28} />
                 <Text style={[styles.statValue, { color: c.ink }]}>+{village?.coins ?? stageCoinReward(state)}</Text>
               </View>
-              <Text style={[styles.statLabel, { color: c.soft }]}>{he.coinsLabel}</Text>
+              <Text style={[styles.statLabel, { color: c.soft }]}>
+                {village && village.giftCoins > 0 ? he.coinsWithVillage(village.giftCoins) : he.coinsLabel}
+              </Text>
             </View>
             <View style={[styles.statDivider, { backgroundColor: c.line }]} />
             <View style={styles.stat}>
