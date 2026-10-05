@@ -200,6 +200,8 @@ export const he = {
   villageBannerSub: "מסיימים שלבים, אוספים ⭐ ובונים",
   villageHint: "כל שלב מביא כוכבים: ⭐⭐⭐ על הכל נכון. הכוכבים בונים את הבניין של המקצוע.",
   villageGrowTitle: "ככה הבית גדל",
+  ownedBonusesTitle: "הבונוסים שלי",
+  ownedBonusesEmpty: "עדיין אין בונוסים",
   growNeedFirst: (name: string) => `כדי לבנות את זה צריך קודם ${name}`,
   buildingReading: "ספרייה",
   buildingScience: "מעבדה",

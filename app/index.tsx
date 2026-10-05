@@ -18,10 +18,12 @@ import {
   categoryStars,
   LEVEL_STARS,
   lookFor,
+  MILESTONES,
   nextGoal,
   totalStars,
   villageDetails,
   villageLevels,
+  VILLAGE_ORDER,
   wishCategory,
   wishDoneToday,
 } from "../src/game/village";
@@ -311,12 +313,55 @@ export default function HomeScreen() {
         ) : null}
 
         {tab === "village" ? (
+          <>
           <View style={[styles.homeCard, { backgroundColor: c.surface, borderBottomColor: c.line }]}>
-            <VillageGrow
-              category={goal?.category ?? "language"}
-              selected={selectedStep.level}
-              onSelect={setGrowLevel}
-            />
+            <Pressable
+              onPress={() => router.push("/village")}
+              onLayout={(e) => setSceneWidth(e.nativeEvent.layout.width)}
+              style={({ pressed }) => [styles.scene, pressed && { opacity: 0.85 }]}
+            >
+              {sceneWidth > 0 ? (
+                <VillageScene
+                  levels={villageLevels(active)}
+                  details={villageDetails(active)}
+                  blooms={active.villageBlooms ?? 0}
+                  litCategory={wished ? wishCat : null}
+                  width={sceneWidth}
+                  aspect={0.5}
+                />
+              ) : null}
+              <View style={[styles.sceneChip, { backgroundColor: c.surface, borderBottomColor: c.line }]}>
+                <Text style={[styles.sceneChipText, { color: c.ink }]}>{he.villageMine} ←</Text>
+              </View>
+            </Pressable>
+          </View>
+          <View style={[styles.homeCard, { backgroundColor: c.surface, borderBottomColor: c.line, marginTop: 12 }]}>
+            <Text style={[styles.guideTitle, { color: c.ink }]}>{he.ownedBonusesTitle}</Text>
+            {VILLAGE_ORDER.every((cat) => categoryStars(active, cat) < MILESTONES[0].stars) ? (
+              <Text style={[styles.goalText, { color: c.soft }]}>{he.ownedBonusesEmpty}</Text>
+            ) : (
+              VILLAGE_ORDER.map((cat) => {
+                const stars = categoryStars(active, cat);
+                const owned = MILESTONES.filter((m) => stars >= m.stars);
+                if (owned.length === 0) return null;
+                const look = lookFor(stars);
+                return (
+                  <View key={cat} style={styles.ownedGroup}>
+                    <View style={styles.goalHead}>
+                      <Building category={cat} level={look.level} detail={look.detail} size={36} />
+                      <Text style={[styles.goalTitle, { color: c.ink }]}>{buildingName(cat)}</Text>
+                    </View>
+                    {owned.map((m) => (
+                      <Text key={m.id} style={[styles.goalText, { color: CATEGORY_COLORS[cat].deep }]}>
+                        {he.milestoneBonus[m.id]}
+                      </Text>
+                    ))}
+                  </View>
+                );
+              })
+            )}
+          </View>
+          <View style={[styles.homeCard, { backgroundColor: c.surface, borderBottomColor: c.line, marginTop: 12 }]}>
             <View style={[styles.bubble, { backgroundColor: c.ground }]}>
               <View style={styles.goalHead}>
                 <Building category={goal?.category ?? "language"} level={selectedStep.level} size={44} />
@@ -346,26 +391,13 @@ export default function HomeScreen() {
                 <Text style={[styles.goalText, { color: c.soft }]}>{he.homeGoalDone}</Text>
               )}
             </View>
-            <Pressable
-              onPress={() => router.push("/village")}
-              onLayout={(e) => setSceneWidth(e.nativeEvent.layout.width)}
-              style={({ pressed }) => [styles.scene, pressed && { opacity: 0.85 }]}
-            >
-              {sceneWidth > 0 ? (
-                <VillageScene
-                  levels={villageLevels(active)}
-                  details={villageDetails(active)}
-                  blooms={active.villageBlooms ?? 0}
-                  litCategory={wished ? wishCat : null}
-                  width={sceneWidth}
-                  aspect={0.5}
-                />
-              ) : null}
-              <View style={[styles.sceneChip, { backgroundColor: c.surface, borderBottomColor: c.line }]}>
-                <Text style={[styles.sceneChipText, { color: c.ink }]}>{he.villageMine} ←</Text>
-              </View>
-            </Pressable>
+            <VillageGrow
+              category={goal?.category ?? "language"}
+              selected={selectedStep.level}
+              onSelect={setGrowLevel}
+            />
           </View>
+          </>
         ) : null}
 
         {tab === "scores" ? <LeaderboardBoard /> : null}
@@ -725,6 +757,7 @@ const styles = StyleSheet.create({
   growName: { width: "100%", fontFamily: font.heavy, fontSize: 11, textAlign: "center", marginTop: 2 },
   growStars: { flexDirection: "row", alignItems: "center", gap: 2 },
   growStarText: { fontFamily: font.bold, fontSize: 12 },
+  ownedGroup: { alignSelf: "stretch", alignItems: "flex-end", gap: 2 },
   goalHead: { flexDirection: "row-reverse", alignItems: "center", gap: 6 },
   goalTitle: { fontFamily: font.heavy, fontSize: 16, textAlign: "right", flexShrink: 1 },
   goalText: { fontFamily: font.bold, fontSize: 14, textAlign: "right" },
