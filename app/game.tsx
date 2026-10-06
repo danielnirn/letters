@@ -456,7 +456,7 @@ function GameRun() {
         {state.currentHint ? <Text style={[styles.hintHe, { color: c.ink }]}>{state.currentHint}</Text> : null}
         {state.questionType !== "spell" && state.category !== "math" && state.category !== "reading" ? (
           <Text style={[styles.prompt, { color: c.soft }]}>
-            {state.questionType === "type" ? he.promptType : choicePrompt(state.category)}
+            {state.questionType === "type" ? he.promptType : choicePrompt(state.category, state.currentWord)}
           </Text>
         ) : null}
       </Card>
@@ -782,11 +782,14 @@ function categoryTitle(cat: Category) {
   return he.categoryLanguage;
 }
 
-function choicePrompt(cat: Category) {
+const COLOR_WORDS = new Set(["אדום", "כחול", "ירוק", "צהוב", "כתום", "סגול", "ורוד", "שחור", "לבן", "חום", "אפור"]);
+
+function choicePrompt(cat: Category, word: string) {
   if (cat === "english") return he.promptEnglish;
   if (cat === "logic") return he.promptLogic;
   if (cat === "science") return he.promptScience;
   if (cat === "reading") return he.promptReading;
+  if (COLOR_WORDS.has(word)) return he.promptColor;
   return he.promptWhat;
 }
 

@@ -294,6 +294,7 @@ export const he = {
   checkLabel: "בדיקה",
   nextLabel: "הבא",
   promptWhat: "מה זה?",
+  promptColor: "איזה צבע זה?",
   promptEnglish: "איך כותבים באנגלית?",
   promptLogic: "מה התשובה?",
   promptScience: "מה למדנו?",
