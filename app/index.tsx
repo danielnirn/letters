@@ -187,6 +187,7 @@ export default function HomeScreen() {
   const [sceneWidth, setSceneWidth] = useState(0);
   const [tab, setTab] = useState<HomeTab>("village");
   const [lockHint, setLockHint] = useState<string | null>(null);
+  const [hintPlace, setHintPlace] = useState<"dock" | "lessons" | "stages">("dock");
   const homeLevel = villageLevel(active);
   const prevHomeLevel = useRef(homeLevel);
   const [levelPop, setLevelPop] = useState(false);
@@ -238,12 +239,13 @@ export default function HomeScreen() {
     noteFrame.current = requestAnimationFrame(tick);
   };
 
-  const showLockHint = (label: string) => {
+  const showLockHint = (label: string, place: "dock" | "lessons" | "stages" = "dock") => {
     cancelAnimationFrame(hintFrame.current);
+    setHintPlace(place);
     setLockHint(label);
     setHintOpacity(1);
     const started = performance.now();
-    const hold = 1200;
+    const hold = 2400;
     const fade = 600;
     const tick = (now: number) => {
       const elapsed = now - started;
@@ -310,9 +312,7 @@ export default function HomeScreen() {
     };
     const dock = (
       <View>
-        {lockHint ? (
-          <Text style={[styles.lockHint, { color: c.soft, opacity: hintOpacity }]}>{lockHint}</Text>
-        ) : null}
+        {lockHint && hintPlace === "dock" ? <LockBanner text={lockHint} opacity={hintOpacity} /> : null}
         <View style={[styles.dock, { backgroundColor: c.surface, borderBottomColor: c.line }]}>
           {HOME_TABS.map((id) => {
             const need = TAB_UNLOCK[id];
@@ -384,10 +384,12 @@ export default function HomeScreen() {
         {tab === "questions" ? (
           <>
             <Text style={[styles.section, { color: c.ink }]}>{he.pickCategory}</Text>
+            {lockHint && hintPlace === "lessons" ? <LockBanner text={lockHint} opacity={hintOpacity} /> : null}
             <View style={styles.grid}>
               {LESSON_PACKS.map((cat) => {
                 const done = DIFFICULTIES.reduce((sum, d) => sum + clearedStages(active.stageClears, cat, d), 0);
                 const open = isLessonUnlocked(level, cat);
+                const need = lessonUnlockLevel(cat);
                 return (
                   <SubjectCard
                     key={cat}
@@ -395,9 +397,15 @@ export default function HomeScreen() {
                     done={done}
                     total={CONFIG.miniLevels * DIFFICULTIES.length}
                     locked={!open}
-                    unlockLevel={lessonUnlockLevel(cat)}
+                    unlockLevel={need}
                     onPress={() => {
-                      if (open) setCategory(cat);
+                      if (!open) {
+                        showLockHint(he.lockedUntilLevel(need), "lessons");
+                        return;
+                      }
+                      cancelAnimationFrame(hintFrame.current);
+                      setLockHint(null);
+                      setCategory(cat);
                     }}
                   />
                 );
@@ -445,10 +453,24 @@ export default function HomeScreen() {
             <>
               {upgradeNote ? (
                 <Text style={[styles.upgradeNote, { color: OK.deep, opacity: noteOpacity }]}>{upgradeNote}</Text>
-              ) : null}
+              ) : (
+                <View style={[styles.upgradeHint, { backgroundColor: GOLD.tint, borderBottomColor: GOLD.lip }]}>
+                  <Text style={[styles.upgradeHintTitle, { color: GOLD.deep }]}>{he.upgradeHelpsTitle}</Text>
+                  <Text style={[styles.upgradeHintBody, { color: c.ink }]}>
+                    {he.upgradeHelpsBody(buildingCoinBonus(ownedLevel(active, build.category) + 1))}
+                  </Text>
+                  {active.coins < build.cost ? (
+                    <Text style={[styles.upgradeHintNeed, { color: GOLD.deep }]}>
+                      {he.upgradeShort(build.cost - active.coins)}
+                    </Text>
+                  ) : (
+                    <Text style={[styles.upgradeHintNeed, { color: GOLD.deep }]}>{he.upgradeReady}</Text>
+                  )}
+                </View>
+              )}
               <PrimaryButton
                 label={he.upgradeName(buildingThe(build.category))}
-                variant="soft"
+                variant={active.coins >= build.cost ? "solid" : "soft"}
                 levelPlus={he.levelPlus}
                 coins={{ amount: build.cost, mode: "pay" }}
                 disabled={active.coins < build.cost}
@@ -465,6 +487,7 @@ export default function HomeScreen() {
           ) : null}
           <PrimaryButton
             label={he.homePlay}
+            variant={build && active.coins >= build.cost ? "soft" : "solid"}
             coins={{ mode: "earn" }}
             onPress={() => setTab("questions")}
             style={styles.playBtn}
@@ -574,6 +597,7 @@ export default function HomeScreen() {
         </View>
         <ProgressBar pct={(cleared / CONFIG.miniLevels) * 100} color={CATEGORY_COLORS[category].base} height={10} />
       </Card>
+      {lockHint && hintPlace === "stages" ? <LockBanner text={lockHint} opacity={hintOpacity} /> : null}
 
       <View style={styles.map}>
         {Array.from({ length: CONFIG.miniLevels }, (_, i) => i + 1).map((stage) => {
@@ -587,7 +611,13 @@ export default function HomeScreen() {
               stage={stage}
               cost={entryCost(active, category, difficulty, stage)}
               state={!unlocked ? "locked" : perfect ? "perfect" : done ? "partial" : "current"}
-              onPress={() => start(stage)}
+              onPress={() => {
+                if (!unlocked) {
+                  showLockHint(he.lockedUntilStage(stage - 1), "stages");
+                  return;
+                }
+                start(stage);
+              }}
             />
           );
         })}
@@ -611,7 +641,7 @@ function StageNode({
 }) {
   const c = useColors();
   const offset = ZIGZAG[(stage - 1) % ZIGZAG.length];
-  const size = state === "current" ? 70 : state === "locked" ? 52 : 58;
+  const size = state === "current" ? 70 : state === "locked" ? 64 : 58;
   const fill =
     state === "perfect"
       ? OK
@@ -633,8 +663,9 @@ function StageNode({
         ) : null}
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={state === "locked" ? `${he.stageLabel(stage)} · ${he.stageLocked}` : he.stageLabel(stage)}
-          disabled={state === "locked"}
+          accessibilityLabel={
+            state === "locked" ? `${he.stageLabel(stage)} · ${he.lockedUntilStage(Math.max(1, stage - 1))}` : he.stageLabel(stage)
+          }
           onPress={onPress}
           style={({ pressed }) => [
             styles.node,
@@ -656,13 +687,18 @@ function StageNode({
           ) : state === "current" ? (
             <Text style={styles.nodeNum}>{stage}</Text>
           ) : (
-            <View style={{ alignItems: "center" }}>
-              <Icon name="lock" size={18} color="#8C9BB5" weight={2.4} />
+            <View style={styles.nodeLock}>
+              <Icon name="lock" size={26} color="#7A879C" weight={2.6} />
               <Text style={styles.nodeLockedNum}>{stage}</Text>
             </View>
           )}
         </Pressable>
 
+        {state === "locked" ? (
+          <View style={[styles.sideLabel, side, { alignItems: align, top: size / 2 - 10 }]}>
+            <Text style={[styles.sideText, { color: "#7A879C" }]}>{he.stageLocked}</Text>
+          </View>
+        ) : null}
         {state === "perfect" ? (
           <View style={[styles.sideLabel, side, { alignItems: align, top: size / 2 - 11 }]}>
             <Text style={[styles.sideText, { color: OK.deep }]}>{he.stagePerfectBadge}</Text>
@@ -707,6 +743,16 @@ function StageNode({
   );
 }
 
+function LockBanner({ text, opacity }: { text: string; opacity: number }) {
+  const c = useColors();
+  return (
+    <View style={[styles.lockBanner, { backgroundColor: "#EEF2F7", borderBottomColor: "#C5D0DE", opacity }]}>
+      <Icon name="lock" size={20} color={c.soft} weight={2.6} />
+      <Text style={[styles.lockBannerText, { color: c.soft }]}>{text}</Text>
+    </View>
+  );
+}
+
 function SubjectCard({
   category,
   done,
@@ -724,37 +770,43 @@ function SubjectCard({
 }) {
   const sw = CATEGORY_COLORS[category];
   const c = useColors();
+  const need = locked && unlockLevel ? he.lockedUntilLevel(unlockLevel) : null;
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ disabled: locked }}
-      accessibilityLabel={locked && unlockLevel ? `${categoryLabel(category)} · ${he.unlockAt(unlockLevel)}` : categoryLabel(category)}
-      onPress={locked ? undefined : onPress}
+      accessibilityLabel={need ? `${categoryLabel(category)} · ${need}` : categoryLabel(category)}
+      onPress={onPress}
       style={({ pressed }) => [
         styles.subject,
         {
           backgroundColor: sw.tint,
-          borderBottomColor: sw.lip,
-          borderBottomWidth: pressed && !locked ? 2 : 5,
-          marginTop: pressed && !locked ? 3 : 0,
-          opacity: locked ? 0.55 : 1,
+          borderBottomColor: locked ? "#C5D0DE" : sw.lip,
+          borderBottomWidth: pressed ? 2 : 5,
+          marginTop: pressed ? 3 : 0,
         },
       ]}
     >
-      <View>
-        <CategoryTile category={category} size={52} />
+      <View style={styles.subjectMark}>
+        <View style={locked ? styles.subjectDim : undefined}>
+          <CategoryTile category={category} size={52} />
+        </View>
         {locked ? (
-          <View style={[styles.subjectLock, { backgroundColor: c.surface, borderColor: c.line }]}>
-            <Icon name="lock" size={12} color={c.ink} weight={2.6} />
+          <View style={[styles.subjectLock, { backgroundColor: "#E8EEF6", borderBottomColor: "#C5D0DE" }]}>
+            <Icon name="lock" size={22} color="#6E7C92" weight={2.6} />
           </View>
         ) : null}
       </View>
-      <Text style={[styles.cardTitle, { color: sw.deep, textAlign: "center" }]} numberOfLines={1}>
+      <Text style={[styles.cardTitle, { color: locked ? c.ink : sw.deep, textAlign: "center" }]} numberOfLines={1}>
         {categoryLabel(category)}
       </Text>
-      <Text style={[styles.fraction, { color: sw.deep, textAlign: "center" }]}>
-        {locked && unlockLevel ? he.unlockAt(unlockLevel) : he.stagesDone(done, total)}
-      </Text>
+      {need ? (
+        <View style={[styles.lockLine, { backgroundColor: "#E4EAF2" }]}>
+          <Icon name="lock" size={14} color={c.soft} weight={2.6} />
+          <Text style={[styles.lockLineText, { color: c.soft }]}>{need}</Text>
+        </View>
+      ) : (
+        <Text style={[styles.fraction, { color: sw.deep, textAlign: "center" }]}>{he.stagesDone(done, total)}</Text>
+      )}
     </Pressable>
   );
 }
@@ -839,9 +891,34 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  lockHint: { fontFamily: font.heavy, fontSize: 14, textAlign: "center", marginBottom: 8 },
+  lockBanner: {
+    alignSelf: "stretch",
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderRadius: 18,
+    borderBottomWidth: 4,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+  },
+  lockBannerText: { fontFamily: font.heavy, fontSize: 16, textAlign: "center", flexShrink: 1 },
   playBtn: { alignSelf: "stretch", marginTop: 8, minHeight: 64 },
   upgradeNote: { fontFamily: font.heavy, fontSize: 15, textAlign: "center", marginTop: 12 },
+  upgradeHint: {
+    alignSelf: "stretch",
+    borderRadius: 22,
+    borderBottomWidth: 4,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginTop: 12,
+    alignItems: "center",
+    gap: 4,
+  },
+  upgradeHintTitle: { fontFamily: font.heavy, fontSize: 17, textAlign: "center" },
+  upgradeHintBody: { fontFamily: font.bold, fontSize: 15, textAlign: "center" },
+  upgradeHintNeed: { fontFamily: font.heavy, fontSize: 14, textAlign: "center" },
   upgradeBtn: { alignSelf: "stretch", marginTop: 12, minHeight: 56 },
   homeCard: { width: "100%", borderRadius: 28, borderBottomWidth: 6, padding: 14, gap: 12 },
   levelSign: {
@@ -938,17 +1015,26 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
+  subjectMark: { width: 68, height: 68, alignItems: "center", justifyContent: "center" },
+  subjectDim: { opacity: 0.38 },
   subjectLock: {
     position: "absolute",
-    left: -4,
-    bottom: -4,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 1.5,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    borderBottomWidth: 4,
     alignItems: "center",
     justifyContent: "center",
   },
+  lockLine: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 4,
+    borderRadius: 999,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+  },
+  lockLineText: { fontFamily: font.heavy, fontSize: 13, textAlign: "center" },
   cardTitle: { fontSize: 19, fontFamily: font.heavy, textAlign: "right" },
   cardDesc: { fontSize: 13, fontFamily: font.medium, textAlign: "right", lineHeight: 18 },
   fraction: { fontSize: 12, fontFamily: font.bold },
@@ -989,7 +1075,8 @@ const styles = StyleSheet.create({
   halo: { position: "absolute" },
   node: { alignItems: "center", justifyContent: "center" },
   nodeNum: { color: "#fff", fontFamily: font.black, fontSize: 28 },
-  nodeLockedNum: { color: "#8C9BB5", fontFamily: font.heavy, fontSize: 11 },
+  nodeLock: { alignItems: "center", justifyContent: "center" },
+  nodeLockedNum: { color: "#7A879C", fontFamily: font.heavy, fontSize: 12, marginTop: -2 },
   sideLabel: { position: "absolute", width: 170 },
   sideText: { fontFamily: font.heavy, fontSize: 13 },
   startText: { fontFamily: font.black, fontSize: 17 },

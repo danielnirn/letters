@@ -31,8 +31,9 @@ import {
 import { he } from "../src/i18n/he";
 import { BAD, CATEGORY_COLORS, GOLD, OK, TILE_SWATCHES, font } from "../src/theme/colors";
 import { Coin, Icon } from "../src/components/Art";
+import { buildingThe } from "../src/components/VillageArt";
 import { Buddy, Card, RoundButton, useColors } from "../src/components/ui";
-import { buildingCoinBonus, ownedLevel, runStars } from "../src/game/village";
+import { buildingCoinBonus, currentBuild, ownedLevel, runStars } from "../src/game/village";
 
 const LEVEL_LABEL: Record<Difficulty, string> = {
   easy: he.easy,
@@ -77,6 +78,7 @@ function GameRun() {
     bonus: number;
     perfect: boolean;
   } | null>(null);
+  const [upgradeNote, setUpgradeNote] = useState<string | null>(null);
 
   const backToStages = () => {
     router.replace({ pathname: "/", params: { category: cat, level: difficulty } });
@@ -235,6 +237,10 @@ function GameRun() {
     }
     const perfect = stageIsPerfect(state);
     const okCount = state.questionMarks.filter((m) => m === "ok").length;
+    const build = currentBuild(progress.active);
+    const nextBonus = build ? buildingCoinBonus(ownedLevel(progress.active, build.category) + 1) : 0;
+    const coinsNow = progress.active.coins;
+    const canUpgrade = !!build && !upgradeNote && coinsNow >= build.cost;
     return (
       <Screen>
         <Confetti />
@@ -280,11 +286,44 @@ function GameRun() {
           </View>
         </Card>
 
+        {upgradeNote ? (
+          <Text style={[styles.upgradeDone, { color: OK.deep }]}>{upgradeNote}</Text>
+        ) : build ? (
+          <View style={[styles.upgradeHint, { backgroundColor: GOLD.tint, borderBottomColor: GOLD.lip }]}>
+            <Text style={[styles.upgradeHintTitle, { color: GOLD.deep }]}>
+              {canUpgrade ? he.upgradeReady : he.upgradeHelpsTitle}
+            </Text>
+            <Text style={[styles.upgradeHintBody, { color: c.ink }]}>{he.upgradeHelpsBody(nextBonus)}</Text>
+            {canUpgrade ? null : (
+              <Text style={[styles.upgradeHintNeed, { color: GOLD.deep }]}>{he.upgradeShort(build.cost - coinsNow)}</Text>
+            )}
+          </View>
+        ) : null}
+
         <View style={styles.stackButtons}>
           {state.mistakes.length > 0 ? (
             <PrimaryButton label={he.viewMistakes} variant="soft" onPress={() => setShowReport(true)} />
           ) : null}
-          <PrimaryButton label={he.keepGoing} icon="home" onPress={backToHome} />
+          {canUpgrade && build ? (
+            <PrimaryButton
+              label={he.upgradeName(buildingThe(build.category))}
+              levelPlus={he.levelPlus}
+              coins={{ amount: build.cost, mode: "pay" }}
+              onPress={() => {
+                const name = buildingThe(build.category);
+                const gift = nextBonus;
+                void (async () => {
+                  if (await progress.upgradeVillage()) setUpgradeNote(he.builtNote(name, gift));
+                })();
+              }}
+            />
+          ) : null}
+          <PrimaryButton
+            label={canUpgrade ? he.playMore : he.keepGoing}
+            icon={canUpgrade ? undefined : "home"}
+            variant={canUpgrade ? "soft" : "solid"}
+            onPress={canUpgrade ? backToStages : backToHome}
+          />
         </View>
       </Screen>
     );
@@ -899,6 +938,20 @@ const styles = StyleSheet.create({
   runStars: { flexDirection: "row-reverse", alignItems: "flex-end", gap: 6, marginTop: 14 },
   runStarMid: { marginBottom: 6 },
   starsLine: { fontFamily: font.heavy, fontSize: 15, marginTop: 6, textAlign: "center" },
+  upgradeHint: {
+    alignSelf: "stretch",
+    borderRadius: 22,
+    borderBottomWidth: 4,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginTop: 14,
+    alignItems: "center",
+    gap: 4,
+  },
+  upgradeHintTitle: { fontFamily: font.heavy, fontSize: 17, textAlign: "center" },
+  upgradeHintBody: { fontFamily: font.bold, fontSize: 15, textAlign: "center" },
+  upgradeHintNeed: { fontFamily: font.heavy, fontSize: 14, textAlign: "center" },
+  upgradeDone: { fontFamily: font.heavy, fontSize: 16, textAlign: "center", marginTop: 14 },
   upgrade: {
     width: "100%",
     flexDirection: "row-reverse",

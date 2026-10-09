@@ -4,7 +4,6 @@ import {
   CATEGORIES,
   CLEAR_PAY,
   CONFIG,
-  ENTRY_COST,
   UPGRADE_COST,
   clearedStages,
   isStagePerfectClear,
@@ -245,12 +244,9 @@ export function replayPlay(p: ProfileDoc): { category: Category; difficulty: Dif
   return null;
 }
 
-/** New stages cost coins. The first stage in the game, and any replay, do not. */
-export function entryCost(p: ProfileDoc, category: Category, difficulty: Difficulty, stage: number): number {
-  const played = CATEGORIES.some((cat) => DIFFICULTIES.some((d) => clearedStages(p.stageClears, cat, d) > 0));
-  if (!played) return 0;
-  if (stage <= clearedStages(p.stageClears, category, difficulty)) return 0;
-  return ENTRY_COST[difficulty];
+/** Coin cost to start a stage. Free for now, while testing. */
+export function entryCost(_p: ProfileDoc, _category: Category, _difficulty: Difficulty, _stage: number): number {
+  return 0;
 }
 
 export function clearPay(difficulty: Difficulty): number {
