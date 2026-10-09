@@ -27,7 +27,7 @@ import type { CachedProgress, Gender, ProfileDoc, ScoreEntry, AvatarSlot } from 
 import { isFirebaseConfigured } from "../firebase/app";
 import { useAuth } from "./AuthContext";
 import { stageProgressKey, stageCoinsKey, type Category, type Difficulty } from "../game/config";
-import { currentBuild, ownedLevel, todayKey, totalStars, villageLevels, wishCategory } from "../game/village";
+import { currentBuild, ownedLevel, totalStars, villageLevels } from "../game/village";
 
 type ProgressValue = {
   loading: boolean;
@@ -331,8 +331,6 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
           const prevPerfect = p.stagePerfect ?? {};
           const prevStars = p.stageStars ?? {};
           const best = Math.max(prev[key] ?? 0, stage);
-          const day = todayKey();
-          const fulfill = category === wishCategory(p.id, day) && !(p.wishDay === day && p.wishDone);
           return {
             ...p,
             coins: p.coins + earned,
@@ -340,9 +338,6 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
             stageCoins: { ...prevCoins, [coinKey]: Math.max(prevCoins[coinKey] ?? 0, earned) },
             stagePerfect: { ...prevPerfect, [coinKey]: Boolean(prevPerfect[coinKey] || perfect) },
             stageStars: { ...prevStars, [coinKey]: Math.max(prevStars[coinKey] ?? 0, stars) },
-            villageBlooms: (p.villageBlooms ?? 0) + (fulfill ? 1 : 0),
-            wishDay: fulfill ? day : (p.wishDay ?? null),
-            wishDone: fulfill ? true : p.wishDay === day ? p.wishDone === true : false,
           };
         });
       },

@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
-import { colorsFor, font } from "../theme/colors";
-import { Icon, type IconName } from "./Art";
+import { GOLD, OK, colorsFor, font } from "../theme/colors";
+import { Coin, Icon, type IconName } from "./Art";
 
 /** Darken a #rrggbb color by `amount` (0–1). */
 export function shade(hex: string, amount = 0.22) {
@@ -23,6 +23,8 @@ export function PrimaryButton({
   color,
   variant = "solid",
   icon,
+  coins,
+  levelPlus,
   style,
 }: {
   label: string;
@@ -31,6 +33,10 @@ export function PrimaryButton({
   color?: string;
   variant?: "solid" | "soft";
   icon?: IconName;
+  /** `pay` is a price. `earn` is coins the player receives. */
+  coins?: { amount?: number; mode: "pay" | "earn" };
+  /** Shown when this action raises the village level. */
+  levelPlus?: string;
   style?: StyleProp<ViewStyle>;
 }) {
   const c = colorsFor();
@@ -57,6 +63,19 @@ export function PrimaryButton({
       <View style={styles.row}>
         {icon ? <Icon name={icon} size={20} color={fg} /> : null}
         <Text style={[styles.label, { color: fg }]}>{label}</Text>
+        {levelPlus ? (
+          <View style={[styles.levelChip, { backgroundColor: soft ? c.primaryTint : "#fff" }]}>
+            <Text style={[styles.coinText, { color: c.primary }]}>{levelPlus}</Text>
+          </View>
+        ) : null}
+        {coins ? (
+          <View style={[styles.coinChip, { backgroundColor: soft ? GOLD.tint : "#fff" }]}>
+            <Coin size={18} />
+            <Text style={[styles.coinText, { color: coins.mode === "pay" ? GOLD.deep : OK.deep }]}>
+              {coins.mode === "pay" ? `−${coins.amount ?? 0}` : coins.amount != null ? `+${coins.amount}` : "+"}
+            </Text>
+          </View>
+        ) : null}
       </View>
     </Pressable>
   );
@@ -71,6 +90,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  row: { flexDirection: "row-reverse", alignItems: "center", gap: 8 },
+  row: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: 8 },
   label: { fontSize: 17, fontFamily: font.heavy, textAlign: "center" },
+  coinChip: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 4,
+    borderRadius: 999,
+    paddingVertical: 3,
+    paddingLeft: 8,
+    paddingRight: 4,
+  },
+  coinText: { fontFamily: font.black, fontSize: 15 },
+  levelChip: { borderRadius: 999, paddingVertical: 4, paddingHorizontal: 8 },
 });

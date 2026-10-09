@@ -26,6 +26,11 @@ export function buildingName(cat: Category) {
   return he.buildingLanguage;
 }
 
+/** Definite form for a sentence: המכולת, בית הספר. */
+export function buildingThe(cat: Category) {
+  return he.buildingThe[cat];
+}
+
 /** Subject sign, drawn in a 20×20 box around (0,0). */
 function Emblem({ category, color }: { category: Category; color: string }) {
   if (category === "reading") {

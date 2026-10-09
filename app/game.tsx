@@ -32,7 +32,7 @@ import { he } from "../src/i18n/he";
 import { BAD, CATEGORY_COLORS, GOLD, OK, TILE_SWATCHES, font } from "../src/theme/colors";
 import { Coin, Icon } from "../src/components/Art";
 import { Buddy, Card, RoundButton, useColors } from "../src/components/ui";
-import { buildingCoinBonus, ownedLevel, runStars, wishCategory, wishDoneToday } from "../src/game/village";
+import { buildingCoinBonus, ownedLevel, runStars } from "../src/game/village";
 
 const LEVEL_LABEL: Record<Difficulty, string> = {
   easy: he.easy,
@@ -73,7 +73,6 @@ function GameRun() {
   const [showReport, setShowReport] = useState(false);
   const [openMistake, setOpenMistake] = useState<number | null>(null);
   const [village, setVillage] = useState<{
-    wish: boolean;
     coins: number;
     bonus: number;
     perfect: boolean;
@@ -114,8 +113,7 @@ function GameRun() {
     const perfect = stageIsPerfect(state);
     const coins = stageCoinReward(state) + bonus;
     const earned = runStars(state);
-    const wish = state.category === wishCategory(activeRef.current.id) && !wishDoneToday(activeRef.current);
-    setVillage({ wish, coins, bonus, perfect });
+    setVillage({ coins, bonus, perfect });
     void (async () => {
       await completeStageRef.current(state.category, state.level, state.stage, coins, perfect, earned);
       await saveScoreRef.current(coins, `${state.category}:${state.level}:${state.stage}`);
@@ -281,10 +279,6 @@ function GameRun() {
             </View>
           </View>
         </Card>
-
-        {village?.wish ? (
-          <Text style={[styles.starsLine, { color: OK.deep, marginTop: 8 }]}>{he.wishBloom}</Text>
-        ) : null}
 
         <View style={styles.stackButtons}>
           {state.mistakes.length > 0 ? (

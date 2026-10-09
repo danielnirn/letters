@@ -8,16 +8,18 @@ import { he } from "../src/i18n/he";
 import { CATEGORY_COLORS, DIFFICULTY_COLORS, GOLD, OK, font } from "../src/theme/colors";
 import { AvatarPreview } from "../src/components/AvatarPreview";
 import { LeaderboardBoard } from "./leaderboard";
-import { CategoryTile, Coin, DifficultyTile, Icon, Star } from "../src/components/Art";
+import { AvatarMark, CategoryTile, Coin, DifficultyTile, Icon, Star } from "../src/components/Art";
 import { PrimaryButton } from "../src/components/PrimaryButton";
 import { Buddy, Card, CoinPill, ProgressBar, TopBar, useColors } from "../src/components/ui";
-import { Building, buildingName, VillageScene } from "../src/components/VillageArt";
+import { Building, buildingName, buildingThe, VillageScene } from "../src/components/VillageArt";
 import { guideSteps, type GuideId, type GuideState } from "../src/game/path";
 import type { ProfileDoc } from "../src/types/models";
 import {
   LEVEL_STARS,
+  buildingCoinBonus,
   currentBuild,
   clearPay,
+  ownedLevel,
   entryCost,
   isLessonUnlocked,
   lessonUnlockLevel,
@@ -185,10 +187,56 @@ export default function HomeScreen() {
   const [sceneWidth, setSceneWidth] = useState(0);
   const [tab, setTab] = useState<HomeTab>("village");
   const [lockHint, setLockHint] = useState<string | null>(null);
+  const homeLevel = villageLevel(active);
+  const prevHomeLevel = useRef(homeLevel);
+  const [levelPop, setLevelPop] = useState(false);
+
+  useEffect(() => {
+    if (homeLevel > prevHomeLevel.current) {
+      setLevelPop(true);
+      const t = setTimeout(() => setLevelPop(false), 900);
+      prevHomeLevel.current = homeLevel;
+      return () => clearTimeout(t);
+    }
+    prevHomeLevel.current = homeLevel;
+  }, [homeLevel]);
   const [hintOpacity, setHintOpacity] = useState(0);
   const hintFrame = useRef(0);
+  const [upgradeNote, setUpgradeNote] = useState<string | null>(null);
+  const [noteOpacity, setNoteOpacity] = useState(0);
+  const noteFrame = useRef(0);
 
-  useEffect(() => () => cancelAnimationFrame(hintFrame.current), []);
+  useEffect(
+    () => () => {
+      cancelAnimationFrame(hintFrame.current);
+      cancelAnimationFrame(noteFrame.current);
+    },
+    [],
+  );
+
+  const showUpgradeNote = (label: string) => {
+    cancelAnimationFrame(noteFrame.current);
+    setUpgradeNote(label);
+    setNoteOpacity(1);
+    const started = performance.now();
+    const hold = 2200;
+    const fade = 700;
+    const tick = (now: number) => {
+      const elapsed = now - started;
+      if (elapsed < hold) {
+        noteFrame.current = requestAnimationFrame(tick);
+        return;
+      }
+      const t = Math.min(1, (elapsed - hold) / fade);
+      setNoteOpacity(1 - t);
+      if (t < 1) noteFrame.current = requestAnimationFrame(tick);
+      else {
+        setUpgradeNote(null);
+        setNoteOpacity(0);
+      }
+    };
+    noteFrame.current = requestAnimationFrame(tick);
+  };
 
   const showLockHint = (label: string) => {
     cancelAnimationFrame(hintFrame.current);
@@ -256,10 +304,9 @@ export default function HomeScreen() {
       scores: he.navLeaderboard,
       avatar: he.homeAvatar,
     };
-    const tabIcon: Record<DockTab, "home" | "trophy" | "user"> = {
+    const tabIcon: Record<Exclude<DockTab, "avatar">, "home" | "trophy"> = {
       village: "home",
       scores: "trophy",
-      avatar: "user",
     };
     const dock = (
       <View>
@@ -291,7 +338,11 @@ export default function HomeScreen() {
               >
                 <View style={styles.dockIcon}>
                   <View style={locked ? { opacity: 0.45 } : undefined}>
-                    <Icon name={tabIcon[id]} size={26} color={on ? c.primary : c.soft} />
+                    {id === "avatar" ? (
+                      <AvatarMark size={30} color={on ? c.primary : c.soft} />
+                    ) : (
+                      <Icon name={tabIcon[id]} size={26} color={on ? c.primary : c.soft} />
+                    )}
                   </View>
                   {locked ? (
                     <View style={[styles.lockBadge, { backgroundColor: c.surface, borderColor: c.line }]}>
@@ -375,7 +426,14 @@ export default function HomeScreen() {
                   aspect={0.66}
                 />
               ) : null}
-              <View pointerEvents="none" style={[styles.levelSign, { backgroundColor: GOLD.tint, borderBottomColor: GOLD.lip }]}>
+              <View
+                pointerEvents="none"
+                style={[
+                  styles.levelSign,
+                  { backgroundColor: GOLD.tint, borderBottomColor: GOLD.lip },
+                  levelPop && { transform: [{ scale: 1.14 }] },
+                ]}
+              >
                 <Text style={[styles.levelWord, { color: GOLD.deep }]}>{he.villageLevelWord}</Text>
                 <View style={[styles.levelMark, { backgroundColor: GOLD.base, borderBottomColor: GOLD.lip }]}>
                   <Text style={styles.levelNum}>{level}</Text>
@@ -385,18 +443,32 @@ export default function HomeScreen() {
           </View>
           {build ? (
             <>
+              {upgradeNote ? (
+                <Text style={[styles.upgradeNote, { color: OK.deep, opacity: noteOpacity }]}>{upgradeNote}</Text>
+              ) : null}
               <PrimaryButton
-                label={he.upgradeFor(buildingName(build.category), build.cost)}
+                label={he.upgradeName(buildingThe(build.category))}
                 variant="soft"
+                levelPlus={he.levelPlus}
+                coins={{ amount: build.cost, mode: "pay" }}
                 disabled={active.coins < build.cost}
                 onPress={() => {
-                  void upgradeVillage();
+                  const name = buildingThe(build.category);
+                  const gift = buildingCoinBonus(ownedLevel(active, build.category) + 1);
+                  void (async () => {
+                    if (await upgradeVillage()) showUpgradeNote(he.builtNote(name, gift));
+                  })();
                 }}
                 style={styles.upgradeBtn}
               />
             </>
           ) : null}
-          <PrimaryButton label={he.homePlay} onPress={() => setTab("questions")} style={styles.playBtn} />
+          <PrimaryButton
+            label={he.homePlay}
+            coins={{ mode: "earn" }}
+            onPress={() => setTab("questions")}
+            style={styles.playBtn}
+          />
           </>
         ) : null}
 
@@ -513,6 +585,7 @@ export default function HomeScreen() {
             <StageNode
               key={stage}
               stage={stage}
+              cost={entryCost(active, category, difficulty, stage)}
               state={!unlocked ? "locked" : perfect ? "perfect" : done ? "partial" : "current"}
               onPress={() => start(stage)}
             />
@@ -527,10 +600,12 @@ const ZIGZAG = [0, -72, -104, -72, 0, 72, 104, 72, 0, -72];
 
 function StageNode({
   stage,
+  cost,
   state,
   onPress,
 }: {
   stage: number;
+  cost: number;
   state: "locked" | "perfect" | "partial" | "current";
   onPress: () => void;
 }) {
@@ -608,8 +683,19 @@ function StageNode({
         ) : null}
         {state === "current" ? (
           <>
-            <View style={[styles.sideLabel, side, { alignItems: align, top: size / 2 - 12 }]}>
+            <View style={[styles.sideLabel, side, { alignItems: align, top: size / 2 - 18 }]}>
               <Text style={[styles.startText, { color: c.primary }]}>{he.stageStart}</Text>
+              {cost > 0 ? (
+                <View style={[styles.startCost, { backgroundColor: GOLD.tint }]}>
+                  <Coin size={16} />
+                  <Text style={[styles.startCostText, { color: GOLD.deep }]}>{`−${cost}`}</Text>
+                </View>
+              ) : (
+                <View style={[styles.startCost, { backgroundColor: OK.tint }]}>
+                  <Coin size={16} />
+                  <Text style={[styles.startCostText, { color: OK.deep }]}>+</Text>
+                </View>
+              )}
             </View>
             <View style={[styles.mascotPeek, otherSide]}>
               <Buddy size={54} body={c.primary} />
@@ -755,6 +841,7 @@ const styles = StyleSheet.create({
   },
   lockHint: { fontFamily: font.heavy, fontSize: 14, textAlign: "center", marginBottom: 8 },
   playBtn: { alignSelf: "stretch", marginTop: 8, minHeight: 64 },
+  upgradeNote: { fontFamily: font.heavy, fontSize: 15, textAlign: "center", marginTop: 12 },
   upgradeBtn: { alignSelf: "stretch", marginTop: 12, minHeight: 56 },
   homeCard: { width: "100%", borderRadius: 28, borderBottomWidth: 6, padding: 14, gap: 12 },
   levelSign: {
@@ -906,6 +993,17 @@ const styles = StyleSheet.create({
   sideLabel: { position: "absolute", width: 170 },
   sideText: { fontFamily: font.heavy, fontSize: 13 },
   startText: { fontFamily: font.black, fontSize: 17 },
+  startCost: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 3,
+    borderRadius: 999,
+    paddingVertical: 2,
+    paddingLeft: 7,
+    paddingRight: 3,
+    marginTop: 2,
+  },
+  startCostText: { fontFamily: font.black, fontSize: 13 },
   retryPill: {
     flexDirection: "row-reverse",
     alignItems: "center",

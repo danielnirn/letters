@@ -113,6 +113,21 @@ const ICON_PATHS = {
 
 export type IconName = keyof typeof ICON_PATHS;
 
+/** Dock mark for the dress-up tab: a gnome with a hat, not a profile silhouette. */
+export function AvatarMark({ size = 30, color = INK }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 32 32">
+      <Path d="M8.6 14.6 16 1.6 23.4 14.6Z" fill={color} />
+      <Circle cx={16} cy={3.6} r={2.2} fill="#FFC23D" />
+      <Rect x={5} y={13.2} width={22} height={3.6} rx={1.8} fill={color} />
+      <Circle cx={16} cy={20.6} r={5.3} fill="#FFD9B8" />
+      <Circle cx={14} cy={20.2} r={1} fill={INK} />
+      <Circle cx={18} cy={20.2} r={1} fill={INK} />
+      <Path d="M10.2 25.6c.9-2.1 3-3.2 5.8-3.2s4.9 1.1 5.8 3.2V32H10.2Z" fill={color} />
+    </Svg>
+  );
+}
+
 export function Icon({
   name,
   size = 22,
