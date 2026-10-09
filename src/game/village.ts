@@ -1,5 +1,17 @@
 import type { ProfileDoc } from "../types/models";
-import { CONFIG, CATEGORIES, clearedStages, isStagePerfectClear, stageCoinsKey, type Category, type Difficulty } from "./config";
+import {
+  BUILDING_COIN_BONUS,
+  CATEGORIES,
+  CLEAR_PAY,
+  CONFIG,
+  ENTRY_COST,
+  UPGRADE_COST,
+  clearedStages,
+  isStagePerfectClear,
+  stageCoinsKey,
+  type Category,
+  type Difficulty,
+} from "./config";
 import type { GameState } from "./session";
 
 const DIFFICULTIES: Difficulty[] = ["easy", "mid", "hard"];
@@ -168,15 +180,92 @@ export function nextLevelStars(stars: number): number | null {
   return LEVEL_STARS.find((need) => stars < need) ?? null;
 }
 
+const BUILD_IDS: readonly MilestoneId[] = ["tent", "hut", "house", "fancy"];
+
+/** Building levels the player bought with coins. Stars no longer raise this. */
+export function ownedLevel(p: ProfileDoc, cat: Category): number {
+  const n = p.villageBuilt?.[cat] ?? 0;
+  return Math.min(MAX_BUILDING_LEVEL, Math.max(0, Math.floor(n)));
+}
+
+export function buildingCoinBonus(level: number): number {
+  const i = Math.min(BUILDING_COIN_BONUS.length - 1, Math.max(0, level));
+  return BUILDING_COIN_BONUS[i] ?? 0;
+}
+
+/** Village level. A new village starts at 1. Each bought tent, hut, house, or fancy house adds 1. */
+export function villageLevel(p: ProfileDoc): number {
+  return 1 + VILLAGE_ORDER.reduce((sum, cat) => sum + ownedLevel(p, cat), 0);
+}
+
+/** Lesson packs. Language is open from the start. Each next pack opens every 5 village levels. */
+export const LESSON_PACKS: readonly Category[] = ["language", "math", "english", "logic", "science", "reading"];
+
+export function lessonUnlockLevel(category: Category): number {
+  const i = LESSON_PACKS.indexOf(category);
+  if (i <= 0) return 1;
+  return i * 5;
+}
+
+export function isLessonUnlocked(level: number, category: Category): boolean {
+  return level >= lessonUnlockLevel(category);
+}
+
+/**
+ * The one building the player can buy now.
+ * Houses go up together: every subject gets a tent before anyone gets a hut.
+ */
+export function currentBuild(p: ProfileDoc): { category: Category; id: MilestoneId; cost: number } | null {
+  let min: number = MAX_BUILDING_LEVEL;
+  for (const cat of VILLAGE_ORDER) min = Math.min(min, ownedLevel(p, cat));
+  if (min >= MAX_BUILDING_LEVEL) return null;
+  const category = VILLAGE_ORDER.find((cat) => ownedLevel(p, cat) === min);
+  if (!category) return null;
+  return { category, id: BUILD_IDS[min], cost: UPGRADE_COST[min] };
+}
+
+/** The next new stage of the one current building. No subject to pick. */
+export function nextPlay(p: ProfileDoc): { category: Category; difficulty: Difficulty; stage: number } | null {
+  const category = currentBuild(p)?.category ?? VILLAGE_ORDER[0];
+  for (const difficulty of DIFFICULTIES) {
+    const done = clearedStages(p.stageClears, category, difficulty);
+    if (done < CONFIG.miniLevels) return { category, difficulty, stage: done + 1 };
+  }
+  return { category, difficulty: "hard", stage: CONFIG.miniLevels };
+}
+
+/** Last cleared stage, so a player who spent their coins can earn more. */
+export function replayPlay(p: ProfileDoc): { category: Category; difficulty: Difficulty; stage: number } | null {
+  const category = currentBuild(p)?.category ?? VILLAGE_ORDER[0];
+  for (let i = DIFFICULTIES.length - 1; i >= 0; i--) {
+    const difficulty = DIFFICULTIES[i];
+    const done = clearedStages(p.stageClears, category, difficulty);
+    if (done > 0) return { category, difficulty, stage: done };
+  }
+  return null;
+}
+
+/** New stages cost coins. The first stage in the game, and any replay, do not. */
+export function entryCost(p: ProfileDoc, category: Category, difficulty: Difficulty, stage: number): number {
+  const played = CATEGORIES.some((cat) => DIFFICULTIES.some((d) => clearedStages(p.stageClears, cat, d) > 0));
+  if (!played) return 0;
+  if (stage <= clearedStages(p.stageClears, category, difficulty)) return 0;
+  return ENTRY_COST[difficulty];
+}
+
+export function clearPay(difficulty: Difficulty): number {
+  return CLEAR_PAY[difficulty];
+}
+
 export function villageLevels(p: ProfileDoc): Record<Category, number> {
   const out = {} as Record<Category, number>;
-  for (const cat of CATEGORIES) out[cat] = buildingLevel(categoryStars(p, cat));
+  for (const cat of CATEGORIES) out[cat] = ownedLevel(p, cat);
   return out;
 }
 
 export function villageDetails(p: ProfileDoc): Record<Category, number> {
   const out = {} as Record<Category, number>;
-  for (const cat of CATEGORIES) out[cat] = lookFor(categoryStars(p, cat)).detail;
+  for (const cat of CATEGORIES) out[cat] = 0;
   return out;
 }
 

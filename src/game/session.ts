@@ -1,4 +1,4 @@
-import { CONFIG, TILE_COLORS, isSpellingCategory, questionsInStage, type Category, type Difficulty } from "./config";
+import { CLEAR_PAY, CONFIG, TILE_COLORS, isSpellingCategory, questionsInStage, type Category, type Difficulty } from "./config";
 import { ENGLISH_WORDS } from "./english";
 import { generateLogicList, LOGIC_WORDS } from "./logic";
 import { generateMathList } from "./math";
@@ -425,10 +425,9 @@ export function stageIsPerfect(state: GameState): boolean {
 }
 
 export function stageCoinReward(state: GameState): number {
-  const n = Math.max(1, state.wordList.length);
-  const full = n * CONFIG.coinsCorrect;
-  const base = stageIsPerfect(state) ? full : Math.floor(full / 2);
-  return state.doubleCoins ? base * 2 : base;
+  const base = CLEAR_PAY[state.level] ?? CLEAR_PAY.easy;
+  const amount = stageIsPerfect(state) ? base * 2 : base;
+  return state.doubleCoins ? amount * 2 : amount;
 }
 
 export function skipWord(state: GameState): GameState {

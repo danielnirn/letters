@@ -39,8 +39,10 @@ export type ProfileDoc = {
   stageCoins: Record<string, number>;
   /** Perfect clears per `${category}:${difficulty}:${stage}`. */
   stagePerfect: Record<string, boolean>;
-  /** Best stars (1–3) per `${category}:${difficulty}:${stage}` — they build the village. */
+  /** Best stars (1–3) per `${category}:${difficulty}:${stage}`. Kept for the avatar, not the village. */
   stageStars: Record<string, number>;
+  /** Building level (0–4) bought with coins, per subject. */
+  villageBuilt?: Partial<Record<Category, number>>;
   /** Flowers planted by finishing the daily building wish. */
   villageBlooms: number;
   /** `YYYY-MM-DD` of the last fulfilled wish. */

@@ -27,6 +27,18 @@ export const TILE_COLORS = [
 export type Difficulty = "easy" | "mid" | "hard";
 export type Category = "language" | "math" | "english" | "logic" | "science" | "reading";
 
+/** Coins for finishing a stage. A perfect round pays double. */
+export const CLEAR_PAY: Record<Difficulty, number> = { easy: 20, mid: 50, hard: 100 };
+
+/** Coins to enter a new stage. The first stage, and any replay, are free. */
+export const ENTRY_COST: Record<Difficulty, number> = { easy: 10, mid: 25, hard: 50 };
+
+/** Coins to buy the next building: tent, hut, house, fancy. */
+export const UPGRADE_COST = [30, 80, 160, 300] as const;
+
+/** Extra coins at the end of a stage in a subject, once that building is bought. */
+export const BUILDING_COIN_BONUS = [0, 2, 4, 6, 10] as const;
+
 export const CATEGORIES: Category[] = ["language", "math", "english", "logic", "science", "reading"];
 
 export function isSpellingCategory(category: Category) {

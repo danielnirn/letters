@@ -27,7 +27,7 @@ import type { CachedProgress, Gender, ProfileDoc, ScoreEntry, AvatarSlot } from 
 import { isFirebaseConfigured } from "../firebase/app";
 import { useAuth } from "./AuthContext";
 import { stageProgressKey, stageCoinsKey, type Category, type Difficulty } from "../game/config";
-import { todayKey, totalStars, villageLevels, wishCategory } from "../game/village";
+import { currentBuild, ownedLevel, todayKey, totalStars, villageLevels, wishCategory } from "../game/village";
 
 type ProgressValue = {
   loading: boolean;
@@ -39,6 +39,7 @@ type ProgressValue = {
   setGender: (gender: Gender) => Promise<void>;
   addCoins: (amount: number) => Promise<void>;
   spendCoins: (amount: number) => Promise<boolean>;
+  upgradeVillage: () => Promise<boolean>;
   buyItem: (item: ShopItem) => Promise<"ok" | "funds" | "fail">;
   equipAvatar: (slot: AvatarSlot, itemId: string | null) => Promise<void>;
   useInventory: (itemId: string) => Promise<boolean>;
@@ -240,6 +241,25 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
           current.profiles[0];
         if (p.coins < amount) return false;
         await patchActive((prev) => ({ ...prev, coins: prev.coins - amount }));
+        return true;
+      },
+      upgradeVillage: async () => {
+        const current = dataRef.current;
+        if (!current) return false;
+        const p =
+          current.profiles.find((x) => x.id === current.user.activeProfileId) ??
+          current.profiles[0];
+        const build = currentBuild(p);
+        if (!build || p.coins < build.cost) return false;
+        await patchActive((prev) => {
+          const again = currentBuild(prev);
+          if (!again || again.category !== build.category || prev.coins < again.cost) return prev;
+          return {
+            ...prev,
+            coins: prev.coins - again.cost,
+            villageBuilt: { ...prev.villageBuilt, [again.category]: ownedLevel(prev, again.category) + 1 },
+          };
+        });
         return true;
       },
       buyItem: async (item: ShopItem) => {

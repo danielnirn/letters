@@ -39,11 +39,22 @@ export function defaultProfile(id: string, displayName = ""): ProfileDoc {
     stageCoins: {},
     stagePerfect: {},
     stageStars: {},
+    villageBuilt: {},
     villageBlooms: 0,
     wishDay: null,
     wishDone: false,
     updatedAt: Date.now(),
   };
+}
+
+function villageBuiltFrom(value: unknown): Partial<Record<Category, number>> {
+  if (!value || typeof value !== "object") return {};
+  const out: Partial<Record<Category, number>> = {};
+  for (const cat of CATEGORIES) {
+    const n = (value as Record<string, unknown>)[cat];
+    if (typeof n === "number" && n > 0) out[cat] = Math.min(4, Math.floor(n));
+  }
+  return out;
 }
 
 function profileFromData(id: string, data: Record<string, unknown>): ProfileDoc {
@@ -72,6 +83,7 @@ function profileFromData(id: string, data: Record<string, unknown>): ProfileDoc 
       data.stageStars && typeof data.stageStars === "object"
         ? (data.stageStars as Record<string, number>)
         : {},
+    villageBuilt: villageBuiltFrom(data.villageBuilt),
     villageBlooms: typeof data.villageBlooms === "number" ? data.villageBlooms : 0,
     wishDay: typeof data.wishDay === "string" ? data.wishDay : null,
     wishDone: data.wishDone === true,
@@ -119,6 +131,7 @@ export async function ensureAccount(
       stageCoins: {},
       stagePerfect: {},
       stageStars: {},
+      villageBuilt: {},
       villageBlooms: 0,
       wishDay: null,
       wishDone: false,
@@ -158,6 +171,7 @@ export async function loadAccount(uid: string): Promise<CachedProgress> {
       stageCoins: {},
       stagePerfect: {},
       stageStars: {},
+      villageBuilt: {},
       villageBlooms: 0,
       wishDay: null,
       wishDone: false,
@@ -206,6 +220,7 @@ export async function persistProfile(uid: string, profile: ProfileDoc): Promise<
       stageCoins: profile.stageCoins ?? {},
       stagePerfect: profile.stagePerfect ?? {},
       stageStars: profile.stageStars ?? {},
+      villageBuilt: profile.villageBuilt ?? {},
       villageBlooms: profile.villageBlooms ?? 0,
       wishDay: profile.wishDay ?? null,
       wishDone: profile.wishDone === true,

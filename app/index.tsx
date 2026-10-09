@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Screen } from "../src/components/Screen";
@@ -8,29 +8,28 @@ import { he } from "../src/i18n/he";
 import { CATEGORY_COLORS, DIFFICULTY_COLORS, GOLD, OK, font } from "../src/theme/colors";
 import { AvatarPreview } from "../src/components/AvatarPreview";
 import { LeaderboardBoard } from "./leaderboard";
-import { CategoryTile, DifficultyTile, Icon, Star } from "../src/components/Art";
+import { CategoryTile, Coin, DifficultyTile, Icon, Star } from "../src/components/Art";
 import { PrimaryButton } from "../src/components/PrimaryButton";
-import { Buddy, Card, CoinPill, ProgressBar, StarPill, TopBar, useColors } from "../src/components/ui";
+import { Buddy, Card, CoinPill, ProgressBar, TopBar, useColors } from "../src/components/ui";
 import { Building, buildingName, VillageScene } from "../src/components/VillageArt";
 import { guideSteps, type GuideId, type GuideState } from "../src/game/path";
 import type { ProfileDoc } from "../src/types/models";
 import {
-  categoryStars,
   LEVEL_STARS,
-  lookFor,
-  MILESTONES,
+  currentBuild,
+  clearPay,
+  entryCost,
+  isLessonUnlocked,
+  lessonUnlockLevel,
+  LESSON_PACKS,
   nextGoal,
-  totalStars,
+  villageLevel,
   villageDetails,
   villageLevels,
-  VILLAGE_ORDER,
-  wishCategory,
-  wishDoneToday,
 } from "../src/game/village";
 import { defaultAvatar } from "../src/game/avatar";
 import {
   CONFIG,
-  CATEGORIES,
   clearedStages,
   isStagePerfectClear,
   isStageUnlocked,
@@ -41,8 +40,10 @@ import {
 } from "../src/game/config";
 
 const DIFFICULTIES: Difficulty[] = ["easy", "mid", "hard"];
-const HOME_TABS = ["questions", "objectives", "village", "scores", "avatar"] as const;
-type HomeTab = (typeof HOME_TABS)[number];
+const HOME_TABS = ["village", "avatar", "scores"] as const;
+type DockTab = (typeof HOME_TABS)[number];
+type HomeTab = DockTab | "questions";
+const TAB_UNLOCK: Partial<Record<DockTab, number>> = { avatar: 5, scores: 10 };
 
 const GUIDE_COPY: Record<GuideId, { title: string; body: string }> = {
   learn: { title: he.startLearn, body: he.startLearnBody },
@@ -173,7 +174,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ category?: string; level?: string }>();
   const { signOut, isLocal } = useAuth();
-  const { active, loading } = useProgress();
+  const { active, loading, spendCoins, upgradeVillage } = useProgress();
   const [category, setCategory] = useState<Category | null>(
     params.category ? parseCategory(params.category) : null,
   );
@@ -182,17 +183,58 @@ export default function HomeScreen() {
   );
   const c = useColors();
   const [sceneWidth, setSceneWidth] = useState(0);
-  const [tab, setTab] = useState<HomeTab>("questions");
-  const [growLevel, setGrowLevel] = useState<number | null>(null);
+  const [tab, setTab] = useState<HomeTab>("village");
+  const [lockHint, setLockHint] = useState<string | null>(null);
+  const [hintOpacity, setHintOpacity] = useState(0);
+  const hintFrame = useRef(0);
+
+  useEffect(() => () => cancelAnimationFrame(hintFrame.current), []);
+
+  const showLockHint = (label: string) => {
+    cancelAnimationFrame(hintFrame.current);
+    setLockHint(label);
+    setHintOpacity(1);
+    const started = performance.now();
+    const hold = 1200;
+    const fade = 600;
+    const tick = (now: number) => {
+      const elapsed = now - started;
+      if (elapsed < hold) {
+        hintFrame.current = requestAnimationFrame(tick);
+        return;
+      }
+      const t = Math.min(1, (elapsed - hold) / fade);
+      setHintOpacity(1 - t);
+      if (t < 1) hintFrame.current = requestAnimationFrame(tick);
+      else {
+        setLockHint(null);
+        setHintOpacity(0);
+      }
+    };
+    hintFrame.current = requestAnimationFrame(tick);
+  };
 
   useEffect(() => {
     setCategory(params.category ? parseCategory(params.category) : null);
     setDifficulty(params.level ? parseDifficulty(params.level) : null);
   }, [params.category, params.level]);
 
+  useEffect(() => {
+    if (category && !isLessonUnlocked(villageLevel(active), category)) {
+      setCategory(null);
+      setDifficulty(null);
+      setTab("questions");
+    }
+  }, [category, active]);
+
   const start = (stage: number) => {
     if (!category || !difficulty) return;
-    router.push({ pathname: "/game", params: { level: difficulty, category, stage: String(stage) } });
+    if (!isLessonUnlocked(villageLevel(active), category)) return;
+    const cost = entryCost(active, category, difficulty, stage);
+    void (async () => {
+      if (cost > 0 && !(await spendCoins(cost))) return;
+      router.push({ pathname: "/game", params: { level: difficulty, category, stage: String(stage) } });
+    })();
   };
 
   const coinPill = <CoinPill coins={active.coins} onPress={() => router.push("/shop")} />;
@@ -207,24 +249,64 @@ export default function HomeScreen() {
   }
 
   if (!category) {
-    const goal = nextGoal(active);
-    const selectedLevel = growLevel ?? goal?.look.level ?? HOUSE_STEPS[HOUSE_STEPS.length - 1].level;
-    const selectedStep = HOUSE_STEPS.find((step) => step.level === selectedLevel) ?? HOUSE_STEPS[0];
-    const showingNext = goal != null && goal.look.level === selectedStep.level;
-    const needFirst = HOUSE_STEPS.find((step) => step.level === selectedStep.level - 1);
-    const locked = goal != null && selectedStep.level > goal.look.level && needFirst != null;
-    const wishCat = wishCategory(active.id);
-    const wished = wishDoneToday(active);
-    const wishLook = lookFor(categoryStars(active, wishCat));
-    const tabLabel: Record<HomeTab, string> = {
-      questions: he.homeQuestions,
-      objectives: he.homeObjectives,
+    const build = currentBuild(active);
+    const level = villageLevel(active);
+    const tabLabel: Record<DockTab, string> = {
       village: he.homeVillage,
       scores: he.navLeaderboard,
       avatar: he.homeAvatar,
     };
+    const tabIcon: Record<DockTab, "home" | "trophy" | "user"> = {
+      village: "home",
+      scores: "trophy",
+      avatar: "user",
+    };
+    const dock = (
+      <View>
+        {lockHint ? (
+          <Text style={[styles.lockHint, { color: c.soft, opacity: hintOpacity }]}>{lockHint}</Text>
+        ) : null}
+        <View style={[styles.dock, { backgroundColor: c.surface, borderBottomColor: c.line }]}>
+          {HOME_TABS.map((id) => {
+            const need = TAB_UNLOCK[id];
+            const locked = need != null && level < need;
+            const on = tab === id;
+            const lockedLabel = id === "avatar" ? he.unlockAvatar(need ?? 0) : he.unlockScores(need ?? 0);
+            return (
+              <Pressable
+                key={id}
+                accessibilityRole="tab"
+                accessibilityLabel={locked ? lockedLabel : tabLabel[id]}
+                accessibilityState={{ selected: on, disabled: locked }}
+                onPress={() => {
+                  if (locked) {
+                    showLockHint(lockedLabel);
+                    return;
+                  }
+                  cancelAnimationFrame(hintFrame.current);
+                  setLockHint(null);
+                  setTab(id);
+                }}
+                style={[styles.dockTab, on && { backgroundColor: c.primaryTint }]}
+              >
+                <View style={styles.dockIcon}>
+                  <View style={locked ? { opacity: 0.45 } : undefined}>
+                    <Icon name={tabIcon[id]} size={26} color={on ? c.primary : c.soft} />
+                  </View>
+                  {locked ? (
+                    <View style={[styles.lockBadge, { backgroundColor: c.surface, borderColor: c.line }]}>
+                      <Icon name="lock" size={11} color={c.ink} weight={2.6} />
+                    </View>
+                  ) : null}
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+    );
     return (
-      <Screen>
+      <Screen footer={dock}>
         <View style={styles.helloBar}>
           <View style={styles.helloLeft}>
             <Pressable
@@ -238,7 +320,7 @@ export default function HomeScreen() {
             {tab === "avatar" ? coinPill : null}
           </View>
           <View style={styles.helloRight}>
-            {tab === "village" ? <StarPill stars={totalStars(active)} onPress={() => router.push("/village")} /> : null}
+            {tab === "village" ? <CoinPill coins={active.coins} onPress={() => router.push("/village")} /> : null}
             <View style={styles.helloWho}>
               <Text style={[styles.helloSmall, { color: c.soft }]}>{he.hello}</Text>
               <Text style={[styles.helloName, { color: c.ink }]} numberOfLines={1}>
@@ -248,66 +330,27 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <View style={[styles.tabs, { backgroundColor: c.line }]}>
-          {HOME_TABS.map((id) => {
-            const on = tab === id;
-            return (
-              <Pressable
-                key={id}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: on }}
-                onPress={() => setTab(id)}
-                style={[styles.tab, on && { backgroundColor: c.surface }]}
-              >
-                <Text style={[styles.tabText, { color: on ? c.ink : c.soft }]} numberOfLines={1}>
-                  {tabLabel[id]}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
         {tab === "questions" ? (
           <>
             <Text style={[styles.section, { color: c.ink }]}>{he.pickCategory}</Text>
             <View style={styles.grid}>
-              {CATEGORIES.map((cat) => {
+              {LESSON_PACKS.map((cat) => {
                 const done = DIFFICULTIES.reduce((sum, d) => sum + clearedStages(active.stageClears, cat, d), 0);
+                const open = isLessonUnlocked(level, cat);
                 return (
                   <SubjectCard
                     key={cat}
                     category={cat}
                     done={done}
                     total={CONFIG.miniLevels * DIFFICULTIES.length}
-                    onPress={() => setCategory(cat)}
+                    locked={!open}
+                    unlockLevel={lessonUnlockLevel(cat)}
+                    onPress={() => {
+                      if (open) setCategory(cat);
+                    }}
                   />
                 );
               })}
-            </View>
-          </>
-        ) : null}
-
-        {tab === "objectives" ? (
-          <>
-            <GuideCard profile={active} onPlay={setCategory} />
-            <View style={[styles.homeCard, { backgroundColor: c.surface, borderBottomColor: c.line, marginTop: 12 }]}>
-              <Text style={[styles.guideTitle, { color: c.ink }]}>{he.homeDailyObjective}</Text>
-              <Pressable
-                onPress={() => {
-                  if (!wished) setCategory(wishCat);
-                }}
-                style={[styles.wish, { backgroundColor: wished ? OK.tint : CATEGORY_COLORS[wishCat].tint }]}
-              >
-                <Building category={wishCat} level={wishLook.level} detail={wishLook.detail} lit={wished} size={52} />
-                <View style={{ flex: 1, alignItems: "flex-end" }}>
-                  <Text style={[styles.wishText, { color: c.ink }]}>
-                    {wished ? he.wishDone : he.wishAsk(buildingName(wishCat))}
-                  </Text>
-                  {wished ? null : (
-                    <Text style={[styles.wishCta, { color: CATEGORY_COLORS[wishCat].deep }]}>{he.wishCta}</Text>
-                  )}
-                </View>
-              </Pressable>
             </View>
           </>
         ) : null}
@@ -316,6 +359,8 @@ export default function HomeScreen() {
           <>
           <View style={[styles.homeCard, { backgroundColor: c.surface, borderBottomColor: c.line }]}>
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${he.villageMine} · ${he.villageLevelLabel(level)}`}
               onPress={() => router.push("/village")}
               onLayout={(e) => setSceneWidth(e.nativeEvent.layout.width)}
               style={({ pressed }) => [styles.scene, pressed && { opacity: 0.85 }]}
@@ -325,78 +370,33 @@ export default function HomeScreen() {
                   levels={villageLevels(active)}
                   details={villageDetails(active)}
                   blooms={active.villageBlooms ?? 0}
-                  litCategory={wished ? wishCat : null}
+                  litCategory={build?.category ?? null}
                   width={sceneWidth}
-                  aspect={0.5}
+                  aspect={0.66}
                 />
               ) : null}
-              <View style={[styles.sceneChip, { backgroundColor: c.surface, borderBottomColor: c.line }]}>
-                <Text style={[styles.sceneChipText, { color: c.ink }]}>{he.villageMine} ←</Text>
+              <View pointerEvents="none" style={[styles.levelSign, { backgroundColor: GOLD.tint, borderBottomColor: GOLD.lip }]}>
+                <Text style={[styles.levelWord, { color: GOLD.deep }]}>{he.villageLevelWord}</Text>
+                <View style={[styles.levelMark, { backgroundColor: GOLD.base, borderBottomColor: GOLD.lip }]}>
+                  <Text style={styles.levelNum}>{level}</Text>
+                </View>
               </View>
             </Pressable>
           </View>
-          <View style={[styles.homeCard, { backgroundColor: c.surface, borderBottomColor: c.line, marginTop: 12 }]}>
-            <Text style={[styles.guideTitle, { color: c.ink }]}>{he.ownedBonusesTitle}</Text>
-            {VILLAGE_ORDER.every((cat) => categoryStars(active, cat) < MILESTONES[0].stars) ? (
-              <Text style={[styles.goalText, { color: c.soft }]}>{he.ownedBonusesEmpty}</Text>
-            ) : (
-              VILLAGE_ORDER.map((cat) => {
-                const stars = categoryStars(active, cat);
-                const owned = MILESTONES.filter((m) => stars >= m.stars);
-                if (owned.length === 0) return null;
-                const look = lookFor(stars);
-                return (
-                  <View key={cat} style={styles.ownedGroup}>
-                    <View style={styles.goalHead}>
-                      <Building category={cat} level={look.level} detail={look.detail} size={36} />
-                      <Text style={[styles.goalTitle, { color: c.ink }]}>{buildingName(cat)}</Text>
-                    </View>
-                    {owned.map((m) => (
-                      <Text key={m.id} style={[styles.goalText, { color: CATEGORY_COLORS[cat].deep }]}>
-                        {he.milestoneBonus[m.id]}
-                      </Text>
-                    ))}
-                  </View>
-                );
-              })
-            )}
-          </View>
-          <View style={[styles.homeCard, { backgroundColor: c.surface, borderBottomColor: c.line, marginTop: 12 }]}>
-            <View style={[styles.bubble, { backgroundColor: c.ground }]}>
-              <View style={styles.goalHead}>
-                <Building category={goal?.category ?? "language"} level={selectedStep.level} size={44} />
-                <Text style={[styles.goalTitle, { color: c.ink }]}>
-                  {showingNext && goal ? he.homeGoalTitle(buildingName(goal.category)) : he.milestoneName[selectedStep.id]}
-                </Text>
-              </View>
-              <Text style={[styles.goalText, { color: goal ? CATEGORY_COLORS[goal.category].deep : c.ink }]}>
-                {he.milestoneBonus[selectedStep.id]}
-              </Text>
-              {locked && needFirst ? (
-                <Text style={[styles.goalText, { color: c.soft }]}>{he.growNeedFirst(he.milestoneName[needFirst.id])}</Text>
-              ) : null}
-              {showingNext && goal ? (
-                <>
-                  <Text style={[styles.goalText, { color: c.soft }]}>
-                    {he.homeGoal(goal.need, he.milestoneName[goal.id])}
-                  </Text>
-                  <PrimaryButton
-                    label={he.homeBuildCta}
-                    color={CATEGORY_COLORS[goal.category].base}
-                    onPress={() => setCategory(goal.category)}
-                    style={styles.goalBtn}
-                  />
-                </>
-              ) : goal ? null : (
-                <Text style={[styles.goalText, { color: c.soft }]}>{he.homeGoalDone}</Text>
-              )}
-            </View>
-            <VillageGrow
-              category={goal?.category ?? "language"}
-              selected={selectedStep.level}
-              onSelect={setGrowLevel}
-            />
-          </View>
+          {build ? (
+            <>
+              <PrimaryButton
+                label={he.upgradeFor(buildingName(build.category), build.cost)}
+                variant="soft"
+                disabled={active.coins < build.cost}
+                onPress={() => {
+                  void upgradeVillage();
+                }}
+                style={styles.upgradeBtn}
+              />
+            </>
+          ) : null}
+          <PrimaryButton label={he.homePlay} onPress={() => setTab("questions")} style={styles.playBtn} />
           </>
         ) : null}
 
@@ -464,6 +464,10 @@ export default function HomeScreen() {
                 <View style={styles.levelCopy}>
                   <Text style={[styles.cardTitle, { color: c.ink }]}>{difficultyLabel(d)}</Text>
                   <Text style={[styles.cardDesc, { color: c.soft }]}>{levelDesc(category, d)}</Text>
+                  <View style={styles.payRow}>
+                    <Coin size={18} />
+                    <Text style={[styles.payText, { color: GOLD.deep }]}>{he.difficultyPay(clearPay(d))}</Text>
+                  </View>
                   <View style={styles.levelProgress}>
                     <Text style={[styles.fraction, { color: c.soft }]}>{he.fraction(cleared, CONFIG.miniLevels)}</Text>
                     <View style={{ flex: 1 }}>
@@ -621,32 +625,50 @@ function SubjectCard({
   category,
   done,
   total,
+  locked,
+  unlockLevel,
   onPress,
 }: {
   category: Category;
   done: number;
   total: number;
+  locked?: boolean;
+  unlockLevel?: number;
   onPress: () => void;
 }) {
   const sw = CATEGORY_COLORS[category];
+  const c = useColors();
   return (
     <Pressable
-      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: locked }}
+      accessibilityLabel={locked && unlockLevel ? `${categoryLabel(category)} · ${he.unlockAt(unlockLevel)}` : categoryLabel(category)}
+      onPress={locked ? undefined : onPress}
       style={({ pressed }) => [
         styles.subject,
         {
           backgroundColor: sw.tint,
           borderBottomColor: sw.lip,
-          borderBottomWidth: pressed ? 2 : 5,
-          marginTop: pressed ? 3 : 0,
+          borderBottomWidth: pressed && !locked ? 2 : 5,
+          marginTop: pressed && !locked ? 3 : 0,
+          opacity: locked ? 0.55 : 1,
         },
       ]}
     >
-      <CategoryTile category={category} size={52} />
+      <View>
+        <CategoryTile category={category} size={52} />
+        {locked ? (
+          <View style={[styles.subjectLock, { backgroundColor: c.surface, borderColor: c.line }]}>
+            <Icon name="lock" size={12} color={c.ink} weight={2.6} />
+          </View>
+        ) : null}
+      </View>
       <Text style={[styles.cardTitle, { color: sw.deep, textAlign: "center" }]} numberOfLines={1}>
         {categoryLabel(category)}
       </Text>
-      <Text style={[styles.fraction, { color: sw.deep, textAlign: "center" }]}>{he.stagesDone(done, total)}</Text>
+      <Text style={[styles.fraction, { color: sw.deep, textAlign: "center" }]}>
+        {locked && unlockLevel ? he.unlockAt(unlockLevel) : he.stagesDone(done, total)}
+      </Text>
     </Pressable>
   );
 }
@@ -710,10 +732,56 @@ const styles = StyleSheet.create({
   helloWho: { alignItems: "flex-end", flexShrink: 1 },
   helloSmall: { fontSize: 13, fontFamily: font.medium },
   helloName: { fontSize: 22, fontFamily: font.heavy, maxWidth: 180, textAlign: "right" },
-  tabs: { flexDirection: "row-reverse", width: "100%", borderRadius: 999, padding: 4, marginBottom: 8 },
-  tab: { flex: 1, minHeight: 44, borderRadius: 999, alignItems: "center", justifyContent: "center" },
-  tabText: { fontFamily: font.heavy, fontSize: 12, textAlign: "center" },
+  dock: {
+    flexDirection: "row-reverse",
+    width: "100%",
+    borderRadius: 28,
+    borderBottomWidth: 5,
+    padding: 6,
+    gap: 6,
+  },
+  dockTab: { flex: 1, minHeight: 52, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  dockIcon: { width: 34, height: 34, alignItems: "center", justifyContent: "center" },
+  lockBadge: {
+    position: "absolute",
+    left: -1,
+    bottom: -1,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  lockHint: { fontFamily: font.heavy, fontSize: 14, textAlign: "center", marginBottom: 8 },
+  playBtn: { alignSelf: "stretch", marginTop: 8, minHeight: 64 },
+  upgradeBtn: { alignSelf: "stretch", marginTop: 12, minHeight: 56 },
   homeCard: { width: "100%", borderRadius: 28, borderBottomWidth: 6, padding: 14, gap: 12 },
+  levelSign: {
+    position: "absolute",
+    top: 10,
+    alignSelf: "center",
+    zIndex: 2,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 999,
+    borderBottomWidth: 4,
+    paddingVertical: 4,
+    paddingLeft: 6,
+    paddingRight: 14,
+  },
+  levelWord: { fontFamily: font.heavy, fontSize: 15 },
+  levelMark: {
+    minWidth: 32,
+    height: 32,
+    borderRadius: 16,
+    borderBottomWidth: 3,
+    paddingHorizontal: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  levelNum: { fontFamily: font.black, fontSize: 18, color: "#fff", lineHeight: 22 },
   guideTitle: { fontFamily: font.heavy, fontSize: 20, textAlign: "right" },
   guideBody: { fontFamily: font.medium, fontSize: 15, textAlign: "right" },
   guideHint: { fontFamily: font.medium, fontSize: 13, textAlign: "right" },
@@ -763,16 +831,6 @@ const styles = StyleSheet.create({
   goalText: { fontFamily: font.bold, fontSize: 14, textAlign: "right" },
   goalBtn: { alignSelf: "stretch", marginTop: 6 },
   scene: { width: "100%" },
-  sceneChip: {
-    position: "absolute",
-    right: 10,
-    top: 10,
-    borderRadius: 999,
-    borderBottomWidth: 3,
-    paddingVertical: 5,
-    paddingHorizontal: 12,
-  },
-  sceneChipText: { fontFamily: font.heavy, fontSize: 14 },
   localHint: { fontFamily: font.medium, fontSize: 13, textAlign: "center", marginTop: 10 },
   section: {
     alignSelf: "stretch",
@@ -792,6 +850,17 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     alignItems: "center",
     gap: 8,
+  },
+  subjectLock: {
+    position: "absolute",
+    left: -4,
+    bottom: -4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
   },
   cardTitle: { fontSize: 19, fontFamily: font.heavy, textAlign: "right" },
   cardDesc: { fontSize: 13, fontFamily: font.medium, textAlign: "right", lineHeight: 18 },
@@ -821,6 +890,8 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   levelCopy: { flex: 1, alignItems: "flex-end", gap: 3 },
+  payRow: { flexDirection: "row-reverse", alignItems: "center", gap: 6, marginTop: 2 },
+  payText: { fontFamily: font.heavy, fontSize: 14 },
   levelProgress: { alignSelf: "stretch", flexDirection: "row-reverse", alignItems: "center", gap: 8, marginTop: 8 },
   progressCard: { gap: 8, paddingVertical: 12 },
   progressHead: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" },

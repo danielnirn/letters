@@ -30,21 +30,9 @@ import {
 } from "../src/game/session";
 import { he } from "../src/i18n/he";
 import { BAD, CATEGORY_COLORS, GOLD, OK, TILE_SWATCHES, font } from "../src/theme/colors";
-import { Coin, Icon, Star } from "../src/components/Art";
+import { Coin, Icon } from "../src/components/Art";
 import { Buddy, Card, RoundButton, useColors } from "../src/components/ui";
-import { Building, buildingName } from "../src/components/VillageArt";
-import {
-  awardedStars,
-  categoryStars,
-  milestoneIndex,
-  MILESTONES,
-  perksFor,
-  runStars,
-  stageStars,
-  STARS_PER_STAGE,
-  wishCategory,
-  wishDoneToday,
-} from "../src/game/village";
+import { buildingCoinBonus, ownedLevel, runStars, wishCategory, wishDoneToday } from "../src/game/village";
 
 const LEVEL_LABEL: Record<Difficulty, string> = {
   easy: he.easy,
@@ -77,7 +65,7 @@ function GameRun() {
   saveScoreRef.current = progress.saveScore;
   const c = useColors();
   const [state, setState] = useState<GameState>(() =>
-    startGame(difficulty, cat, miniLevel, perksFor(categoryStars(progress.active, cat)).hints),
+    startGame(difficulty, cat, miniLevel),
   );
   const settled = useRef(false);
   const [advancePct, setAdvancePct] = useState(0);
@@ -85,13 +73,10 @@ function GameRun() {
   const [showReport, setShowReport] = useState(false);
   const [openMistake, setOpenMistake] = useState<number | null>(null);
   const [village, setVillage] = useState<{
-    earned: number;
-    gained: number;
-    step: (typeof MILESTONES)[number] | null;
     wish: boolean;
     coins: number;
-    giftStars: number;
-    giftCoins: number;
+    bonus: number;
+    perfect: boolean;
   } | null>(null);
 
   const backToStages = () => {
@@ -100,14 +85,6 @@ function GameRun() {
 
   const backToHome = () => {
     router.replace("/");
-  };
-
-  const hasNextStage = miniLevel < CONFIG.miniLevels;
-  const goNextStage = () => {
-    router.replace({
-      pathname: "/game",
-      params: { level: difficulty, category: cat, stage: String(miniLevel + 1) },
-    });
   };
 
   useEffect(() => {
@@ -133,33 +110,16 @@ function GameRun() {
     if (state.phase !== "complete") return;
     if (settled.current) return;
     settled.current = true;
-    const before = categoryStars(activeRef.current, state.category);
-    const perks = perksFor(before);
-    const plain = runStars(state);
-    const earned = awardedStars(state, perks);
-    const coins = stageCoinReward(state) + perks.coins;
-    const gained = Math.max(0, earned - stageStars(activeRef.current, state.category, state.level, state.stage));
-    const beforeStep = milestoneIndex(before);
-    const afterStep = milestoneIndex(before + gained);
-    const step = afterStep > beforeStep ? MILESTONES[afterStep] : null;
+    const bonus = buildingCoinBonus(ownedLevel(activeRef.current, state.category));
+    const perfect = stageIsPerfect(state);
+    const coins = stageCoinReward(state) + bonus;
+    const earned = runStars(state);
     const wish = state.category === wishCategory(activeRef.current.id) && !wishDoneToday(activeRef.current);
-    setVillage({ earned, gained, step, wish, coins, giftStars: Math.max(0, earned - plain), giftCoins: perks.coins });
+    setVillage({ wish, coins, bonus, perfect });
     void (async () => {
-      await completeStageRef.current(
-        state.category,
-        state.level,
-        state.stage,
-        coins,
-        stageIsPerfect(state),
-        earned,
-      );
+      await completeStageRef.current(state.category, state.level, state.stage, coins, perfect, earned);
       await saveScoreRef.current(coins, `${state.category}:${state.level}:${state.stage}`);
     })();
-    // A village upgrade is worth staying on the screen for.
-    if (stageIsPerfect(state) && step == null && !wish) {
-      const t = setTimeout(backToStages, CONFIG.stageCompleteHoldMs);
-      return () => clearTimeout(t);
-    }
     return undefined;
   }, [state.phase, state.score, state.lastStreakBonus, state.category, state.level, state.stage]);
 
@@ -301,36 +261,7 @@ function GameRun() {
           <Text style={[styles.resultLine, { color: perfect ? OK.deep : GOLD.deep }]}>
             {perfect ? he.stagePerfect : he.stageHadMistakes} · {he.correctOf(okCount, state.wordList.length)}
           </Text>
-          {village ? (
-            <>
-              <View style={styles.runStars}>
-                {Array.from({ length: STARS_PER_STAGE }, (_, i) => (
-                  <View key={i} style={i === 1 ? styles.runStarMid : null}>
-                    <Star
-                      size={i === 1 ? 46 : 36}
-                      fill={i < village.earned ? GOLD.base : c.line}
-                      stroke={i < village.earned ? GOLD.lip : c.line}
-                    />
-                  </View>
-                ))}
-              </View>
-              <Text style={[styles.starsLine, { color: village.gained > 0 ? GOLD.deep : c.soft }]}>
-                {village.gained > 0 && (village.giftStars > 0 || village.giftCoins > 0)
-                  ? he.villageRewardLine(
-                      village.earned - village.giftStars,
-                      buildingName(state.category),
-                      village.giftStars,
-                      village.giftCoins,
-                    )
-                  : village.gained > 0
-                    ? he.starsGained(village.gained, buildingName(state.category))
-                    : he.starsAlready}
-              </Text>
-              {village.gained === 0 && village.giftCoins > 0 ? (
-                <Text style={[styles.starsLine, { color: GOLD.deep }]}>{he.villageCoinsOnly(village.giftCoins)}</Text>
-              ) : null}
-            </>
-          ) : null}
+          {perfect ? <Text style={[styles.starsLine, { color: OK.deep }]}>{he.perfectPay}</Text> : null}
           <View style={[styles.statsRow, { borderTopColor: c.line }]}>
             <View style={styles.stat}>
               <View style={styles.statValueRow}>
@@ -338,7 +269,7 @@ function GameRun() {
                 <Text style={[styles.statValue, { color: c.ink }]}>+{village?.coins ?? stageCoinReward(state)}</Text>
               </View>
               <Text style={[styles.statLabel, { color: c.soft }]}>
-                {village && village.giftCoins > 0 ? he.coinsWithVillage(village.giftCoins) : he.coinsLabel}
+                {village && village.bonus > 0 ? he.coinsWithVillage(village.bonus) : he.coinsLabel}
               </Text>
             </View>
             <View style={[styles.statDivider, { backgroundColor: c.line }]} />
@@ -351,24 +282,6 @@ function GameRun() {
           </View>
         </Card>
 
-        {village?.step ? (
-          <Pressable
-            onPress={() => router.replace("/village")}
-            style={[styles.upgrade, { backgroundColor: c.surface, borderColor: GOLD.base, borderBottomColor: GOLD.lip }]}
-          >
-            <View style={[styles.upgradeArt, { backgroundColor: CATEGORY_COLORS[state.category].tint }]}>
-              <Building category={state.category} level={village.step.level} detail={village.step.detail} size={84} />
-            </View>
-            <View style={{ flex: 1, alignItems: "flex-end", gap: 4 }}>
-              <Text style={[styles.upgradeTitle, { color: GOLD.deep }]}>{he.villageUpgrade}</Text>
-              <Text style={[styles.upgradeSub, { color: c.ink }]}>
-                {buildingName(state.category)} · {he.milestoneName[village.step.id]}
-              </Text>
-              <Text style={[styles.upgradeSub, { color: c.soft }]}>{he.bonusFromNow(he.milestoneBonus[village.step.id])}</Text>
-              <Text style={[styles.upgradeLink, { color: c.primary }]}>{he.toVillage} ←</Text>
-            </View>
-          </Pressable>
-        ) : null}
         {village?.wish ? (
           <Text style={[styles.starsLine, { color: OK.deep, marginTop: 8 }]}>{he.wishBloom}</Text>
         ) : null}
@@ -377,12 +290,7 @@ function GameRun() {
           {state.mistakes.length > 0 ? (
             <PrimaryButton label={he.viewMistakes} variant="soft" onPress={() => setShowReport(true)} />
           ) : null}
-          {hasNextStage ? (
-            <PrimaryButton label={he.nextStage} icon="next" onPress={goNextStage} />
-          ) : (
-            <PrimaryButton label={he.backToStages} onPress={backToStages} />
-          )}
-          <PrimaryButton label={he.backToHome} icon="home" variant="soft" onPress={backToHome} />
+          <PrimaryButton label={he.keepGoing} icon="home" onPress={backToHome} />
         </View>
       </Screen>
     );
