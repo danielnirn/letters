@@ -3,7 +3,7 @@ import { useAuth } from "../src/context/AuthContext";
 import { he } from "../src/i18n/he";
 import { useState } from "react";
 import { Mascot, Star } from "../src/components/Art";
-import { ForestScreen, NIGHT, WOOD, WOOD_LIP, WoodSign } from "../src/components/Forest";
+import { ForestScreen, WOOD, WOOD_LIP, WoodSign } from "../src/components/Forest";
 import { PrimaryButton } from "../src/components/PrimaryButton";
 import { BAD, OK, defaultTheme as c, font } from "../src/theme/colors";
 
@@ -39,9 +39,6 @@ export default function LoginScreen() {
         </View>
         <View style={styles.sign}>
           <WoodSign text={he.appName} big />
-        </View>
-        <View style={styles.subPill}>
-          <Text style={styles.sub}>{he.appSubtitle}</Text>
         </View>
         <View style={styles.card}>
           <Text style={[styles.hint, { color: c.soft }]}>{he.parentLoginHint}</Text>
@@ -101,16 +98,6 @@ const styles = StyleSheet.create({
   starA: { position: "absolute", top: 28, right: 30 },
   starB: { position: "absolute", top: 60, left: 28 },
   sign: { marginTop: -22 },
-  subPill: {
-    backgroundColor: NIGHT,
-    borderRadius: 999,
-    borderWidth: 2,
-    borderColor: "#fff",
-    paddingVertical: 5,
-    paddingHorizontal: 16,
-    marginTop: 12,
-  },
-  sub: { fontSize: 16, fontFamily: font.bold, textAlign: "center", color: "#fff" },
   card: {
     width: "100%",
     maxWidth: 380,

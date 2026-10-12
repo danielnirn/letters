@@ -40,11 +40,24 @@ export function defaultProfile(id: string, displayName = ""): ProfileDoc {
     stagePerfect: {},
     stageStars: {},
     villageBuilt: {},
+    startLesson: null,
+    openedLessons: [],
     villageBlooms: 0,
     wishDay: null,
     wishDone: false,
     updatedAt: Date.now(),
   };
+}
+
+function openedLessonsFrom(value: unknown): Category[] {
+  if (!Array.isArray(value)) return [];
+  const out: Category[] = [];
+  for (const item of value) {
+    if (typeof item === "string" && CATEGORIES.includes(item as Category) && !out.includes(item as Category)) {
+      out.push(item as Category);
+    }
+  }
+  return out;
 }
 
 function villageBuiltFrom(value: unknown): Partial<Record<Category, number>> {
@@ -84,6 +97,8 @@ function profileFromData(id: string, data: Record<string, unknown>): ProfileDoc 
         ? (data.stageStars as Record<string, number>)
         : {},
     villageBuilt: villageBuiltFrom(data.villageBuilt),
+    startLesson: CATEGORIES.includes(data.startLesson as Category) ? (data.startLesson as Category) : null,
+    openedLessons: openedLessonsFrom(data.openedLessons),
     villageBlooms: typeof data.villageBlooms === "number" ? data.villageBlooms : 0,
     wishDay: typeof data.wishDay === "string" ? data.wishDay : null,
     wishDone: data.wishDone === true,
@@ -132,6 +147,8 @@ export async function ensureAccount(
       stagePerfect: {},
       stageStars: {},
       villageBuilt: {},
+      startLesson: null,
+      openedLessons: [],
       villageBlooms: 0,
       wishDay: null,
       wishDone: false,
@@ -172,6 +189,8 @@ export async function loadAccount(uid: string): Promise<CachedProgress> {
       stagePerfect: {},
       stageStars: {},
       villageBuilt: {},
+      startLesson: null,
+      openedLessons: [],
       villageBlooms: 0,
       wishDay: null,
       wishDone: false,
@@ -221,6 +240,8 @@ export async function persistProfile(uid: string, profile: ProfileDoc): Promise<
       stagePerfect: profile.stagePerfect ?? {},
       stageStars: profile.stageStars ?? {},
       villageBuilt: profile.villageBuilt ?? {},
+      startLesson: profile.startLesson ?? null,
+      openedLessons: profile.openedLessons ?? [],
       villageBlooms: profile.villageBlooms ?? 0,
       wishDay: profile.wishDay ?? null,
       wishDone: profile.wishDone === true,

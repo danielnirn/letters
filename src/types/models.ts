@@ -43,6 +43,10 @@ export type ProfileDoc = {
   stageStars: Record<string, number>;
   /** Building level (0–4) bought with coins, per subject. */
   villageBuilt?: Partial<Record<Category, number>>;
+  /** First lesson pack. Kept so older profiles still have a start. */
+  startLesson?: Category | null;
+  /** Lesson packs the player chose to open. */
+  openedLessons?: Category[];
   /** Flowers planted by finishing the daily building wish. */
   villageBlooms: number;
   /** `YYYY-MM-DD` of the last fulfilled wish. */

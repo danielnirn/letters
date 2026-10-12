@@ -197,35 +197,54 @@ export function villageLevel(p: ProfileDoc): number {
   return 1 + VILLAGE_ORDER.reduce((sum, cat) => sum + ownedLevel(p, cat), 0);
 }
 
-/** Lesson packs. Language is open from the start. Each next pack opens every 5 village levels. */
+/** Lesson packs. The player chooses which ones to open. */
 export const LESSON_PACKS: readonly Category[] = ["language", "math", "english", "logic", "science", "reading"];
 
-export function lessonUnlockLevel(category: Category): number {
-  const i = LESSON_PACKS.indexOf(category);
-  if (i <= 0) return 1;
-  return i * 5;
+/** One pack at the start, then another choice every 5 village levels. */
+export function lessonSlots(level: number): number {
+  return Math.min(LESSON_PACKS.length, 1 + Math.floor(Math.max(0, level) / 5));
+}
+
+/** Packs this player has chosen. Language is assumed if they already played before the choice existed. */
+export function openedLessons(p: ProfileDoc): Category[] {
+  const saved = (p.openedLessons ?? []).filter((cat) => LESSON_PACKS.includes(cat));
+  const unique = [...new Set(saved)];
+  if (unique.length > 0) return unique;
+  if (p.startLesson && LESSON_PACKS.includes(p.startLesson)) return [p.startLesson];
+  if (Object.values(p.stageClears ?? {}).some((n) => n > 0)) return [LESSON_PACKS[0]];
+  return [];
+}
+
+/** A free slot is waiting: the first pack, or another one at level 5, 10, 15, 20, 25. */
+export function pendingLessonPick(p: ProfileDoc, level = villageLevel(p)): boolean {
+  const open = openedLessons(p).length;
+  return open < lessonSlots(level) && open < LESSON_PACKS.length;
+}
+
+/** Village level of the next choice. `null` when every pack is open. */
+export function nextLessonPickLevel(p: ProfileDoc): number | null {
+  const open = openedLessons(p).length;
+  if (open >= LESSON_PACKS.length) return null;
+  return open * 5;
 }
 
 /** Village level that opens each home feature. */
 export const FEATURE_UNLOCK = { avatar: 5, shop: 5, scores: 10 } as const;
 export type Feature = keyof typeof FEATURE_UNLOCK;
 
-export type Unlock = { kind: "lesson"; category: Category } | { kind: "feature"; feature: Feature };
+export type Unlock = { kind: "lesson-pick" } | { kind: "feature"; feature: Feature };
 
-/** Everything that opens exactly at this village level. */
+/** Features that open exactly at this village level. Lesson packs are a separate choice. */
 export function unlocksAt(level: number): Unlock[] {
   const out: Unlock[] = [];
-  for (const cat of LESSON_PACKS) {
-    if (cat !== LESSON_PACKS[0] && lessonUnlockLevel(cat) === level) out.push({ kind: "lesson", category: cat });
-  }
   for (const feature of Object.keys(FEATURE_UNLOCK) as Feature[]) {
     if (FEATURE_UNLOCK[feature] === level) out.push({ kind: "feature", feature });
   }
   return out;
 }
 
-export function isLessonUnlocked(level: number, category: Category): boolean {
-  return level >= lessonUnlockLevel(category);
+export function isLessonUnlocked(p: ProfileDoc, category: Category): boolean {
+  return openedLessons(p).includes(category);
 }
 
 /**

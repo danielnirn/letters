@@ -70,12 +70,12 @@ Screens:
 - **Login / name**: `ForestScreen` + wooden signs, not a flat card on `Screen`
 - **Home**: sky village. HUD is avatar (profile), coin pill (village status), profile button. Center is the building being bought, a level ribbon, and **לבנות!**. Side widgets: coin pot (build progress), `?` (how to play), next unlock, chest (village). Big green **לשחק!** opens the subject list
 - **Dock** (RTL, first item on the right): mushroom map → `/village`, avatar, home (center), trophy, shop. Avatar and shop unlock at village level 5, leaderboard at 10 (`FEATURE_UNLOCK`). Locked tap fades a banner; the lock badge stays
-- **Subjects**: lesson packs stay locked except language until village level 5 / 10 / 15 / 20 / 25
+- **Subjects**: the first visit asks which pack to start with. Every 5 village levels the player picks one more locked pack (`openedLessons`). Nothing opens by itself. A player who already has stage clears keeps language open
 - **Difficulty**: wood sign + cards that show the coin payout, including perfect ×2
 - **Stages**: `StageMap`, a path from stage 1 at the bottom up to 10 and the building. Locked nodes do not open
 - **Play**: `ForestScreen`; no coins/streak in the header; math `{expr} = ?`; skip icon; progress under answers
 - **Complete**: reward on the forest screen; mistakes stay for **🤔 איפה טעיתי?**; tap a math row → `MathErrorCard`
-- **Build**: success opens `BuiltPopup` (what was built and the per-stage coins). If that village level unlocks a lesson or feature, a second step lists it
+- **Build**: success opens `BuiltPopup` (what was built and the per-stage coins). If that village level unlocks a feature, or a new lesson choice, a second step says so
 
 Do **not** restore the old flat home (hello bar, subject grid on the first screen, 3-icon dock), dark navy, Heebo, or emoji-only nav. `SkyScene` may use an SVG gradient; the `Screen` component stays a solid ground.
 

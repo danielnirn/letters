@@ -27,7 +27,7 @@ import type { CachedProgress, Gender, ProfileDoc, ScoreEntry, AvatarSlot } from 
 import { isFirebaseConfigured } from "../firebase/app";
 import { useAuth } from "./AuthContext";
 import { stageProgressKey, stageCoinsKey, type Category, type Difficulty } from "../game/config";
-import { currentBuild, ownedLevel, totalStars, villageLevels } from "../game/village";
+import { currentBuild, lessonSlots, openedLessons, ownedLevel, totalStars, villageLevel, villageLevels } from "../game/village";
 
 type ProgressValue = {
   loading: boolean;
@@ -37,6 +37,7 @@ type ProgressValue = {
   topScores: ScoreEntry[];
   setActiveName: (name: string) => Promise<void>;
   setGender: (gender: Gender) => Promise<void>;
+  openLesson: (category: Category) => Promise<void>;
   addCoins: (amount: number) => Promise<void>;
   spendCoins: (amount: number) => Promise<boolean>;
   upgradeVillage: () => Promise<boolean>;
@@ -229,6 +230,14 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       setGender: async (gender) => {
         const next = await patchActive((p) => ({ ...p, gender }));
         if (next) await publishLook(next);
+      },
+      openLesson: async (category) => {
+        await patchActive((p) => {
+          const open = openedLessons(p);
+          if (open.includes(category)) return p;
+          if (open.length >= lessonSlots(villageLevel(p))) return p;
+          return { ...p, startLesson: p.startLesson ?? category, openedLessons: [...open, category] };
+        });
       },
       addCoins: async (amount: number) => {
         await patchActive((p) => ({ ...p, coins: p.coins + amount }));

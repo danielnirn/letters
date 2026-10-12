@@ -17,6 +17,7 @@ export function BuiltPopup({
   level,
   gift,
   villageLevel,
+  lessonPick,
   onClose,
 }: {
   category: Category;
@@ -24,9 +25,11 @@ export function BuiltPopup({
   gift: number;
   /** Village level after this build; shows a "level up" step when it opens something. */
   villageLevel: number;
+  /** The player may choose one more lesson pack. */
+  lessonPick?: boolean;
   onClose: () => void;
 }) {
-  const unlocks = unlocksAt(villageLevel);
+  const unlocks: Unlock[] = [...unlocksAt(villageLevel), ...(lessonPick ? [{ kind: "lesson-pick" as const }] : [])];
   const [step, setStep] = useState<"built" | "unlocks">("built");
   const next = () => (step === "built" && unlocks.length > 0 ? setStep("unlocks") : onClose());
   if (step === "unlocks") {
@@ -48,7 +51,7 @@ export function BuiltPopup({
             <Text style={styles.popBody}>{he.levelUpBody}</Text>
             <View style={styles.unlockList}>
               {unlocks.map((u) => (
-                <UnlockRow key={u.kind === "lesson" ? u.category : u.feature} unlock={u} />
+                <UnlockRow key={u.kind === "feature" ? u.feature : u.kind} unlock={u} />
               ))}
             </View>
             <PrimaryButton label={he.builtOk} color={OK.base} onPress={onClose} style={{ alignSelf: "stretch" }} />
@@ -110,10 +113,10 @@ function UnlockRow({ unlock }: { unlock: Unlock }) {
   let art;
   let label: string;
   let tint: string;
-  if (unlock.kind === "lesson") {
-    art = <CategoryTile category={unlock.category} size={50} />;
-    label = he.levelUpLesson(lessonName(unlock.category));
-    tint = CATEGORY_COLORS[unlock.category].tint;
+  if (unlock.kind === "lesson-pick") {
+    art = <CategoryTile category="language" size={50} />;
+    label = he.levelUpPick;
+    tint = CATEGORY_COLORS.language.tint;
   } else if (unlock.feature === "avatar") {
     art = <Buddy size={44} />;
     label = he.homeAvatar;
@@ -140,15 +143,6 @@ function UnlockRow({ unlock }: { unlock: Unlock }) {
       </View>
     </View>
   );
-}
-
-function lessonName(cat: Category) {
-  if (cat === "math") return he.categoryMath;
-  if (cat === "english") return he.categoryEnglish;
-  if (cat === "logic") return he.categoryLogic;
-  if (cat === "science") return he.categoryScience;
-  if (cat === "reading") return he.categoryReading;
-  return he.categoryLanguage;
 }
 
 const styles = StyleSheet.create({

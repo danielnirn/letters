@@ -28,7 +28,9 @@ import {
   ownedLevel,
   entryCost,
   isLessonUnlocked,
-  lessonUnlockLevel,
+  nextLessonPickLevel,
+  openedLessons,
+  pendingLessonPick,
   FEATURE_UNLOCK,
   LESSON_PACKS,
   nextGoal,
@@ -186,7 +188,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ category?: string; level?: string }>();
   const { signOut, isLocal } = useAuth();
-  const { active, loading, spendCoins, upgradeVillage } = useProgress();
+  const { active, loading, spendCoins, upgradeVillage, openLesson } = useProgress();
   const [category, setCategory] = useState<Category | null>(
     params.category ? parseCategory(params.category) : null,
   );
@@ -257,7 +259,7 @@ export default function HomeScreen() {
   }, [params.category, params.level]);
 
   useEffect(() => {
-    if (category && !isLessonUnlocked(villageLevel(active), category)) {
+    if (category && !isLessonUnlocked(active, category)) {
       setCategory(null);
       setDifficulty(null);
       setTab("questions");
@@ -273,7 +275,7 @@ export default function HomeScreen() {
 
   const start = (stage: number) => {
     if (!category || !difficulty) return;
-    if (!isLessonUnlocked(villageLevel(active), category)) return;
+    if (!isLessonUnlocked(active, category)) return;
     const cost = entryCost(active, category, difficulty, stage);
     void (async () => {
       if (cost > 0 && !(await spendCoins(cost))) return;
@@ -299,7 +301,7 @@ export default function HomeScreen() {
     const level = villageLevel(active);
     const heroCat = build?.category ?? VILLAGE_ORDER[0];
     const heroLevel = ownedLevel(active, heroCat);
-    const unlock = nextUnlock(level);
+    const unlock = nextUnlock(active, level);
     const canBuild = !!build && active.coins >= build.cost;
     const isLocked = (id: DockSlot) => {
       const need = DOCK_UNLOCK[id];
@@ -416,10 +418,17 @@ export default function HomeScreen() {
           <View style={styles.sideColLeft}>
             {unlock ? (
               <SideWidget
-                label={he.nextUnlockShort(unlock.level)}
-                locked
+                label={unlock.ready ? he.openLesson : he.nextUnlockShort(unlock.level)}
+                locked={!unlock.ready}
+                glow={unlock.ready}
                 accessibilityLabel={unlock.text}
-                onPress={() => showLockHint(unlock.text, "top")}
+                onPress={() => {
+                  if (unlock.ready) {
+                    setTab("questions");
+                    return;
+                  }
+                  showLockHint(unlock.text, "top");
+                }}
               >
                 {unlock.art}
               </SideWidget>
@@ -482,13 +491,31 @@ export default function HomeScreen() {
               <TopBar
                 onBack={() => setTab("village")}
                 backLabel={he.pickSubjectBack}
-                center={<WoodSign text={he.pickCategory} />}
+                center={
+                  <WoodSign
+                    text={
+                      openedLessons(active).length === 0
+                        ? he.pickStartLesson
+                        : pendingLessonPick(active, level)
+                          ? he.pickOpenLesson
+                          : he.pickCategory
+                    }
+                  />
+                }
               />
+              {pendingLessonPick(active, level) ? (
+                <View style={styles.scoresSub}>
+                  <Text style={styles.scoresSubText}>
+                    {openedLessons(active).length === 0 ? he.pickStartHint : he.pickOpenHint}
+                  </Text>
+                </View>
+              ) : null}
               <View style={styles.grid}>
                 {LESSON_PACKS.map((cat) => {
+                  const picking = pendingLessonPick(active, level);
                   const done = DIFFICULTIES.reduce((sum, d) => sum + clearedStages(active.stageClears, cat, d), 0);
-                  const open = isLessonUnlocked(level, cat);
-                  const need = lessonUnlockLevel(cat);
+                  const open = isLessonUnlocked(active, cat);
+                  const need = nextLessonPickLevel(active);
                   return (
                     <SubjectCard
                       key={cat}
@@ -497,15 +524,20 @@ export default function HomeScreen() {
                       total={CONFIG.miniLevels * DIFFICULTIES.length}
                       stars={categoryStars(active, cat)}
                       locked={!open}
-                      unlockLevel={need}
+                      choose={picking && !open}
+                      unlockLevel={need ?? undefined}
                       onPress={() => {
-                        if (!open) {
-                          showLockHint(he.lockedUntilLevel(need));
+                        if (open) {
+                          cancelAnimationFrame(hintFrame.current);
+                          setLockHint(null);
+                          setCategory(cat);
                           return;
                         }
-                        cancelAnimationFrame(hintFrame.current);
-                        setLockHint(null);
-                        setCategory(cat);
+                        if (picking) {
+                          void openLesson(cat).then(() => setCategory(cat));
+                          return;
+                        }
+                        if (need) showLockHint(he.lockedUntilLevel(need));
                       }}
                     />
                   );
@@ -590,6 +622,7 @@ export default function HomeScreen() {
             level={built.level}
             gift={built.gift}
             villageLevel={built.village}
+            lessonPick={pendingLessonPick(active, built.village)}
             onClose={() => setBuilt(null)}
           />
         ) : null}
@@ -790,14 +823,18 @@ function SideWidget({
   );
 }
 
-/** The next thing that opens with a higher village level. */
-function nextUnlock(level: number): { level: number; text: string; art: ReactNode } | null {
+/** The next gate: a lesson the player still has to choose, or a locked home feature. */
+function nextUnlock(
+  profile: ProfileDoc,
+  level: number,
+): { level: number; ready: boolean; text: string; art: ReactNode } | null {
+  if (pendingLessonPick(profile, level) && openedLessons(profile).length > 0) {
+    return { level, ready: true, text: he.pickOpenLesson, art: <Star size={40} /> };
+  }
   const options: { level: number; text: string; art: ReactNode }[] = [];
-  for (const cat of LESSON_PACKS) {
-    const need = lessonUnlockLevel(cat);
-    if (need > level) {
-      options.push({ level: need, text: he.nextUnlockLesson(categoryLabel(cat), need), art: <CategoryTile category={cat} size={54} /> });
-    }
+  const lessonAt = nextLessonPickLevel(profile);
+  if (lessonAt != null && lessonAt > level) {
+    options.push({ level: lessonAt, text: he.nextUnlockPick(lessonAt), art: <Star size={40} /> });
   }
   for (const id of ["avatar", "scores"] as const) {
     const need = DOCK_UNLOCK[id] ?? 0;
@@ -810,7 +847,8 @@ function nextUnlock(level: number): { level: number; text: string; art: ReactNod
     }
   }
   options.sort((a, b) => a.level - b.level);
-  return options[0] ?? null;
+  const first = options[0];
+  return first ? { ...first, ready: false } : null;
 }
 
 function LockBanner({ text, opacity }: { text: string; opacity: number }) {
@@ -842,6 +880,7 @@ function SubjectCard({
   total,
   stars,
   locked,
+  choose,
   unlockLevel,
   onPress,
 }: {
@@ -850,12 +889,14 @@ function SubjectCard({
   total: number;
   stars: number;
   locked?: boolean;
+  /** A free slot is open, so this locked pack can be chosen. */
+  choose?: boolean;
   unlockLevel?: number;
   onPress: () => void;
 }) {
   const sw = CATEGORY_COLORS[category];
   const c = useColors();
-  const need = locked && unlockLevel ? he.lockedUntilLevel(unlockLevel) : null;
+  const need = locked && !choose && unlockLevel ? he.lockedUntilLevel(unlockLevel) : null;
   return (
     <Pressable
       accessibilityRole="button"
@@ -874,7 +915,7 @@ function SubjectCard({
         <View style={[styles.subjectHalo, { backgroundColor: "#fff" }]} />
         <View>
           <View style={locked ? styles.subjectDim : undefined}>
-            <CategoryTile category={category} size={52} />
+            <CategoryTile category={category} size={100} />
           </View>
           {locked ? (
             <View style={styles.subjectLock}>
@@ -889,10 +930,10 @@ function SubjectCard({
           </View>
         ) : null}
       </View>
-      <Text style={[styles.subjectTitle, { color: locked ? c.soft : c.ink }]} numberOfLines={1}>
+      <Text style={[styles.subjectTitle, { color: locked ? c.soft : c.ink }]} numberOfLines={2}>
         {categoryLabel(category)}
       </Text>
-      {locked && unlockLevel ? (
+      {locked && choose ? null : locked && unlockLevel ? (
         <View style={styles.subjectNeed}>
           <Icon name="lock" size={12} color={c.soft} weight={2.6} />
           <Text style={[styles.subjectNeedText, { color: c.soft }]}>{he.nextUnlockShort(unlockLevel)}</Text>
@@ -1291,15 +1332,15 @@ const styles = StyleSheet.create({
     width: "48%",
     borderRadius: 22,
     backgroundColor: "#fff",
-    padding: 6,
-    paddingBottom: 10,
+    padding: 8,
+    paddingBottom: 12,
     marginBottom: 12,
     alignItems: "center",
-    gap: 6,
+    gap: 8,
   },
   subjectWindow: {
     alignSelf: "stretch",
-    height: 84,
+    height: 118,
     borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
@@ -1333,9 +1374,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   subjectStarsText: { fontFamily: font.heavy, fontSize: 11 },
-  subjectTitle: { fontFamily: font.heavy, fontSize: 17, textAlign: "center" },
-  subjectNeed: { flexDirection: "row-reverse", alignItems: "center", gap: 4, height: 16 },
-  subjectNeedText: { fontFamily: font.bold, fontSize: 12 },
+  subjectTitle: { fontFamily: font.black, fontSize: 28, lineHeight: 34, textAlign: "center" },
+  subjectNeed: { flexDirection: "row-reverse", alignItems: "center", gap: 4, height: 22 },
+  subjectNeedText: { fontFamily: font.bold, fontSize: 16 },
   subjectProg: { alignSelf: "stretch", flexDirection: "row-reverse", alignItems: "center", gap: 6, paddingHorizontal: 8, height: 16 },
   subjectTrack: { flex: 1, height: 7, borderRadius: 999, overflow: "hidden", flexDirection: "row-reverse" },
   subjectProgText: { fontFamily: font.bold, fontSize: 11 },

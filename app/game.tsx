@@ -33,7 +33,7 @@ import { BAD, CATEGORY_COLORS, GOLD, OK, TILE_SWATCHES, font } from "../src/them
 import { Coin, Icon, Star } from "../src/components/Art";
 import { BuiltPopup } from "../src/components/BuiltPopup";
 import { Buddy, Card, RoundButton, useColors } from "../src/components/ui";
-import { buildingCoinBonus, currentBuild, ownedLevel, runStars, villageLevel } from "../src/game/village";
+import { buildingCoinBonus, currentBuild, ownedLevel, pendingLessonPick, runStars, villageLevel } from "../src/game/village";
 
 const LEVEL_LABEL: Record<Difficulty, string> = {
   easy: he.easy,
@@ -254,6 +254,7 @@ function GameRun() {
               level={built.level}
               gift={built.gift}
               villageLevel={built.village}
+              lessonPick={pendingLessonPick(progress.active, built.village)}
               onClose={() => setBuiltOpen(false)}
             />
           ) : null
