@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { Screen } from "../src/components/Screen";
+import { ForestScreen, WOOD, WOOD_LIP, WoodSign } from "../src/components/Forest";
 import { Coin } from "../src/components/Art";
 import { Building, buildingName, VillageScene } from "../src/components/VillageArt";
 import { CoinPill, TopBar, useColors } from "../src/components/ui";
@@ -31,20 +31,17 @@ export default function VillageScreen() {
   const build = currentBuild(active);
 
   return (
-    <Screen>
+    <ForestScreen>
       <TopBar
         onBack={() => router.replace("/")}
         backLabel={he.backLabel}
-        center={
-          <Text style={[styles.title, { color: c.ink }]} numberOfLines={1}>
-            {he.villageTitle(active.displayName)}
-          </Text>
-        }
+        center={<WoodSign text={he.villageTitle(active.displayName)} />}
         trailing={<CoinPill coins={active.coins} />}
       />
 
-      <View style={styles.sceneWrap} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
-        {width > 0 ? (
+      <View style={styles.sceneFrame}>
+        <View style={styles.sceneWrap} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+          {width > 0 ? (
           <VillageScene
             levels={levels}
             details={villageDetails(active)}
@@ -52,9 +49,12 @@ export default function VillageScreen() {
             litCategory={build?.category ?? null}
             width={width}
           />
-        ) : null}
+          ) : null}
+        </View>
       </View>
-      <Text style={[styles.level, { color: c.ink }]}>{he.villageLevelLabel(villageLevel(active))}</Text>
+      <View style={styles.levelSign}>
+        <WoodSign text={he.villageLevelLabel(villageLevel(active))} big />
+      </View>
 
       {VILLAGE_ORDER.map((cat) => {
         const level = ownedLevel(active, cat);
@@ -65,7 +65,7 @@ export default function VillageScreen() {
         return (
           <View
             key={cat}
-            style={[styles.row, { backgroundColor: c.surface, borderBottomColor: c.line, borderBottomWidth: 5 }]}
+            style={[styles.row, { backgroundColor: c.surface, borderColor: sw.tint, borderBottomColor: sw.lip }]}
           >
             <View style={[styles.art, { backgroundColor: sw.tint }]}>
               <Building category={cat} level={level} detail={0} lit={wished && cat === wishCat} size={78} />
@@ -93,20 +93,30 @@ export default function VillageScreen() {
           </View>
         );
       })}
-    </Screen>
+    </ForestScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  title: { fontFamily: font.heavy, fontSize: 19, textAlign: "center" },
-  sceneWrap: { width: "100%", marginTop: 4 },
-  level: { fontFamily: font.black, fontSize: 28, textAlign: "center", marginTop: 12, marginBottom: 16 },
+  sceneFrame: {
+    width: "100%",
+    backgroundColor: WOOD,
+    borderBottomWidth: 7,
+    borderBottomColor: WOOD_LIP,
+    borderRadius: 30,
+    padding: 7,
+    marginTop: 10,
+  },
+  sceneWrap: { width: "100%", borderRadius: 24, overflow: "hidden" },
+  levelSign: { marginTop: -22, marginBottom: 16 },
   row: {
     width: "100%",
     flexDirection: "row-reverse",
     alignItems: "center",
     gap: 14,
     borderRadius: 24,
+    borderWidth: 3,
+    borderBottomWidth: 6,
     padding: 12,
     marginBottom: 12,
   },

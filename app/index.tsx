@@ -1,17 +1,23 @@
-import { useEffect, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import Svg from "react-native-svg";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Screen } from "../src/components/Screen";
+import { ForestScreen, ForestStage, NIGHT, WoodSign } from "../src/components/Forest";
+import { BuiltPopup } from "../src/components/BuiltPopup";
 import { useAuth } from "../src/context/AuthContext";
 import { useProgress } from "../src/context/ProgressContext";
 import { he } from "../src/i18n/he";
 import { CATEGORY_COLORS, DIFFICULTY_COLORS, GOLD, OK, font } from "../src/theme/colors";
 import { AvatarPreview } from "../src/components/AvatarPreview";
 import { LeaderboardBoard } from "./leaderboard";
-import { AvatarMark, CategoryTile, Coin, DifficultyTile, Icon, Star } from "../src/components/Art";
+import { CategoryTile, Coin, DifficultyTile, Icon, Star } from "../src/components/Art";
 import { PrimaryButton } from "../src/components/PrimaryButton";
-import { Buddy, Card, CoinPill, ProgressBar, TopBar, useColors } from "../src/components/ui";
-import { Building, buildingName, buildingThe, VillageScene } from "../src/components/VillageArt";
+import { Buddy, CoinPill, ProgressBar, StarPill, TopBar, useColors } from "../src/components/ui";
+import { CoinPot, Chest, MushroomG, SkyScene } from "../src/components/HomeArt";
+import { HowToPlay } from "../src/components/HowToPlay";
+import { StageMap, type StageNodeState } from "../src/components/StageMap";
+import { Building, buildingName, buildingThe } from "../src/components/VillageArt";
 import { guideSteps, type GuideId, type GuideState } from "../src/game/path";
 import type { ProfileDoc } from "../src/types/models";
 import {
@@ -23,8 +29,13 @@ import {
   entryCost,
   isLessonUnlocked,
   lessonUnlockLevel,
+  FEATURE_UNLOCK,
   LESSON_PACKS,
   nextGoal,
+  stageStars,
+  categoryStars,
+  totalStars,
+  VILLAGE_ORDER,
   villageLevel,
   villageDetails,
   villageLevels,
@@ -33,7 +44,6 @@ import { defaultAvatar } from "../src/game/avatar";
 import {
   CONFIG,
   clearedStages,
-  isStagePerfectClear,
   isStageUnlocked,
   parseCategory,
   parseDifficulty,
@@ -184,10 +194,14 @@ export default function HomeScreen() {
     params.level ? parseDifficulty(params.level) : null,
   );
   const c = useColors();
-  const [sceneWidth, setSceneWidth] = useState(0);
   const [tab, setTab] = useState<HomeTab>("village");
+  const insets = useSafeAreaInsets();
+  const { height: winH } = useWindowDimensions();
+  const [shellWidth, setShellWidth] = useState(360);
+  const [rootSize, setRootSize] = useState({ w: 0, h: 0 });
+  const [howTo, setHowTo] = useState(false);
   const [lockHint, setLockHint] = useState<string | null>(null);
-  const [hintPlace, setHintPlace] = useState<"dock" | "lessons" | "stages">("dock");
+  const [hintPlace, setHintPlace] = useState<"top" | "stages">("top");
   const homeLevel = villageLevel(active);
   const prevHomeLevel = useRef(homeLevel);
   const [levelPop, setLevelPop] = useState(false);
@@ -203,43 +217,16 @@ export default function HomeScreen() {
   }, [homeLevel]);
   const [hintOpacity, setHintOpacity] = useState(0);
   const hintFrame = useRef(0);
-  const [upgradeNote, setUpgradeNote] = useState<string | null>(null);
-  const [noteOpacity, setNoteOpacity] = useState(0);
-  const noteFrame = useRef(0);
+  const [built, setBuilt] = useState<{ category: Category; level: number; gift: number; village: number } | null>(null);
 
   useEffect(
     () => () => {
       cancelAnimationFrame(hintFrame.current);
-      cancelAnimationFrame(noteFrame.current);
     },
     [],
   );
 
-  const showUpgradeNote = (label: string) => {
-    cancelAnimationFrame(noteFrame.current);
-    setUpgradeNote(label);
-    setNoteOpacity(1);
-    const started = performance.now();
-    const hold = 2200;
-    const fade = 700;
-    const tick = (now: number) => {
-      const elapsed = now - started;
-      if (elapsed < hold) {
-        noteFrame.current = requestAnimationFrame(tick);
-        return;
-      }
-      const t = Math.min(1, (elapsed - hold) / fade);
-      setNoteOpacity(1 - t);
-      if (t < 1) noteFrame.current = requestAnimationFrame(tick);
-      else {
-        setUpgradeNote(null);
-        setNoteOpacity(0);
-      }
-    };
-    noteFrame.current = requestAnimationFrame(tick);
-  };
-
-  const showLockHint = (label: string, place: "dock" | "lessons" | "stages" = "dock") => {
+  const showLockHint = (label: string, place: "top" | "stages" = "top") => {
     cancelAnimationFrame(hintFrame.current);
     setHintPlace(place);
     setLockHint(label);
@@ -277,6 +264,13 @@ export default function HomeScreen() {
     }
   }, [category, active]);
 
+  useEffect(() => {
+    if (loading || howToSeen) return;
+    const played = Object.values(active.stageClears ?? {}).some((n) => n > 0);
+    if (!played) setHowTo(true);
+    else howToSeen = true;
+  }, [loading, active.stageClears]);
+
   const start = (stage: number) => {
     if (!category || !difficulty) return;
     if (!isLessonUnlocked(villageLevel(active), category)) return;
@@ -291,227 +285,323 @@ export default function HomeScreen() {
 
   if (loading) {
     return (
-      <Screen>
-        <Buddy size={120} body={c.primary} />
-        <Text style={[styles.loading, { color: c.ink }]}>{he.appName}</Text>
-      </Screen>
+      <ForestScreen>
+        <View style={styles.loadingBox}>
+          <Buddy size={120} body={c.primary} />
+          <WoodSign text={he.appName} big />
+        </View>
+      </ForestScreen>
     );
   }
 
   if (!category) {
     const build = currentBuild(active);
     const level = villageLevel(active);
-    const tabLabel: Record<DockTab, string> = {
-      village: he.homeVillage,
-      scores: he.navLeaderboard,
-      avatar: he.homeAvatar,
+    const heroCat = build?.category ?? VILLAGE_ORDER[0];
+    const heroLevel = ownedLevel(active, heroCat);
+    const unlock = nextUnlock(level);
+    const canBuild = !!build && active.coins >= build.cost;
+    const isLocked = (id: DockSlot) => {
+      const need = DOCK_UNLOCK[id];
+      return need != null && level < need;
     };
-    const tabIcon: Record<Exclude<DockTab, "avatar">, "home" | "trophy"> = {
-      village: "home",
-      scores: "trophy",
+    const openSlot = (id: DockSlot) => {
+      if (isLocked(id)) {
+        showLockHint(id === "scores" ? he.unlockScores(DOCK_UNLOCK[id] ?? 0) : he.unlockAvatar(DOCK_UNLOCK[id] ?? 0));
+        return;
+      }
+      cancelAnimationFrame(hintFrame.current);
+      setLockHint(null);
+      if (id === "shop") router.push("/shop");
+      else if (id === "map") router.push("/village");
+      else setTab(id === "home" ? "village" : id);
     };
+    const doBuild = () => {
+      if (!build) return;
+      if (!canBuild) {
+        showLockHint(he.upgradeShort(build.cost - active.coins), "top");
+        return;
+      }
+      const cat = build.category;
+      const lvl = ownedLevel(active, cat) + 1;
+      const gift = buildingCoinBonus(lvl);
+      void (async () => {
+        if (await upgradeVillage()) setBuilt({ category: cat, level: lvl, gift, village: villageLevel(active) + 1 });
+      })();
+    };
+    const heroSize = Math.min(shellWidth * 0.78, 300, winH * 0.36);
+
+    const hud = (
+      <View style={styles.hud}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={he.navProfile}
+          onPress={() => router.push("/profile")}
+          style={({ pressed }) => [styles.hudAvatar, pressed && { opacity: 0.85 }]}
+        >
+          <AvatarPreview loadout={active.avatar ?? defaultAvatar()} size={50} showGear={false} />
+        </Pressable>
+        <View style={styles.hudPills}>
+          <CoinPill coins={active.coins} onPress={() => router.push("/village")} />
+          {SHOW_STAR_PILL ? <StarPill stars={totalStars(active)} /> : null}
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={he.navProfile}
+          onPress={() => router.push("/profile")}
+          style={({ pressed }) => [
+            styles.gear,
+            { borderBottomWidth: pressed ? 2 : 5, marginTop: pressed ? 3 : 0 },
+          ]}
+        >
+          <Icon name="user" size={26} color="#fff" weight={2.6} />
+        </Pressable>
+      </View>
+    );
+
     const dock = (
-      <View>
-        {lockHint && hintPlace === "dock" ? <LockBanner text={lockHint} opacity={hintOpacity} /> : null}
-        <View style={[styles.dock, { backgroundColor: c.surface, borderBottomColor: c.line }]}>
-          {HOME_TABS.map((id) => {
-            const need = TAB_UNLOCK[id];
-            const locked = need != null && level < need;
-            const on = tab === id;
-            const lockedLabel = id === "avatar" ? he.unlockAvatar(need ?? 0) : he.unlockScores(need ?? 0);
+      <View style={[styles.dockWrap, { paddingBottom: insets.bottom }]}>
+        <View style={styles.dock}>
+          {DOCK.map((id) => {
+            const on = id === "home" ? tab === "village" || tab === "questions" : tab === id;
+            const locked = isLocked(id);
             return (
               <Pressable
                 key={id}
                 accessibilityRole="tab"
-                accessibilityLabel={locked ? lockedLabel : tabLabel[id]}
+                accessibilityLabel={DOCK_LABEL[id]}
                 accessibilityState={{ selected: on, disabled: locked }}
-                onPress={() => {
-                  if (locked) {
-                    showLockHint(lockedLabel);
-                    return;
-                  }
-                  cancelAnimationFrame(hintFrame.current);
-                  setLockHint(null);
-                  setTab(id);
-                }}
-                style={[styles.dockTab, on && { backgroundColor: c.primaryTint }]}
+                onPress={() => openSlot(id)}
+                style={[styles.dockSlot, on && styles.dockSlotOn]}
               >
-                <View style={styles.dockIcon}>
-                  <View style={locked ? { opacity: 0.45 } : undefined}>
-                    {id === "avatar" ? (
-                      <AvatarMark size={30} color={on ? c.primary : c.soft} />
-                    ) : (
-                      <Icon name={tabIcon[id]} size={26} color={on ? c.primary : c.soft} />
-                    )}
-                  </View>
-                  {locked ? (
-                    <View style={[styles.lockBadge, { backgroundColor: c.surface, borderColor: c.line }]}>
-                      <Icon name="lock" size={11} color={c.ink} weight={2.6} />
-                    </View>
-                  ) : null}
+                <View style={[styles.dockArt, on && styles.dockArtOn, locked && { opacity: 0.5 }]}>
+                  <DockArt id={id} big={on} />
                 </View>
+                {locked ? (
+                  <View style={styles.dockLock}>
+                    <Icon name="lock" size={12} color={c.ink} weight={2.8} />
+                  </View>
+                ) : null}
+                {on ? <Text style={styles.dockLabel}>{DOCK_LABEL[id]}</Text> : null}
               </Pressable>
             );
           })}
         </View>
       </View>
     );
-    return (
-      <Screen footer={dock}>
-        <View style={styles.helloBar}>
-          <View style={styles.helloLeft}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={he.navProfile}
-              onPress={() => router.push("/profile")}
-              style={({ pressed }) => [pressed && { opacity: 0.8 }]}
+
+    const sky = tab === "village" || tab === "questions" || tab === "avatar" || tab === "scores";
+    let body: ReactNode = null;
+    if (tab === "village") {
+      body = (
+        <View style={styles.heroArea}>
+          <View style={styles.sideCol}>
+            {build ? (
+              <SideWidget
+                label={he.buildFund(active.coins, build.cost)}
+                pct={(active.coins / build.cost) * 100}
+                accessibilityLabel={he.upgradeName(buildingThe(build.category))}
+                onPress={doBuild}
+                glow={canBuild}
+              >
+                <CoinPot size={58} />
+              </SideWidget>
+            ) : null}
+            <SideWidget label={he.helpLabel} onPress={() => setHowTo(true)} accessibilityLabel={he.howToButton}>
+              <View style={styles.helpBall}>
+                <Icon name="help" size={34} color="#fff" weight={3.2} />
+              </View>
+            </SideWidget>
+          </View>
+          <View style={styles.sideColLeft}>
+            {unlock ? (
+              <SideWidget
+                label={he.nextUnlockShort(unlock.level)}
+                locked
+                accessibilityLabel={unlock.text}
+                onPress={() => showLockHint(unlock.text, "top")}
+              >
+                {unlock.art}
+              </SideWidget>
+            ) : null}
+            <SideWidget label={he.navVillage} onPress={() => router.push("/village")} accessibilityLabel={he.villageMine}>
+              <Chest size={58} />
+            </SideWidget>
+          </View>
+
+          <View style={styles.heroCenter}>
+            <View
+              style={[
+                styles.levelRibbon,
+                levelPop && { transform: [{ scale: 1.14 }] },
+              ]}
             >
-              <AvatarPreview loadout={active.avatar ?? defaultAvatar()} size={52} showGear={false} />
-            </Pressable>
-            {tab === "avatar" ? coinPill : null}
-          </View>
-          <View style={styles.helloRight}>
-            {tab === "village" ? <CoinPill coins={active.coins} onPress={() => router.push("/village")} /> : null}
-            <View style={styles.helloWho}>
-              <Text style={[styles.helloSmall, { color: c.soft }]}>{he.hello}</Text>
-              <Text style={[styles.helloName, { color: c.ink }]} numberOfLines={1}>
-                {active.displayName}
-              </Text>
+              <Star size={26} />
+              <Text style={styles.levelRibbonText}>{he.villageLevelLabel(level)}</Text>
+              <Star size={26} />
             </View>
-          </View>
-        </View>
-
-        {tab === "questions" ? (
-          <>
-            <Text style={[styles.section, { color: c.ink }]}>{he.pickCategory}</Text>
-            {lockHint && hintPlace === "lessons" ? <LockBanner text={lockHint} opacity={hintOpacity} /> : null}
-            <View style={styles.grid}>
-              {LESSON_PACKS.map((cat) => {
-                const done = DIFFICULTIES.reduce((sum, d) => sum + clearedStages(active.stageClears, cat, d), 0);
-                const open = isLessonUnlocked(level, cat);
-                const need = lessonUnlockLevel(cat);
-                return (
-                  <SubjectCard
-                    key={cat}
-                    category={cat}
-                    done={done}
-                    total={CONFIG.miniLevels * DIFFICULTIES.length}
-                    locked={!open}
-                    unlockLevel={need}
-                    onPress={() => {
-                      if (!open) {
-                        showLockHint(he.lockedUntilLevel(need), "lessons");
-                        return;
-                      }
-                      cancelAnimationFrame(hintFrame.current);
-                      setLockHint(null);
-                      setCategory(cat);
-                    }}
-                  />
-                );
-              })}
-            </View>
-          </>
-        ) : null}
-
-        {tab === "village" ? (
-          <>
-          <View style={[styles.homeCard, { backgroundColor: c.surface, borderBottomColor: c.line }]}>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`${he.villageMine} · ${he.villageLevelLabel(level)}`}
               onPress={() => router.push("/village")}
-              onLayout={(e) => setSceneWidth(e.nativeEvent.layout.width)}
-              style={({ pressed }) => [styles.scene, pressed && { opacity: 0.85 }]}
+              style={({ pressed }) => [pressed && { opacity: 0.9 }]}
             >
-              {sceneWidth > 0 ? (
-                <VillageScene
-                  levels={villageLevels(active)}
-                  details={villageDetails(active)}
-                  blooms={active.villageBlooms ?? 0}
-                  litCategory={build?.category ?? null}
-                  width={sceneWidth}
-                  aspect={0.66}
-                />
-              ) : null}
-              <View
-                pointerEvents="none"
-                style={[
-                  styles.levelSign,
-                  { backgroundColor: GOLD.tint, borderBottomColor: GOLD.lip },
-                  levelPop && { transform: [{ scale: 1.14 }] },
-                ]}
-              >
-                <Text style={[styles.levelWord, { color: GOLD.deep }]}>{he.villageLevelWord}</Text>
-                <View style={[styles.levelMark, { backgroundColor: GOLD.base, borderBottomColor: GOLD.lip }]}>
-                  <Text style={styles.levelNum}>{level}</Text>
-                </View>
-              </View>
+              <Building category={heroCat} level={heroLevel} size={heroSize} />
             </Pressable>
-          </View>
-          {build ? (
-            <>
-              {upgradeNote ? (
-                <Text style={[styles.upgradeNote, { color: OK.deep, opacity: noteOpacity }]}>{upgradeNote}</Text>
-              ) : (
-                <View style={[styles.upgradeHint, { backgroundColor: GOLD.tint, borderBottomColor: GOLD.lip }]}>
-                  <Text style={[styles.upgradeHintTitle, { color: GOLD.deep }]}>{he.upgradeHelpsTitle}</Text>
-                  <Text style={[styles.upgradeHintBody, { color: c.ink }]}>
-                    {he.upgradeHelpsBody(buildingCoinBonus(ownedLevel(active, build.category) + 1))}
-                  </Text>
-                  {active.coins < build.cost ? (
-                    <Text style={[styles.upgradeHintNeed, { color: GOLD.deep }]}>
-                      {he.upgradeShort(build.cost - active.coins)}
-                    </Text>
-                  ) : (
-                    <Text style={[styles.upgradeHintNeed, { color: GOLD.deep }]}>{he.upgradeReady}</Text>
-                  )}
-                </View>
-              )}
+            <View style={styles.heroSign}>
+              <Text style={styles.heroSignText} numberOfLines={1}>
+                {buildingName(heroCat)}
+              </Text>
+            </View>
+            {build ? (
               <PrimaryButton
-                label={he.upgradeName(buildingThe(build.category))}
-                variant={active.coins >= build.cost ? "solid" : "soft"}
-                levelPlus={he.levelPlus}
+                label={he.buildNow}
+                variant={canBuild ? "solid" : "soft"}
+                color={canBuild ? GOLD.base : undefined}
                 coins={{ amount: build.cost, mode: "pay" }}
-                disabled={active.coins < build.cost}
-                onPress={() => {
-                  const name = buildingThe(build.category);
-                  const gift = buildingCoinBonus(ownedLevel(active, build.category) + 1);
-                  void (async () => {
-                    if (await upgradeVillage()) showUpgradeNote(he.builtNote(name, gift));
-                  })();
-                }}
-                style={styles.upgradeBtn}
+                onPress={doBuild}
+                style={styles.buildBtn}
               />
-            </>
-          ) : null}
+            ) : null}
+          </View>
+
           <PrimaryButton
+            big
             label={he.homePlay}
-            variant={build && active.coins >= build.cost ? "soft" : "solid"}
-            coins={{ mode: "earn" }}
+            color={OK.base}
             onPress={() => setTab("questions")}
             style={styles.playBtn}
           />
-          </>
-        ) : null}
+        </View>
+      );
+    } else {
+      body = (
+        <ScrollView contentContainerStyle={styles.tabScroll} showsVerticalScrollIndicator={false}>
+          {tab === "questions" ? (
+            <>
+              <TopBar
+                onBack={() => setTab("village")}
+                backLabel={he.pickSubjectBack}
+                center={<WoodSign text={he.pickCategory} />}
+              />
+              <View style={styles.grid}>
+                {LESSON_PACKS.map((cat) => {
+                  const done = DIFFICULTIES.reduce((sum, d) => sum + clearedStages(active.stageClears, cat, d), 0);
+                  const open = isLessonUnlocked(level, cat);
+                  const need = lessonUnlockLevel(cat);
+                  return (
+                    <SubjectCard
+                      key={cat}
+                      category={cat}
+                      done={done}
+                      total={CONFIG.miniLevels * DIFFICULTIES.length}
+                      stars={categoryStars(active, cat)}
+                      locked={!open}
+                      unlockLevel={need}
+                      onPress={() => {
+                        if (!open) {
+                          showLockHint(he.lockedUntilLevel(need));
+                          return;
+                        }
+                        cancelAnimationFrame(hintFrame.current);
+                        setLockHint(null);
+                        setCategory(cat);
+                      }}
+                    />
+                  );
+                })}
+              </View>
+            </>
+          ) : null}
 
-        {tab === "scores" ? <LeaderboardBoard /> : null}
+          {tab === "scores" ? (
+            <>
+              <WoodSign text={he.navLeaderboard} />
+              <View style={styles.scoresSub}>
+                <Text style={styles.scoresSubText}>{he.leaderboardSub}</Text>
+              </View>
+              <LeaderboardBoard />
+            </>
+          ) : null}
 
-        {tab === "avatar" ? (
-          <>
-            <View style={[styles.avatarCard, { backgroundColor: c.surface, borderBottomColor: c.line }]}>
-              <AvatarPreview loadout={active.avatar ?? defaultAvatar()} size={170} />
-              <Text style={[styles.avatarName, { color: c.ink }]}>{active.displayName}</Text>
-              <PrimaryButton label={he.homeDress} icon="bag" onPress={() => router.push("/shop")} style={styles.goalBtn} />
-            </View>
-            {isLocal ? <Text style={[styles.localHint, { color: c.soft }]}>{he.coinsLocalOnly}</Text> : null}
-            <Pressable onPress={() => signOut()} style={styles.logout}>
-              <Icon name="logout" size={18} color={c.soft} />
-              <Text style={[styles.logoutText, { color: c.soft }]}>{he.logout}</Text>
-            </Pressable>
-          </>
+          {tab === "avatar" ? (
+            <>
+              <WoodSign text={he.homeAvatar} />
+              <ForestStage>
+                <View style={styles.avatarLift}>
+                  <AvatarPreview loadout={active.avatar ?? defaultAvatar()} size={200} />
+                </View>
+                <View style={styles.avatarNamePill}>
+                  <Text style={styles.avatarName} numberOfLines={1}>
+                    {active.displayName}
+                  </Text>
+                </View>
+              </ForestStage>
+              <PrimaryButton
+                label={he.homeDress}
+                icon="bag"
+                color={GOLD.base}
+                onPress={() => router.push("/shop")}
+                style={styles.avatarDress}
+              />
+              {isLocal ? (
+                <View style={styles.avatarNote}>
+                  <Text style={[styles.localHint, { color: c.soft }]}>{he.coinsLocalOnly}</Text>
+                </View>
+              ) : null}
+              <Pressable
+                onPress={() => signOut()}
+                style={({ pressed }) => [styles.logout, { borderBottomWidth: pressed ? 1 : 4, marginTop: pressed ? 21 : 18 }]}
+              >
+                <Icon name="logout" size={18} color={c.soft} />
+                <Text style={[styles.logoutText, { color: c.soft }]}>{he.logout}</Text>
+              </Pressable>
+            </>
+          ) : null}
+        </ScrollView>
+      );
+    }
+
+    return (
+      <View
+        style={[styles.fill, { backgroundColor: sky ? "#B5E4FF" : c.ground }]}
+        onLayout={(e) => setRootSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
+      >
+        {sky && rootSize.w > 0 ? (
+          <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+            <SkyScene width={rootSize.w} height={rootSize.h} />
+          </View>
         ) : null}
-      </Screen>
+        <SafeAreaView edges={["top"]} style={styles.fill}>
+          <View style={styles.shell} onLayout={(e) => setShellWidth(e.nativeEvent.layout.width)}>
+            {hud}
+            {body}
+          </View>
+        </SafeAreaView>
+        {dock}
+        {lockHint && hintPlace === "top" ? (
+          <View pointerEvents="none" style={[styles.topHint, { top: insets.top + 74 }]}>
+            <LockBanner text={lockHint} opacity={hintOpacity} />
+          </View>
+        ) : null}
+        {built ? (
+          <BuiltPopup
+            category={built.category}
+            level={built.level}
+            gift={built.gift}
+            villageLevel={built.village}
+            onClose={() => setBuilt(null)}
+          />
+        ) : null}
+        {howTo ? (
+          <HowToPlay
+            onClose={() => {
+              howToSeen = true;
+              setHowTo(false);
+            }}
+          />
+        ) : null}
+      </View>
     );
   }
 
@@ -526,221 +616,201 @@ export default function HomeScreen() {
 
   if (!difficulty) {
     return (
-      <Screen>
+      <View
+        style={[styles.fill, { backgroundColor: "#B5E4FF" }]}
+        onLayout={(e) => setRootSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
+      >
+        {rootSize.w > 0 ? (
+          <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+            <SkyScene width={rootSize.w} height={rootSize.h} />
+          </View>
+        ) : null}
+        <SafeAreaView edges={["top", "bottom"]} style={styles.fill}>
+          <ScrollView contentContainerStyle={styles.diffScroll} showsVerticalScrollIndicator={false}>
+            <View style={styles.shell}>
+              <TopBar
+                onBack={() => {
+                  setCategory(null);
+                  router.replace("/");
+                }}
+                backLabel={he.backLabel}
+                center={chip}
+                trailing={coinPill}
+              />
+              <View style={styles.diffSign}>
+                <WoodSign text={he.pickDifficulty} />
+              </View>
+              {DIFFICULTIES.map((d) => (
+                <DifficultyCard
+                  key={d}
+                  difficulty={d}
+                  desc={levelDesc(category, d)}
+                  cleared={clearedStages(active.stageClears, category, d)}
+                  onPress={() => setDifficulty(d)}
+                />
+              ))}
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
+  const cleared = clearedStages(active.stageClears, category, difficulty);
+  const stages: StageNodeState[] = Array.from({ length: CONFIG.miniLevels }, (_, i) => {
+    const stage = i + 1;
+    const unlocked = isStageUnlocked(active.stageClears, category, difficulty, stage);
+    return {
+      stars: stageStars(active, category, difficulty, stage),
+      state: !unlocked ? "locked" : cleared >= stage ? "done" : "current",
+      cost: entryCost(active, category, difficulty, stage),
+    };
+  });
+  return (
+    <StageMap
+      category={category}
+      goalLevel={ownedLevel(active, category)}
+      stages={stages}
+      onPressStage={(stage) => {
+        if (stages[stage - 1].state === "locked") {
+          showLockHint(he.lockedUntilStage(stage - 1), "stages");
+          return;
+        }
+        start(stage);
+      }}
+      header={
         <TopBar
           onBack={() => {
-            setCategory(null);
-            router.replace("/");
+            setDifficulty(null);
+            router.replace({ pathname: "/", params: { category } });
           }}
           backLabel={he.backLabel}
           center={chip}
           trailing={coinPill}
         />
-        <Text style={[styles.section, styles.sectionCenter, { color: c.ink }]}>{he.pickDifficulty}</Text>
-        <View style={styles.levels}>
-          {DIFFICULTIES.map((d) => {
-            const cleared = clearedStages(active.stageClears, category, d);
-            const sw = DIFFICULTY_COLORS[d];
-            return (
-              <Pressable
-                key={d}
-                onPress={() => setDifficulty(d)}
-                style={({ pressed }) => [
-                  styles.levelCard,
-                  {
-                    backgroundColor: c.surface,
-                    borderBottomColor: c.line,
-                    borderBottomWidth: pressed ? 2 : 5,
-                    marginTop: pressed ? 3 : 0,
-                  },
-                ]}
-              >
-                <DifficultyTile difficulty={d} size={58} />
-                <View style={styles.levelCopy}>
-                  <Text style={[styles.cardTitle, { color: c.ink }]}>{difficultyLabel(d)}</Text>
-                  <Text style={[styles.cardDesc, { color: c.soft }]}>{levelDesc(category, d)}</Text>
-                  <View style={styles.payRow}>
-                    <Coin size={18} />
-                    <Text style={[styles.payText, { color: GOLD.deep }]}>{he.difficultyPay(clearPay(d))}</Text>
-                  </View>
-                  <View style={styles.levelProgress}>
-                    <Text style={[styles.fraction, { color: c.soft }]}>{he.fraction(cleared, CONFIG.miniLevels)}</Text>
-                    <View style={{ flex: 1 }}>
-                      <ProgressBar pct={(cleared / CONFIG.miniLevels) * 100} color={sw.base} />
-                    </View>
-                  </View>
-                </View>
-              </Pressable>
-            );
-          })}
-        </View>
-      </Screen>
-    );
-  }
-
-  const cleared = clearedStages(active.stageClears, category, difficulty);
-  return (
-    <Screen>
-      <TopBar
-        onBack={() => {
-          setDifficulty(null);
-          router.replace({ pathname: "/", params: { category } });
-        }}
-        backLabel={he.backLabel}
-        center={chip}
-        trailing={coinPill}
-      />
-      <Card style={styles.progressCard}>
-        <View style={styles.progressHead}>
-          <Text style={[styles.progressTitle, { color: c.ink }]}>{he.yourProgress}</Text>
-          <Text style={[styles.progressSub, { color: c.soft }]}>{he.stagesDone(cleared, CONFIG.miniLevels)}</Text>
-        </View>
-        <ProgressBar pct={(cleared / CONFIG.miniLevels) * 100} color={CATEGORY_COLORS[category].base} height={10} />
-      </Card>
-      {lockHint && hintPlace === "stages" ? <LockBanner text={lockHint} opacity={hintOpacity} /> : null}
-
-      <View style={styles.map}>
-        {Array.from({ length: CONFIG.miniLevels }, (_, i) => i + 1).map((stage) => {
-          const unlocked = isStageUnlocked(active.stageClears, category, difficulty, stage);
-          const done = cleared >= stage;
-          const perfect =
-            done && isStagePerfectClear(active.stagePerfect, active.stageCoins, category, difficulty, stage);
-          return (
-            <StageNode
-              key={stage}
-              stage={stage}
-              cost={entryCost(active, category, difficulty, stage)}
-              state={!unlocked ? "locked" : perfect ? "perfect" : done ? "partial" : "current"}
-              onPress={() => {
-                if (!unlocked) {
-                  showLockHint(he.lockedUntilStage(stage - 1), "stages");
-                  return;
-                }
-                start(stage);
-              }}
-            />
-          );
-        })}
-      </View>
-    </Screen>
+      }
+      hint={lockHint && hintPlace === "stages" ? <LockBanner text={lockHint} opacity={hintOpacity} /> : null}
+    />
   );
 }
 
-const ZIGZAG = [0, -72, -104, -72, 0, 72, 104, 72, 0, -72];
+type DockSlot = "map" | "avatar" | "home" | "scores" | "shop";
+/** RTL: first slot is on the right. Home sits in the middle. */
+const DOCK: DockSlot[] = ["map", "avatar", "home", "scores", "shop"];
+const DOCK_UNLOCK: Partial<Record<DockSlot, number>> = FEATURE_UNLOCK;
+const DOCK_LABEL: Record<DockSlot, string> = {
+  map: he.navVillage,
+  avatar: he.homeAvatar,
+  home: he.homeTab,
+  scores: he.navLeaderboard,
+  shop: he.navShop,
+};
 
-function StageNode({
-  stage,
-  cost,
-  state,
-  onPress,
-}: {
-  stage: number;
-  cost: number;
-  state: "locked" | "perfect" | "partial" | "current";
-  onPress: () => void;
-}) {
-  const c = useColors();
-  const offset = ZIGZAG[(stage - 1) % ZIGZAG.length];
-  const size = state === "current" ? 70 : state === "locked" ? 64 : 58;
-  const fill =
-    state === "perfect"
-      ? OK
-      : state === "partial"
-        ? GOLD
-        : state === "current"
-          ? { base: c.primary, lip: c.primaryLip }
-          : { base: "#DCE6F2", lip: "#C3D1E3" };
-  // Side labels go toward the screen center so they never clip.
-  const side = offset <= 0 ? { left: size + 12 } : { right: size + 12 };
-  const align = offset <= 0 ? "flex-start" : "flex-end";
-  const otherSide = offset <= 0 ? { right: size + 6 } : { left: size + 6 };
+/** Star total in the HUD. Hidden until stars get a job (unlocks / chests / leaderboard). */
+const SHOW_STAR_PILL = false;
 
-  return (
-    <View style={styles.mapRow}>
-      <View style={{ width: size, height: size, transform: [{ translateX: offset }] }}>
-        {state === "current" ? (
-          <View style={[styles.halo, { backgroundColor: c.primaryTint, top: -11, left: -11, width: size + 22, height: size + 22, borderRadius: (size + 22) / 2 }]} />
-        ) : null}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={
-            state === "locked" ? `${he.stageLabel(stage)} · ${he.lockedUntilStage(Math.max(1, stage - 1))}` : he.stageLabel(stage)
-          }
-          onPress={onPress}
-          style={({ pressed }) => [
-            styles.node,
-            {
-              width: size,
-              height: size,
-              borderRadius: size / 2,
-              backgroundColor: fill.base,
-              borderBottomColor: fill.lip,
-              borderBottomWidth: pressed ? 2 : 5,
-              marginTop: pressed ? 3 : 0,
-            },
-          ]}
-        >
-          {state === "perfect" ? (
-            <Star size={28} fill="#fff" stroke="#fff" />
-          ) : state === "partial" ? (
-            <Icon name="check" size={28} color="#fff" weight={3.4} />
-          ) : state === "current" ? (
-            <Text style={styles.nodeNum}>{stage}</Text>
-          ) : (
-            <View style={styles.nodeLock}>
-              <Icon name="lock" size={26} color="#7A879C" weight={2.6} />
-              <Text style={styles.nodeLockedNum}>{stage}</Text>
-            </View>
-          )}
-        </Pressable>
+/** Shown once per app run for a brand-new player; the "?" widget reopens it. */
+let howToSeen = false;
 
-        {state === "locked" ? (
-          <View style={[styles.sideLabel, side, { alignItems: align, top: size / 2 - 10 }]}>
-            <Text style={[styles.sideText, { color: "#7A879C" }]}>{he.stageLocked}</Text>
-          </View>
-        ) : null}
-        {state === "perfect" ? (
-          <View style={[styles.sideLabel, side, { alignItems: align, top: size / 2 - 11 }]}>
-            <Text style={[styles.sideText, { color: OK.deep }]}>{he.stagePerfectBadge}</Text>
-          </View>
-        ) : null}
-        {state === "partial" ? (
-          <View style={[styles.sideLabel, side, { alignItems: align, top: size / 2 - 18 }]}>
-            <Pressable
-              onPress={onPress}
-              style={[styles.retryPill, { backgroundColor: c.surface, borderBottomColor: c.line }]}
-            >
-              <Icon name="replay" size={14} color={GOLD.deep} weight={2.6} />
-              <Text style={[styles.sideText, { color: GOLD.deep }]}>
-                {he.stagePartialBadge} · {he.stageRetry}
-              </Text>
-            </Pressable>
-          </View>
-        ) : null}
-        {state === "current" ? (
-          <>
-            <View style={[styles.sideLabel, side, { alignItems: align, top: size / 2 - 18 }]}>
-              <Text style={[styles.startText, { color: c.primary }]}>{he.stageStart}</Text>
-              {cost > 0 ? (
-                <View style={[styles.startCost, { backgroundColor: GOLD.tint }]}>
-                  <Coin size={16} />
-                  <Text style={[styles.startCostText, { color: GOLD.deep }]}>{`−${cost}`}</Text>
-                </View>
-              ) : (
-                <View style={[styles.startCost, { backgroundColor: OK.tint }]}>
-                  <Coin size={16} />
-                  <Text style={[styles.startCostText, { color: OK.deep }]}>+</Text>
-                </View>
-              )}
-            </View>
-            <View style={[styles.mascotPeek, otherSide]}>
-              <Buddy size={54} body={c.primary} />
-            </View>
-          </>
-        ) : null}
+function DockArt({ id, big }: { id: DockSlot; big: boolean }) {
+  const s = big ? 46 : 36;
+  if (id === "home") return <Building category="math" level={4} size={s + 6} />;
+  if (id === "map") {
+    return (
+      <Svg width={s} height={s} viewBox="-12 -24 24 26">
+        <MushroomG x={0} y={0} s={1.5} />
+      </Svg>
+    );
+  }
+  if (id === "avatar") return <Buddy size={s * 0.82} />;
+  if (id === "scores") {
+    return (
+      <View style={[styles.dockBadge, { width: s, height: s, backgroundColor: GOLD.base, borderBottomColor: GOLD.lip }]}>
+        <Icon name="trophy" size={s * 0.62} color="#fff" weight={2.6} />
       </View>
+    );
+  }
+  return (
+    <View
+      style={[
+        styles.dockBadge,
+        { width: s, height: s, backgroundColor: CATEGORY_COLORS.reading.base, borderBottomColor: CATEGORY_COLORS.reading.lip },
+      ]}
+    >
+      <Icon name="bag" size={s * 0.62} color="#fff" weight={2.6} />
     </View>
   );
+}
+
+/** Floating home widget: picture on top, label pill (or progress bar) underneath. */
+function SideWidget({
+  children,
+  label,
+  pct,
+  locked,
+  glow,
+  onPress,
+  accessibilityLabel,
+}: {
+  children: ReactNode;
+  label?: string;
+  pct?: number;
+  locked?: boolean;
+  glow?: boolean;
+  onPress: () => void;
+  accessibilityLabel: string;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      onPress={onPress}
+      style={({ pressed }) => [styles.widget, pressed && { transform: [{ scale: 0.95 }] }]}
+    >
+      {glow ? <View style={styles.widgetGlow} /> : null}
+      <View style={locked ? { opacity: 0.6 } : undefined}>{children}</View>
+      {locked ? (
+        <View style={styles.widgetLock}>
+          <Icon name="lock" size={14} color="#fff" weight={2.8} />
+        </View>
+      ) : null}
+      {label ? <View style={[styles.widgetPill, pct != null && styles.widgetPillBar]}>
+        {pct != null ? (
+          <View style={StyleSheet.absoluteFill}>
+            <View style={styles.widgetTrack}>
+              <View style={[styles.widgetFill, { width: `${Math.max(6, Math.min(100, pct))}%` }]} />
+            </View>
+          </View>
+        ) : null}
+        <Text style={styles.widgetText} numberOfLines={1}>
+          {label}
+        </Text>
+      </View> : null}
+    </Pressable>
+  );
+}
+
+/** The next thing that opens with a higher village level. */
+function nextUnlock(level: number): { level: number; text: string; art: ReactNode } | null {
+  const options: { level: number; text: string; art: ReactNode }[] = [];
+  for (const cat of LESSON_PACKS) {
+    const need = lessonUnlockLevel(cat);
+    if (need > level) {
+      options.push({ level: need, text: he.nextUnlockLesson(categoryLabel(cat), need), art: <CategoryTile category={cat} size={54} /> });
+    }
+  }
+  for (const id of ["avatar", "scores"] as const) {
+    const need = DOCK_UNLOCK[id] ?? 0;
+    if (need > level) {
+      options.push({
+        level: need,
+        text: id === "avatar" ? he.unlockAvatar(need) : he.unlockScores(need),
+        art: id === "avatar" ? <Buddy size={46} /> : <DockArt id="scores" big={false} />,
+      });
+    }
+  }
+  options.sort((a, b) => a.level - b.level);
+  return options[0] ?? null;
 }
 
 function LockBanner({ text, opacity }: { text: string; opacity: number }) {
@@ -753,10 +823,24 @@ function LockBanner({ text, opacity }: { text: string; opacity: number }) {
   );
 }
 
+/** Wooden plank title, same as the home building sign. */
+/** Dark pill with a colored fill from the right and "n/m" on top. */
+function ProgressPill({ pct, label, color }: { pct: number; label: string; color: string }) {
+  return (
+    <View style={styles.progPill}>
+      <View style={[StyleSheet.absoluteFill, styles.widgetTrack]}>
+        <View style={{ height: "100%", width: `${Math.max(0, Math.min(100, pct))}%`, backgroundColor: color }} />
+      </View>
+      <Text style={styles.widgetText}>{label}</Text>
+    </View>
+  );
+}
+
 function SubjectCard({
   category,
   done,
   total,
+  stars,
   locked,
   unlockLevel,
   onPress,
@@ -764,6 +848,7 @@ function SubjectCard({
   category: Category;
   done: number;
   total: number;
+  stars: number;
   locked?: boolean;
   unlockLevel?: number;
   onPress: () => void;
@@ -779,34 +864,100 @@ function SubjectCard({
       style={({ pressed }) => [
         styles.subject,
         {
-          backgroundColor: sw.tint,
-          borderBottomColor: locked ? "#C5D0DE" : sw.lip,
-          borderBottomWidth: pressed ? 2 : 5,
-          marginTop: pressed ? 3 : 0,
+          borderBottomColor: locked ? "#DCE3EC" : sw.base + "66",
+          borderBottomWidth: pressed ? 2 : 4,
+          marginTop: pressed ? 2 : 0,
         },
       ]}
     >
-      <View style={styles.subjectMark}>
-        <View style={locked ? styles.subjectDim : undefined}>
-          <CategoryTile category={category} size={52} />
+      <View style={[styles.subjectWindow, { backgroundColor: locked ? "#EEF2F7" : sw.tint }]}>
+        <View style={[styles.subjectHalo, { backgroundColor: "#fff" }]} />
+        <View>
+          <View style={locked ? styles.subjectDim : undefined}>
+            <CategoryTile category={category} size={52} />
+          </View>
+          {locked ? (
+            <View style={styles.subjectLock}>
+              <Icon name="lock" size={13} color="#fff" weight={3} />
+            </View>
+          ) : null}
         </View>
-        {locked ? (
-          <View style={[styles.subjectLock, { backgroundColor: "#E8EEF6", borderBottomColor: "#C5D0DE" }]}>
-            <Icon name="lock" size={22} color="#6E7C92" weight={2.6} />
+        {!locked ? (
+          <View style={styles.subjectStars}>
+            <Star size={13} />
+            <Text style={[styles.subjectStarsText, { color: GOLD.deep }]}>{stars}</Text>
           </View>
         ) : null}
       </View>
-      <Text style={[styles.cardTitle, { color: locked ? c.ink : sw.deep, textAlign: "center" }]} numberOfLines={1}>
+      <Text style={[styles.subjectTitle, { color: locked ? c.soft : c.ink }]} numberOfLines={1}>
         {categoryLabel(category)}
       </Text>
-      {need ? (
-        <View style={[styles.lockLine, { backgroundColor: "#E4EAF2" }]}>
-          <Icon name="lock" size={14} color={c.soft} weight={2.6} />
-          <Text style={[styles.lockLineText, { color: c.soft }]}>{need}</Text>
+      {locked && unlockLevel ? (
+        <View style={styles.subjectNeed}>
+          <Icon name="lock" size={12} color={c.soft} weight={2.6} />
+          <Text style={[styles.subjectNeedText, { color: c.soft }]}>{he.nextUnlockShort(unlockLevel)}</Text>
         </View>
       ) : (
-        <Text style={[styles.fraction, { color: sw.deep, textAlign: "center" }]}>{he.stagesDone(done, total)}</Text>
+        <View style={styles.subjectProg}>
+          <View style={[styles.subjectTrack, { backgroundColor: sw.tint }]}>
+            <View style={{ height: "100%", width: `${Math.max(4, Math.min(100, (done / total) * 100))}%`, borderRadius: 999, backgroundColor: sw.base }} />
+          </View>
+          <Text style={[styles.subjectProgText, { color: sw.deep }]}>{he.fraction(done, total)}</Text>
+        </View>
       )}
+    </Pressable>
+  );
+}
+
+function DifficultyCard({
+  difficulty,
+  desc,
+  cleared,
+  onPress,
+}: {
+  difficulty: Difficulty;
+  desc: string;
+  cleared: number;
+  onPress: () => void;
+}) {
+  const sw = DIFFICULTY_COLORS[difficulty];
+  const c = useColors();
+  const pips = difficulty === "easy" ? 1 : difficulty === "mid" ? 2 : 3;
+  const total = CONFIG.miniLevels;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${difficultyLabel(difficulty)} · ${desc}`}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.diffCard,
+        { borderBottomColor: sw.lip, borderBottomWidth: pressed ? 3 : 7, marginTop: pressed ? 4 : 0 },
+      ]}
+    >
+      <View style={[styles.diffBadge, { backgroundColor: sw.tint }]}>
+        <DifficultyTile difficulty={difficulty} size={62} />
+        <View style={styles.diffPips}>
+          {[1, 2, 3].map((i) => (
+            <Star key={i} size={15} fill={i <= pips ? sw.base : "#D5DCE6"} stroke={i <= pips ? sw.lip : "#B9C4D3"} />
+          ))}
+        </View>
+      </View>
+      <View style={styles.diffCopy}>
+        <Text style={[styles.diffTitle, { color: sw.deep }]}>{difficultyLabel(difficulty)}</Text>
+        <Text style={[styles.cardDesc, { color: c.soft }]} numberOfLines={2}>
+          {desc}
+        </Text>
+        <View style={styles.diffMeta}>
+          <ProgressPill pct={(cleared / total) * 100} label={he.fraction(cleared, total)} color={sw.base} />
+          <View style={styles.diffChip}>
+            <Coin size={16} />
+            <Text style={[styles.diffChipText, { color: GOLD.deep }]}>+{clearPay(difficulty)}</Text>
+          </View>
+        </View>
+      </View>
+      <View style={[styles.diffGo, { backgroundColor: sw.base, borderBottomColor: sw.lip }]}>
+        <Icon name="next" size={24} color="#fff" weight={3.4} />
+      </View>
     </Pressable>
   );
 }
@@ -857,40 +1008,197 @@ function levelDesc(category: Category, level: Difficulty) {
   return he.hardDesc;
 }
 
+const WOOD = "#D9A066";
+const WOOD_LIP = "#A8723A";
+const DOCK_BLUE = "#2F6FEB";
+
 const styles = StyleSheet.create({
-  loading: { fontSize: 28, fontFamily: font.black, marginTop: 16 },
-  helloBar: {
-    width: "100%",
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  helloLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
-  helloRight: { marginLeft: "auto", flexDirection: "row", alignItems: "center", gap: 10 },
-  helloWho: { alignItems: "flex-end", flexShrink: 1 },
-  helloSmall: { fontSize: 13, fontFamily: font.medium },
-  helloName: { fontSize: 22, fontFamily: font.heavy, maxWidth: 180, textAlign: "right" },
-  dock: {
+  fill: { flex: 1 },
+  shell: { flex: 1, width: "100%", maxWidth: 520, alignSelf: "center", paddingHorizontal: 14 },
+  hud: {
     flexDirection: "row-reverse",
-    width: "100%",
-    borderRadius: 28,
-    borderBottomWidth: 5,
-    padding: 6,
-    gap: 6,
+    alignItems: "center",
+    gap: 8,
+    paddingTop: 8,
+    paddingBottom: 6,
   },
-  dockTab: { flex: 1, minHeight: 52, borderRadius: 22, alignItems: "center", justifyContent: "center" },
-  dockIcon: { width: 34, height: 34, alignItems: "center", justifyContent: "center" },
-  lockBadge: {
-    position: "absolute",
-    left: -1,
-    bottom: -1,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    borderWidth: 1.5,
+  hudAvatar: { borderRadius: 30, borderWidth: 3, borderColor: "#fff" },
+  hudPills: { flex: 1, flexDirection: "row-reverse", alignItems: "center", gap: 6, flexWrap: "wrap" },
+  gear: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: GOLD.base,
+    borderBottomColor: GOLD.lip,
     alignItems: "center",
     justifyContent: "center",
   },
+  heroArea: { flex: 1, paddingBottom: 10 },
+  sideCol: { position: "absolute", top: 6, right: 0, zIndex: 3, gap: 12, alignItems: "center" },
+  sideColLeft: { position: "absolute", top: 6, left: 0, zIndex: 3, gap: 12, alignItems: "center" },
+  heroCenter: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 8 },
+  levelRibbon: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#fff",
+    borderBottomWidth: 5,
+    borderBottomColor: "#CFE0F2",
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    marginBottom: -10,
+    zIndex: 2,
+  },
+  levelRibbonText: { fontFamily: font.black, fontSize: 22, color: GOLD.deep },
+  heroSign: {
+    marginTop: -14,
+    backgroundColor: WOOD,
+    borderBottomWidth: 5,
+    borderBottomColor: WOOD_LIP,
+    borderRadius: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 22,
+  },
+  heroSignText: {
+    fontFamily: font.black,
+    fontSize: 22,
+    color: "#fff",
+    textShadowColor: WOOD_LIP,
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 0,
+  },
+  buildBtn: { marginTop: 12, minWidth: 200 },
+  upgradeNote: {
+    fontFamily: font.heavy,
+    fontSize: 15,
+    textAlign: "center",
+    marginTop: 12,
+    color: OK.deep,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    overflow: "hidden",
+  },
+  playBtn: { alignSelf: "stretch", marginHorizontal: 20, marginBottom: 34 },
+  helpBall: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: CATEGORY_COLORS.logic.base,
+    borderBottomWidth: 5,
+    borderBottomColor: CATEGORY_COLORS.logic.lip,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  widget: { width: 80, alignItems: "center" },
+  widgetGlow: {
+    position: "absolute",
+    top: -6,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: "rgba(255, 224, 74, 0.55)",
+  },
+  widgetLock: {
+    position: "absolute",
+    top: 28,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "#6E7C92",
+    borderWidth: 2,
+    borderColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  widgetPill: {
+    marginTop: -4,
+    minWidth: 72,
+    borderRadius: 999,
+    backgroundColor: "#1F2A44",
+    borderWidth: 2,
+    borderColor: "#fff",
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    alignItems: "center",
+    overflow: "hidden",
+  },
+  widgetPillBar: { backgroundColor: "#2B3A5C" },
+  widgetTrack: { flex: 1, flexDirection: "row-reverse" },
+  widgetFill: { height: "100%", backgroundColor: OK.base },
+  widgetText: {
+    fontFamily: font.black,
+    fontSize: 13,
+    color: "#fff",
+    textShadowColor: "rgba(0,0,0,0.35)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 0,
+  },
+  tabScroll: { paddingTop: 8, paddingBottom: 30, alignItems: "center" },
+  tabTitle: { fontFamily: font.heavy, fontSize: 20, textAlign: "center" },
+  topHint: { position: "absolute", left: 16, right: 16, zIndex: 40, alignItems: "center" },
+  dockWrap: {
+    zIndex: 20,
+    backgroundColor: DOCK_BLUE,
+    borderTopWidth: 4,
+    borderTopColor: "#6E9CF7",
+  },
+  dock: {
+    flexDirection: "row-reverse",
+    width: "100%",
+    maxWidth: 520,
+    alignSelf: "center",
+    height: 70,
+  },
+  dockSlot: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderLeftColor: "#1F4FB8",
+    borderRightColor: "#4C86F5",
+  },
+  dockSlotOn: {
+    flex: 1.45,
+    marginTop: -16,
+    backgroundColor: "#4C86F5",
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    borderTopWidth: 4,
+    borderTopColor: "#8DB3FF",
+    borderLeftColor: "#8DB3FF",
+    borderRightColor: "#8DB3FF",
+    justifyContent: "flex-end",
+    paddingBottom: 4,
+  },
+  dockArt: { alignItems: "center", justifyContent: "center" },
+  dockArtOn: { marginTop: -16 },
+  dockLock: {
+    position: "absolute",
+    bottom: 10,
+    left: "56%",
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dockLabel: {
+    fontFamily: font.black,
+    fontSize: 15,
+    color: "#fff",
+    textShadowColor: "#1F4FB8",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 0,
+  },
+  dockBadge: { borderRadius: 12, borderBottomWidth: 4, alignItems: "center", justifyContent: "center" },
+  loadingBox: { flex: 1, alignItems: "center", justifyContent: "center", gap: 16 },
+  scoresSub: { backgroundColor: NIGHT, borderRadius: 999, borderWidth: 2, borderColor: "#fff", paddingVertical: 4, paddingHorizontal: 14, marginTop: 12, marginBottom: 14 },
+  scoresSubText: { fontFamily: font.bold, fontSize: 14, color: "#fff", textAlign: "center" },
   lockBanner: {
     alignSelf: "stretch",
     flexDirection: "row-reverse",
@@ -904,48 +1212,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   lockBannerText: { fontFamily: font.heavy, fontSize: 16, textAlign: "center", flexShrink: 1 },
-  playBtn: { alignSelf: "stretch", marginTop: 8, minHeight: 64 },
-  upgradeNote: { fontFamily: font.heavy, fontSize: 15, textAlign: "center", marginTop: 12 },
-  upgradeHint: {
-    alignSelf: "stretch",
-    borderRadius: 22,
-    borderBottomWidth: 4,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginTop: 12,
-    alignItems: "center",
-    gap: 4,
-  },
-  upgradeHintTitle: { fontFamily: font.heavy, fontSize: 17, textAlign: "center" },
-  upgradeHintBody: { fontFamily: font.bold, fontSize: 15, textAlign: "center" },
-  upgradeHintNeed: { fontFamily: font.heavy, fontSize: 14, textAlign: "center" },
-  upgradeBtn: { alignSelf: "stretch", marginTop: 12, minHeight: 56 },
   homeCard: { width: "100%", borderRadius: 28, borderBottomWidth: 6, padding: 14, gap: 12 },
-  levelSign: {
-    position: "absolute",
-    top: 10,
-    alignSelf: "center",
-    zIndex: 2,
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 8,
-    borderRadius: 999,
-    borderBottomWidth: 4,
-    paddingVertical: 4,
-    paddingLeft: 6,
-    paddingRight: 14,
-  },
-  levelWord: { fontFamily: font.heavy, fontSize: 15 },
-  levelMark: {
-    minWidth: 32,
-    height: 32,
-    borderRadius: 16,
-    borderBottomWidth: 3,
-    paddingHorizontal: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  levelNum: { fontFamily: font.black, fontSize: 18, color: "#fff", lineHeight: 22 },
   guideTitle: { fontFamily: font.heavy, fontSize: 20, textAlign: "right" },
   guideBody: { fontFamily: font.medium, fontSize: 15, textAlign: "right" },
   guideHint: { fontFamily: font.medium, fontSize: 13, textAlign: "right" },
@@ -954,7 +1221,22 @@ const styles = StyleSheet.create({
   guideDot: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   guideNum: { fontFamily: font.heavy, fontSize: 14 },
   avatarCard: { width: "100%", borderRadius: 28, borderBottomWidth: 6, padding: 18, alignItems: "center", marginTop: 8 },
-  avatarName: { fontFamily: font.black, fontSize: 26, marginTop: 8, marginBottom: 12, textAlign: "center" },
+  avatarLift: { position: "relative", zIndex: 1 },
+  avatarNamePill: {
+    position: "relative",
+    zIndex: 1,
+    backgroundColor: "#2B3A5C",
+    borderWidth: 2,
+    borderColor: "#fff",
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 18,
+    marginTop: 8,
+    maxWidth: "90%",
+  },
+  avatarName: { fontFamily: font.black, fontSize: 22, color: "#fff", textAlign: "center" },
+  avatarDress: { alignSelf: "stretch", marginTop: 16 },
+  avatarNote: { backgroundColor: "rgba(255,255,255,0.85)", borderRadius: 16, paddingHorizontal: 12, paddingBottom: 8, marginTop: 12 },
   wish: { flexDirection: "row-reverse", alignItems: "center", gap: 10, borderRadius: 18, padding: 8 },
   wishText: { fontFamily: font.heavy, fontSize: 15, textAlign: "right" },
   wishCta: { fontFamily: font.bold, fontSize: 13, textAlign: "right", marginTop: 2 },
@@ -994,7 +1276,6 @@ const styles = StyleSheet.create({
   goalTitle: { fontFamily: font.heavy, fontSize: 16, textAlign: "right", flexShrink: 1 },
   goalText: { fontFamily: font.bold, fontSize: 14, textAlign: "right" },
   goalBtn: { alignSelf: "stretch", marginTop: 6 },
-  scene: { width: "100%" },
   localHint: { fontFamily: font.medium, fontSize: 13, textAlign: "center", marginTop: 10 },
   section: {
     alignSelf: "stretch",
@@ -1008,20 +1289,116 @@ const styles = StyleSheet.create({
   grid: { width: "100%", flexDirection: "row-reverse", flexWrap: "wrap", justifyContent: "space-between" },
   subject: {
     width: "48%",
-    borderRadius: 24,
-    paddingVertical: 16,
-    paddingHorizontal: 12,
-    marginBottom: 14,
+    borderRadius: 22,
+    backgroundColor: "#fff",
+    padding: 6,
+    paddingBottom: 10,
+    marginBottom: 12,
     alignItems: "center",
-    gap: 8,
+    gap: 6,
   },
-  subjectMark: { width: 68, height: 68, alignItems: "center", justifyContent: "center" },
-  subjectDim: { opacity: 0.38 },
+  subjectWindow: {
+    alignSelf: "stretch",
+    height: 84,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  subjectHalo: { position: "absolute", width: 68, height: 68, borderRadius: 34, opacity: 0.6 },
+  subjectDim: { opacity: 0.45 },
   subjectLock: {
     position: "absolute",
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    bottom: -4,
+    left: -4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#8A97AC",
+    borderWidth: 2,
+    borderColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  subjectStars: {
+    position: "absolute",
+    top: 6,
+    left: 6,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 2,
+    backgroundColor: "rgba(255,255,255,0.85)",
+    borderRadius: 999,
+    paddingVertical: 1,
+    paddingHorizontal: 6,
+  },
+  subjectStarsText: { fontFamily: font.heavy, fontSize: 11 },
+  subjectTitle: { fontFamily: font.heavy, fontSize: 17, textAlign: "center" },
+  subjectNeed: { flexDirection: "row-reverse", alignItems: "center", gap: 4, height: 16 },
+  subjectNeedText: { fontFamily: font.bold, fontSize: 12 },
+  subjectProg: { alignSelf: "stretch", flexDirection: "row-reverse", alignItems: "center", gap: 6, paddingHorizontal: 8, height: 16 },
+  subjectTrack: { flex: 1, height: 7, borderRadius: 999, overflow: "hidden", flexDirection: "row-reverse" },
+  subjectProgText: { fontFamily: font.bold, fontSize: 11 },
+  progPill: {
+    minWidth: 92,
+    borderRadius: 999,
+    backgroundColor: "#2B3A5C",
+    borderWidth: 2,
+    borderColor: "#fff",
+    paddingVertical: 2,
+    paddingHorizontal: 10,
+    alignItems: "center",
+    overflow: "hidden",
+  },
+  woodSign: {
+    backgroundColor: WOOD,
+    borderBottomWidth: 5,
+    borderBottomColor: WOOD_LIP,
+    borderRadius: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 18,
+    maxWidth: "100%",
+  },
+  woodSignText: {
+    fontFamily: font.black,
+    fontSize: 20,
+    color: "#fff",
+    textAlign: "center",
+    textShadowColor: WOOD_LIP,
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 0,
+  },
+  diffScroll: { flexGrow: 1, paddingTop: 10, paddingBottom: 24 },
+  diffSign: { alignItems: "center", marginTop: 14, marginBottom: 16 },
+  diffCard: {
+    width: "100%",
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: "#fff",
+    borderRadius: 26,
+    padding: 10,
+    marginBottom: 16,
+  },
+  diffBadge: { width: 92, height: 108, borderRadius: 20, alignItems: "center", justifyContent: "center", gap: 6 },
+  diffPips: { flexDirection: "row-reverse", gap: 1 },
+  diffCopy: { flex: 1, alignItems: "flex-end", gap: 4 },
+  diffTitle: { fontFamily: font.black, fontSize: 24, textAlign: "right" },
+  diffMeta: { flexDirection: "row-reverse", alignItems: "center", flexWrap: "wrap", gap: 6, marginTop: 4 },
+  diffChip: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: GOLD.tint,
+    borderRadius: 999,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+  },
+  diffChipText: { fontFamily: font.black, fontSize: 13 },
+  diffGo: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     borderBottomWidth: 4,
     alignItems: "center",
     justifyContent: "center",
@@ -1038,7 +1415,16 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 19, fontFamily: font.heavy, textAlign: "right" },
   cardDesc: { fontSize: 13, fontFamily: font.medium, textAlign: "right", lineHeight: 18 },
   fraction: { fontSize: 12, fontFamily: font.bold },
-  logout: { flexDirection: "row-reverse", alignItems: "center", gap: 6, marginTop: 22, padding: 10 },
+  logout: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#fff",
+    borderBottomColor: "#C7D3E3",
+    borderRadius: 999,
+    paddingVertical: 9,
+    paddingHorizontal: 18,
+  },
   logoutText: { fontFamily: font.bold, fontSize: 14 },
   chip: {
     flexDirection: "row-reverse",
@@ -1066,39 +1452,4 @@ const styles = StyleSheet.create({
   payRow: { flexDirection: "row-reverse", alignItems: "center", gap: 6, marginTop: 2 },
   payText: { fontFamily: font.heavy, fontSize: 14 },
   levelProgress: { alignSelf: "stretch", flexDirection: "row-reverse", alignItems: "center", gap: 8, marginTop: 8 },
-  progressCard: { gap: 8, paddingVertical: 12 },
-  progressHead: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" },
-  progressTitle: { fontFamily: font.bold, fontSize: 15 },
-  progressSub: { fontFamily: font.bold, fontSize: 14 },
-  map: { width: "100%", marginTop: 18, paddingBottom: 10 },
-  mapRow: { height: 84, width: "100%", alignItems: "center", justifyContent: "center" },
-  halo: { position: "absolute" },
-  node: { alignItems: "center", justifyContent: "center" },
-  nodeNum: { color: "#fff", fontFamily: font.black, fontSize: 28 },
-  nodeLock: { alignItems: "center", justifyContent: "center" },
-  nodeLockedNum: { color: "#7A879C", fontFamily: font.heavy, fontSize: 12, marginTop: -2 },
-  sideLabel: { position: "absolute", width: 170 },
-  sideText: { fontFamily: font.heavy, fontSize: 13 },
-  startText: { fontFamily: font.black, fontSize: 17 },
-  startCost: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 3,
-    borderRadius: 999,
-    paddingVertical: 2,
-    paddingLeft: 7,
-    paddingRight: 3,
-    marginTop: 2,
-  },
-  startCostText: { fontFamily: font.black, fontSize: 13 },
-  retryPill: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 5,
-    borderRadius: 999,
-    borderBottomWidth: 3,
-    paddingVertical: 7,
-    paddingHorizontal: 11,
-  },
-  mascotPeek: { position: "absolute", top: -6 },
 });

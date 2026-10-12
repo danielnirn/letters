@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { StyleSheet, Text, TextInput, View } from "react-native";
-import { Screen } from "../src/components/Screen";
+import { ForestScreen, ForestStage, NIGHT, WOOD_LIP, WoodSign } from "../src/components/Forest";
 import { PrimaryButton } from "../src/components/PrimaryButton";
 import { Mascot } from "../src/components/Art";
 import { GenderPicker, useColors } from "../src/components/ui";
 import type { Gender } from "../src/types/models";
 import { useProgress } from "../src/context/ProgressContext";
 import { he } from "../src/i18n/he";
-import { BAD, font } from "../src/theme/colors";
+import { BAD, OK, font } from "../src/theme/colors";
 
 export default function NameSetupScreen() {
   const { active, setActiveName, setGender } = useProgress();
@@ -35,10 +35,16 @@ export default function NameSetupScreen() {
   };
 
   return (
-    <Screen>
-      <Mascot size={130} body={c.primary} kind={gender ?? "girl"} />
-      <Text style={[styles.title, { color: c.ink }]}>{he.setupNameTitle}</Text>
-      <Text style={[styles.hint, { color: c.soft }]}>{he.setupNameHint}</Text>
+    <ForestScreen>
+      <WoodSign text={he.setupNameTitle} big />
+      <ForestStage>
+        <View style={styles.lift}>
+          <Mascot size={140} body={c.primary} kind={gender ?? "girl"} />
+        </View>
+        <View style={styles.hintPill}>
+          <Text style={styles.hint}>{he.setupNameHint}</Text>
+        </View>
+      </ForestStage>
       <TextInput
         value={name}
         onChangeText={(t) => {
@@ -48,10 +54,14 @@ export default function NameSetupScreen() {
         placeholder={he.namePlaceholder}
         placeholderTextColor={c.soft}
         maxLength={20}
-        style={[styles.input, { backgroundColor: c.surface, borderColor: c.line, color: c.ink }]}
+        style={[styles.input, { color: c.ink }]}
         onSubmitEditing={() => void submit()}
       />
-      <Text style={[styles.question, { color: c.ink }]}>{he.genderQuestion}</Text>
+      <View style={styles.questionRow}>
+        <View style={styles.questionPill}>
+          <Text style={styles.question}>{he.genderQuestion}</Text>
+        </View>
+      </View>
       <GenderPicker
         value={gender}
         onChange={(g) => {
@@ -61,32 +71,62 @@ export default function NameSetupScreen() {
         labels={{ girl: he.genderGirl, boy: he.genderBoy }}
       />
       <View style={{ height: 18 }} />
-      {error ? <Text style={[styles.err, { color: BAD.deep }]}>{error}</Text> : null}
+      {error ? (
+        <View style={styles.errPill}>
+          <Text style={[styles.err, { color: BAD.deep }]}>{error}</Text>
+        </View>
+      ) : null}
       <PrimaryButton
         label={he.continuePlay}
         onPress={() => void submit()}
         disabled={saving}
+        color={OK.base}
         style={{ alignSelf: "stretch" }}
       />
-    </Screen>
+    </ForestScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 30, fontFamily: font.black, textAlign: "center", marginTop: 16, marginBottom: 6 },
-  hint: { fontFamily: font.medium, textAlign: "center", marginBottom: 20, fontSize: 16 },
+  lift: { position: "relative", zIndex: 1 },
+  hintPill: {
+    position: "relative",
+    zIndex: 1,
+    backgroundColor: NIGHT,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: "#fff",
+    paddingVertical: 5,
+    paddingHorizontal: 16,
+    marginTop: 6,
+  },
+  hint: { fontFamily: font.bold, textAlign: "center", fontSize: 15, color: "#fff" },
   input: {
     width: "100%",
-    minHeight: 60,
+    minHeight: 62,
     padding: 14,
     borderRadius: 22,
-    borderWidth: 2,
-    borderBottomWidth: 5,
+    backgroundColor: "#fff",
+    borderWidth: 3,
+    borderColor: "#F1D9B3",
+    borderBottomWidth: 6,
+    borderBottomColor: WOOD_LIP,
     textAlign: "center",
     fontSize: 22,
     fontFamily: font.heavy,
+    marginTop: 16,
     marginBottom: 16,
   },
-  question: { alignSelf: "stretch", fontFamily: font.heavy, fontSize: 18, textAlign: "right", marginTop: 4, marginBottom: 10 },
-  err: { marginBottom: 12, fontFamily: font.bold },
+  questionRow: { alignSelf: "stretch", flexDirection: "row-reverse", marginBottom: 10 },
+  questionPill: {
+    backgroundColor: NIGHT,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: "#fff",
+    paddingVertical: 4,
+    paddingHorizontal: 14,
+  },
+  question: { fontFamily: font.heavy, fontSize: 16, color: "#fff", textAlign: "right" },
+  errPill: { backgroundColor: "#fff", borderRadius: 999, paddingVertical: 4, paddingHorizontal: 14, marginBottom: 12 },
+  err: { fontFamily: font.bold, textAlign: "center" },
 });

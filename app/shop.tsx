@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
-import { Screen } from "../src/components/Screen";
+import { ForestScreen, ForestStage, NIGHT, WOOD, WOOD_LIP, WoodSign } from "../src/components/Forest";
 import { AvatarFigure, ItemThumb } from "../src/components/AvatarArt";
 import { useToast } from "../src/components/Toast";
 import { useAuth } from "../src/context/AuthContext";
@@ -38,7 +38,6 @@ export default function ShopScreen() {
   const { isLocal } = useAuth();
   const progress = useProgress();
   const { show, node } = useToast();
-  const c = useColors();
 
   const onBuy = async (item: ShopItem) => {
     const result = await progress.buyItem(item);
@@ -55,16 +54,16 @@ export default function ShopScreen() {
   };
 
   return (
-    <Screen>
+    <ForestScreen>
       {node}
       <TopBar
         onBack={() => router.back()}
         backLabel={he.backLabel}
-        center={<Text style={[styles.title, { color: c.ink }]}>{he.navShop}</Text>}
+        center={<WoodSign text={he.navShop} />}
         trailing={<CoinPill coins={progress.active.coins} />}
       />
       <DressingRoom onBuy={onBuy} />
-    </Screen>
+    </ForestScreen>
   );
 }
 
@@ -101,13 +100,12 @@ function DressingRoom({ onBuy }: { onBuy: (item: ShopItem) => Promise<void> }) {
 
   return (
     <>
-      <View style={[styles.stage, { backgroundColor: c.primaryTint, borderBottomColor: c.line }]}>
-        <View style={[styles.spot, { backgroundColor: c.surface }]} />
-        <View>
+      <ForestStage>
+        <View style={styles.lift}>
           <AvatarFigure loadout={shown} gender={gender} height={250} />
         </View>
         {trying && !tryingOwned ? (
-          <View style={[styles.tryBar, { backgroundColor: c.surface, borderBottomColor: c.line }]}>
+          <View style={styles.tryBar}>
             <Text style={[styles.tryText, { color: c.ink }]}>{he.tryingOn(itemName(trying, gender))}</Text>
             <View style={styles.tryRow}>
               <SmallButton
@@ -124,9 +122,11 @@ function DressingRoom({ onBuy }: { onBuy: (item: ShopItem) => Promise<void> }) {
             {missing > 0 ? <Text style={[styles.tryMissing, { color: c.soft }]}>{he.needMoreCoins(missing)}</Text> : null}
           </View>
         ) : (
-          <Text style={[styles.stageHint, { color: c.soft }]}>{he.avatarHint}</Text>
+          <View style={styles.stageHintPill}>
+            <Text style={styles.stageHint}>{he.avatarHint}</Text>
+          </View>
         )}
-      </View>
+      </ForestStage>
 
       <View style={styles.slotGrid}>
         {AVATAR_SLOTS.map((sl) => {
@@ -141,14 +141,14 @@ function DressingRoom({ onBuy }: { onBuy: (item: ShopItem) => Promise<void> }) {
               style={({ pressed }) => [
                 styles.slotChip,
                 {
-                  backgroundColor: on ? c.primary : c.surface,
-                  borderBottomColor: on ? c.primaryLip : c.line,
-                  borderBottomWidth: pressed ? 1 : 4,
+                  backgroundColor: on ? WOOD : c.surface,
+                  borderBottomColor: on ? WOOD_LIP : "#C7D3E3",
+                  borderBottomWidth: pressed ? 1 : 5,
                   marginTop: pressed ? 3 : 0,
                 },
               ]}
             >
-              <View style={[styles.slotIcon, { backgroundColor: on ? "#fff" : c.ground }]}>
+              <View style={[styles.slotIcon, { backgroundColor: on ? "#FFF6E6" : c.ground }]}>
                 <ItemThumb id={sample} slot={sl} gender={gender} size={30} />
               </View>
               <Text style={[styles.slotText, { color: on ? "#fff" : c.ink }]}>{SLOT_LABEL[sl]}</Text>
@@ -157,15 +157,17 @@ function DressingRoom({ onBuy }: { onBuy: (item: ShopItem) => Promise<void> }) {
         })}
       </View>
 
-      <Text style={[styles.section, { color: c.ink }]}>
-        {slot === "base" ? he.avatarStepCharacter : he.avatarStepDress}
-      </Text>
+      <View style={styles.sectionRow}>
+        <View style={styles.sectionPill}>
+          <Text style={styles.sectionText}>{slot === "base" ? he.avatarStepCharacter : he.avatarStepDress}</Text>
+        </View>
+      </View>
       <View style={styles.grid}>
         {items.map((item) => {
           const owned = isOwned(purchases, item);
           const on = equippedId(avatar, item.slot!) === item.id;
           const isTrying = trying?.id === item.id;
-          const border = isTrying ? GOLD.base : on ? c.primary : "transparent";
+          const border = isTrying ? GOLD.base : on ? OK.base : "transparent";
           return (
             <Pressable
               key={item.id}
@@ -177,35 +179,38 @@ function DressingRoom({ onBuy }: { onBuy: (item: ShopItem) => Promise<void> }) {
                 {
                   backgroundColor: c.surface,
                   borderColor: border,
-                  borderBottomColor: isTrying ? GOLD.lip : on ? c.primaryLip : c.line,
-                  borderBottomWidth: pressed ? 2 : 5,
+                  borderBottomColor: isTrying ? GOLD.lip : on ? OK.lip : "#C7D3E3",
+                  borderBottomWidth: pressed ? 2 : 6,
                   marginTop: pressed ? 3 : 0,
                 },
               ]}
             >
-              <View style={[styles.wearThumb, { backgroundColor: on ? c.primaryTint : isTrying ? GOLD.tint : c.ground }]}>
-                <ItemThumb id={item.id} slot={item.slot!} gender={gender} size={84} />
+              <View style={[styles.wearThumb, { backgroundColor: on ? OK.tint : isTrying ? GOLD.tint : "#E4F4FF" }]}>
+                <View style={styles.thumbGrass} />
+                <View style={styles.lift}>
+                  <ItemThumb id={item.id} slot={item.slot!} gender={gender} size={84} />
+                </View>
               </View>
               <Text style={[styles.wearName, { color: c.ink }]} numberOfLines={1}>
                 {itemName(item, gender)}
               </Text>
               {on ? (
-                <Tag label={he.wearing} bg={c.primaryTint} fg={c.primary} />
+                <Tag label={he.wearing} bg={OK.base} fg="#fff" />
               ) : owned ? (
                 <Tag label={he.ownedPlain} bg={OK.tint} fg={OK.deep} />
               ) : (
-                <View style={styles.price}>
+                <View style={[styles.price, coins < item.cost && { opacity: 0.6 }]}>
                   <Coin size={18} />
-                  <Text style={[styles.priceText, { color: coins >= item.cost ? c.ink : c.soft }]}>{item.cost}</Text>
+                  <Text style={styles.priceText}>{item.cost}</Text>
                 </View>
               )}
               {on ? (
-                <View style={[styles.wearCheck, { backgroundColor: c.primary }]}>
+                <View style={[styles.wearCheck, { backgroundColor: OK.base }]}>
                   <Icon name="check" size={12} color="#fff" weight={3.4} />
                 </View>
               ) : !owned ? (
-                <View style={[styles.wearCheck, { backgroundColor: c.ground }]}>
-                  <Icon name="lock" size={12} color={c.soft} />
+                <View style={[styles.wearCheck, { backgroundColor: NIGHT }]}>
+                  <Icon name="lock" size={12} color="#fff" weight={2.8} />
                 </View>
               ) : null}
             </Pressable>
@@ -268,8 +273,16 @@ function SmallButton({
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 22, fontFamily: font.black },
-  section: { alignSelf: "stretch", fontFamily: font.heavy, fontSize: 18, textAlign: "right", marginTop: 18, marginBottom: 10 },
+  sectionRow: { alignSelf: "stretch", alignItems: "flex-end", marginTop: 14, marginBottom: 10 },
+  sectionPill: {
+    backgroundColor: NIGHT,
+    borderWidth: 2,
+    borderColor: "#fff",
+    borderRadius: 999,
+    paddingVertical: 5,
+    paddingHorizontal: 14,
+  },
+  sectionText: { fontFamily: font.heavy, fontSize: 16, color: "#fff", textAlign: "right" },
   grid: { width: "100%", flexDirection: "row-reverse", flexWrap: "wrap", justifyContent: "space-between" },
   tag: { borderRadius: 999, paddingVertical: 6, paddingHorizontal: 12 },
   tagText: { fontFamily: font.heavy, fontSize: 13 },
@@ -283,20 +296,27 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   smallText: { fontFamily: font.heavy, fontSize: 15 },
-  stage: {
-    width: "100%",
-    borderRadius: 28,
-    borderBottomWidth: 5,
-    paddingTop: 18,
-    paddingBottom: 14,
+  lift: { position: "relative", zIndex: 1 },
+  stageHintPill: {
+    backgroundColor: "rgba(255,255,255,0.9)",
+    borderRadius: 999,
+    paddingVertical: 6,
     paddingHorizontal: 14,
-    alignItems: "center",
-    marginTop: 12,
-    overflow: "hidden",
+    marginTop: 10,
   },
-  spot: { position: "absolute", top: 26, width: 230, height: 230, borderRadius: 115 },
-  stageHint: { textAlign: "center", marginTop: 10, fontFamily: font.medium, fontSize: 13 },
-  tryBar: { width: "100%", borderRadius: 20, borderBottomWidth: 4, padding: 12, marginTop: 10, alignItems: "center" },
+  stageHint: { textAlign: "center", fontFamily: font.bold, fontSize: 13, color: "#3F4C66" },
+  tryBar: {
+    width: "100%",
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    borderBottomWidth: 5,
+    borderBottomColor: GOLD.lip,
+    borderWidth: 3,
+    borderColor: GOLD.tint,
+    padding: 12,
+    marginTop: 10,
+    alignItems: "center",
+  },
   tryText: { fontFamily: font.heavy, fontSize: 16, textAlign: "center", marginBottom: 8 },
   tryRow: { flexDirection: "row-reverse", justifyContent: "center", gap: 10 },
   tryMissing: { fontFamily: font.medium, fontSize: 12, textAlign: "center", marginTop: 8 },
@@ -321,7 +341,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 10,
   },
-  wearThumb: { width: "100%", aspectRatio: 1, borderRadius: 14, alignItems: "center", justifyContent: "center", marginBottom: 6 },
+  wearThumb: {
+    width: "100%",
+    aspectRatio: 1,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 6,
+    overflow: "hidden",
+  },
+  thumbGrass: {
+    position: "absolute",
+    bottom: -34,
+    left: -10,
+    right: -10,
+    height: 56,
+    borderRadius: 60,
+    backgroundColor: "#B9E7A0",
+  },
   wearName: { fontFamily: font.heavy, fontSize: 13, textAlign: "center", marginBottom: 6 },
   wearCheck: {
     position: "absolute",
@@ -333,6 +370,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  price: { flexDirection: "row-reverse", alignItems: "center", gap: 4, paddingVertical: 4 },
-  priceText: { fontFamily: font.heavy, fontSize: 15 },
+  price: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: GOLD.tint,
+    borderRadius: 999,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+  },
+  priceText: { fontFamily: font.heavy, fontSize: 15, color: GOLD.deep },
 });

@@ -25,6 +25,7 @@ export function PrimaryButton({
   icon,
   coins,
   levelPlus,
+  big,
   style,
 }: {
   label: string;
@@ -37,6 +38,8 @@ export function PrimaryButton({
   coins?: { amount?: number; mode: "pay" | "earn" };
   /** Shown when this action raises the village level. */
   levelPlus?: string;
+  /** Hero call-to-action: taller, bigger label. */
+  big?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
   const c = colorsFor();
@@ -53,16 +56,17 @@ export function PrimaryButton({
         {
           backgroundColor: bg,
           borderBottomColor: lip,
-          borderBottomWidth: pressed ? 2 : 5,
-          marginTop: pressed ? 3 : 0,
+          borderBottomWidth: pressed ? 2 : big ? 7 : 5,
+          marginTop: pressed ? (big ? 5 : 3) : 0,
           opacity: disabled ? 0.45 : 1,
         },
+        big && styles.big,
         style,
       ]}
     >
       <View style={styles.row}>
         {icon ? <Icon name={icon} size={20} color={fg} /> : null}
-        <Text style={[styles.label, { color: fg }]}>{label}</Text>
+        <Text style={[styles.label, big && styles.bigLabel, { color: fg }]}>{label}</Text>
         {levelPlus ? (
           <View style={[styles.levelChip, { backgroundColor: soft ? c.primaryTint : "#fff" }]}>
             <Text style={[styles.coinText, { color: c.primary }]}>{levelPlus}</Text>
@@ -92,6 +96,14 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: 8 },
   label: { fontSize: 17, fontFamily: font.heavy, textAlign: "center" },
+  big: { minHeight: 74, borderRadius: 28, borderWidth: 3, borderColor: "rgba(255,255,255,0.65)" },
+  bigLabel: {
+    fontSize: 30,
+    fontFamily: font.black,
+    textShadowColor: "rgba(0,0,0,0.18)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 0,
+  },
   coinChip: {
     flexDirection: "row-reverse",
     alignItems: "center",

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
-import { Screen } from "../src/components/Screen";
+import { ForestScreen, ForestStage, NIGHT, WOOD_LIP, WoodSign } from "../src/components/Forest";
 import { PrimaryButton } from "../src/components/PrimaryButton";
 import { useToast } from "../src/components/Toast";
 import { useAuth } from "../src/context/AuthContext";
@@ -11,7 +11,17 @@ import { AvatarPreview } from "../src/components/AvatarPreview";
 import { Coin, Icon } from "../src/components/Art";
 import { Card, GenderPicker, TopBar, useColors } from "../src/components/ui";
 import { defaultAvatar } from "../src/game/avatar";
-import { BAD, font } from "../src/theme/colors";
+import { BAD, OK, font } from "../src/theme/colors";
+
+function SectionPill({ text }: { text: string }) {
+  return (
+    <View style={styles.sectionRow}>
+      <View style={styles.sectionPill}>
+        <Text style={styles.sectionText}>{text}</Text>
+      </View>
+    </View>
+  );
+}
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -29,26 +39,28 @@ export default function ProfileScreen() {
   };
 
   return (
-    <Screen>
-      {node}
+    <ForestScreen overlay={node}>
       <TopBar
         onBack={() => router.back()}
         backLabel={he.backLabel}
-        center={<Text style={[styles.title, { color: c.ink }]}>{he.profileTitle}</Text>}
+        center={<WoodSign text={he.profileTitle} />}
       />
-      <AvatarPreview loadout={active.avatar ?? defaultAvatar()} size={110} />
-
-      <Card style={styles.coinCard}>
-        <View style={styles.coinRow}>
-          <Coin size={36} />
+      <ForestStage>
+        <View style={styles.lift}>
+          <AvatarPreview loadout={active.avatar ?? defaultAvatar()} size={150} />
+        </View>
+        <View style={styles.coinPill}>
+          <Coin size={30} />
           <Text style={[styles.coins, { color: c.ink }]}>{active.coins}</Text>
         </View>
+      </ForestStage>
+      <View style={styles.notePill}>
         <Text style={[styles.hint, { color: c.soft }]}>{isLocal ? he.coinsLocalOnly : he.coinsOnCloud}</Text>
         {cloudError ? <Text style={[styles.err, { color: BAD.deep }]}>{he.cloudError}</Text> : null}
-      </Card>
+      </View>
 
-      <Card style={styles.section}>
-        <Text style={[styles.label, { color: c.soft, marginBottom: 10 }]}>{he.genderQuestion}</Text>
+      <Card style={[styles.section, styles.woodCard]}>
+        <SectionPill text={he.genderQuestion} />
         <GenderPicker
           value={active.gender}
           onChange={async (g) => {
@@ -60,18 +72,18 @@ export default function ProfileScreen() {
         />
       </Card>
 
-      <Card style={styles.section}>
-        <Text style={[styles.label, { color: c.soft }]}>{he.childName}</Text>
+      <Card style={[styles.section, styles.woodCard]}>
+        <SectionPill text={he.childName} />
         <TextInput
           value={name}
           onChangeText={setName}
           maxLength={20}
           style={[styles.input, { backgroundColor: c.ground, borderColor: c.line, color: c.ink }]}
         />
-        <PrimaryButton label={he.saveName} onPress={() => void save()} />
+        <PrimaryButton label={he.saveName} color={OK.base} onPress={() => void save()} />
       </Card>
 
-      <Card style={styles.section}>
+      <Card style={[styles.section, styles.woodCard]}>
         <View style={styles.infoRow}>
           <Text style={[styles.label, { color: c.soft }]}>{he.parentAccount}</Text>
           <Text style={[styles.value, { color: c.ink }]} numberOfLines={1}>
@@ -84,22 +96,49 @@ export default function ProfileScreen() {
         </View>
       </Card>
 
-      <Pressable onPress={() => signOut()} style={styles.logout}>
+      <Pressable
+        onPress={() => signOut()}
+        style={({ pressed }) => [styles.logout, { borderBottomWidth: pressed ? 1 : 4, marginTop: pressed ? 23 : 20 }]}
+      >
         <Icon name="logout" size={18} color={c.soft} />
         <Text style={[styles.logoutText, { color: c.soft }]}>{he.logout}</Text>
       </Pressable>
-    </Screen>
+    </ForestScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 22, fontFamily: font.black },
-  coinCard: { alignItems: "center", marginTop: 16 },
-  coinRow: { flexDirection: "row-reverse", alignItems: "center", gap: 10 },
-  coins: { fontSize: 36, fontFamily: font.black },
+  lift: { position: "relative", zIndex: 1 },
+  coinPill: {
+    position: "relative",
+    zIndex: 1,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#fff",
+    borderRadius: 999,
+    borderBottomWidth: 4,
+    borderBottomColor: "#C7D3E3",
+    paddingVertical: 4,
+    paddingHorizontal: 16,
+    marginTop: 6,
+  },
+  coins: { fontSize: 28, fontFamily: font.black },
+  notePill: { backgroundColor: "rgba(255,255,255,0.85)", borderRadius: 16, paddingHorizontal: 12, paddingBottom: 6, marginTop: 12 },
   hint: { textAlign: "center", marginTop: 6, fontFamily: font.medium, fontSize: 13 },
-  err: { marginTop: 8, fontFamily: font.bold, textAlign: "center" },
-  section: { marginTop: 14 },
+  err: { marginTop: 4, fontFamily: font.bold, textAlign: "center" },
+  section: { marginTop: 14, width: "100%" },
+  woodCard: { borderWidth: 3, borderColor: "#F1D9B3", borderBottomWidth: 6, borderBottomColor: WOOD_LIP },
+  sectionRow: { flexDirection: "row-reverse", marginBottom: 10 },
+  sectionPill: {
+    backgroundColor: NIGHT,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: "#fff",
+    paddingVertical: 4,
+    paddingHorizontal: 14,
+  },
+  sectionText: { fontFamily: font.heavy, fontSize: 14, color: "#fff", textAlign: "right" },
   label: { fontFamily: font.bold, fontSize: 13, textAlign: "right" },
   value: { fontFamily: font.heavy, fontSize: 16, flexShrink: 1 },
   infoRow: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", gap: 12 },
@@ -112,9 +151,17 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontFamily: font.heavy,
     fontSize: 20,
-    marginTop: 8,
     marginBottom: 12,
   },
-  logout: { flexDirection: "row-reverse", alignItems: "center", gap: 6, marginTop: 20, padding: 10 },
+  logout: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#fff",
+    borderRadius: 999,
+    borderBottomColor: "#C7D3E3",
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+  },
   logoutText: { fontFamily: font.bold, fontSize: 14 },
 });

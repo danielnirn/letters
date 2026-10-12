@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
-import { Screen } from "../src/components/Screen";
+import { ForestScreen, NIGHT, WOOD, WOOD_LIP, WoodSign } from "../src/components/Forest";
 import { LeaderboardTable } from "../src/components/LeaderboardTable";
 import { Icon } from "../src/components/Art";
 import { VillageScene } from "../src/components/VillageArt";
@@ -12,7 +12,7 @@ import { useProgress } from "../src/context/ProgressContext";
 import { defaultAvatar } from "../src/game/avatar";
 import { CATEGORIES, type Category } from "../src/game/config";
 import { he } from "../src/i18n/he";
-import { BAD, GOLD, font } from "../src/theme/colors";
+import { BAD, GOLD, OK, font } from "../src/theme/colors";
 import type { ScoreEntry } from "../src/types/models";
 
 export function LeaderboardBoard() {
@@ -31,20 +31,24 @@ export function LeaderboardBoard() {
         <View style={styles.backdrop}>
           <Pressable accessibilityLabel={he.closeReport} style={StyleSheet.absoluteFill} onPress={() => setPicked(null)} />
           {picked ? (
-            <View style={[styles.sheet, { backgroundColor: c.surface, borderBottomColor: c.line }]}>
+            <View style={styles.sheet}>
+              <View style={styles.sheetSign}>
+                <WoodSign text={he.villageTitle(picked.name)} />
+              </View>
               <AvatarFigure
                 loadout={picked.avatar ?? defaultAvatar()}
                 gender={picked.gender === "boy" ? "boy" : "girl"}
                 height={170}
               />
-              <Text style={[styles.sheetName, { color: c.ink }]}>{he.villageTitle(picked.name)}</Text>
-              <View style={styles.scene} onLayout={(e) => setSceneWidth(e.nativeEvent.layout.width)}>
-                {sceneWidth > 0 ? <VillageScene levels={levels} width={sceneWidth} aspect={0.55} /> : null}
+              <View style={styles.sceneFrame}>
+                <View style={styles.scene} onLayout={(e) => setSceneWidth(e.nativeEvent.layout.width)}>
+                  {sceneWidth > 0 ? <VillageScene levels={levels} width={sceneWidth} aspect={0.55} /> : null}
+                </View>
               </View>
               <Text style={[styles.sheetScore, { color: c.soft }]}>
                 {picked.village ? he.leaderboardVillageStats(picked.stars ?? 0, built) : he.leaderboardNoVillage}
               </Text>
-              <PrimaryButton label={he.closeReport} variant="soft" onPress={() => setPicked(null)} />
+              <PrimaryButton label={he.closeReport} color={OK.base} onPress={() => setPicked(null)} style={{ alignSelf: "stretch" }} />
             </View>
           ) : null}
         </View>
@@ -55,18 +59,18 @@ export function LeaderboardBoard() {
 
 export default function LeaderboardScreen() {
   const router = useRouter();
-  const c = useColors();
 
   return (
-    <Screen>
-      <TopBar onBack={() => router.back()} backLabel={he.backLabel} />
+    <ForestScreen>
+      <TopBar onBack={() => router.back()} backLabel={he.backLabel} center={<WoodSign text={he.leaderboardPlain} />} />
       <View style={[styles.trophy, { backgroundColor: GOLD.base, borderBottomColor: GOLD.lip }]}>
         <Icon name="trophy" size={44} color="#fff" weight={2.4} />
       </View>
-      <Text style={[styles.title, { color: c.ink }]}>{he.leaderboardPlain}</Text>
-      <Text style={[styles.sub, { color: c.soft }]}>{he.leaderboardSub}</Text>
+      <View style={styles.subPill}>
+        <Text style={styles.sub}>{he.leaderboardSub}</Text>
+      </View>
       <LeaderboardBoard />
-    </Screen>
+    </ForestScreen>
   );
 }
 
@@ -79,12 +83,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  title: { fontSize: 28, fontFamily: font.black, textAlign: "center", marginTop: 12 },
-  sub: { fontFamily: font.medium, marginBottom: 14, textAlign: "center" },
-  err: { fontFamily: font.bold, textAlign: "center", marginBottom: 8 },
+  subPill: { ...{
+      backgroundColor: NIGHT,
+      borderRadius: 999,
+      borderWidth: 2,
+      borderColor: "#fff",
+      paddingVertical: 4,
+      paddingHorizontal: 14,
+    }, marginTop: 12, marginBottom: 14 },
+  sub: { fontFamily: font.bold, fontSize: 14, color: "#fff", textAlign: "center" },
+  err: { fontFamily: font.bold, textAlign: "center", marginBottom: 8, backgroundColor: "#fff", borderRadius: 12, padding: 6 },
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(31,42,68,0.45)",
+    backgroundColor: "rgba(31,42,68,0.6)",
     alignItems: "center",
     justifyContent: "center",
     padding: 24,
@@ -92,13 +103,27 @@ const styles = StyleSheet.create({
   sheet: {
     width: "100%",
     maxWidth: 360,
-    borderRadius: 28,
-    borderBottomWidth: 6,
-    padding: 20,
+    backgroundColor: "#fff",
+    borderRadius: 30,
+    borderWidth: 3,
+    borderColor: "#F1D9B3",
+    borderBottomWidth: 8,
+    borderBottomColor: WOOD_LIP,
+    paddingTop: 34,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
     alignItems: "center",
     gap: 8,
   },
-  sheetName: { fontFamily: font.black, fontSize: 22, textAlign: "center", marginTop: 4 },
+  sheetSign: { position: "absolute", top: -24, left: 0, right: 0, alignItems: "center", zIndex: 2 },
+  sceneFrame: {
+    alignSelf: "stretch",
+    backgroundColor: WOOD,
+    borderBottomWidth: 6,
+    borderBottomColor: WOOD_LIP,
+    borderRadius: 22,
+    padding: 5,
+  },
   sheetScore: { fontFamily: font.heavy, fontSize: 15, textAlign: "center", marginBottom: 8 },
-  scene: { alignSelf: "stretch" },
+  scene: { alignSelf: "stretch", borderRadius: 17, overflow: "hidden" },
 });

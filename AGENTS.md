@@ -24,15 +24,20 @@ Owner: Daniel (software engineer). Prefer small, direct code changes. Do not com
 
 ```
 app/
-  _layout.tsx        Rubik, Auth+Progress, Gate, light ground
-  index.tsx          hero + category grid + dock → difficulty → 10 stages
-  game.tsx           play + complete + mistake report
-  login / name / shop / profile / leaderboard
+  _layout.tsx        Rubik, Auth+Progress, Gate
+  index.tsx          forest home + dock → subjects → difficulty → StageMap
+  game.tsx           play + complete + mistake report (ForestScreen)
+  login / name / shop / profile / leaderboard / village
 src/theme/colors.ts  ThemeColors, CATEGORY_COLORS, DIFFICULTY_COLORS, OK/BAD/GOLD, font
 src/components/ui.tsx     Card, CoinPill, RoundButton, TopBar, ProgressBar, ScreenTitle, useColors
 src/components/Art.tsx    Mascot (גמדה), Coin, Star, Icon, CategoryTile, DifficultyTile
+src/components/HomeArt.tsx  SkyScene, trees, mushrooms, chest, coin pot
+src/components/Forest.tsx    ForestScreen, ForestStage, WoodSign
+src/components/StageMap.tsx  winding 10-stage path (stage 1 at the bottom)
+src/components/BuiltPopup.tsx  build celebration, then unlocks at that village level
+src/components/HowToPlay.tsx   coach overlay, once per app run, reopened from ?
 src/components/Screen.tsx light c.ground + SafeArea + ScrollView
-src/components/PrimaryButton.tsx  toy button solid|soft + lip squash
+src/components/PrimaryButton.tsx  toy button solid|soft + lip squash, optional big
 src/game/            engine + word banks
 src/i18n/he.ts       ALL user-visible strings
 ```
@@ -53,21 +58,26 @@ Building blocks:
 
 - `useColors()` — app palette (`defaultTheme`)
 - `Card`, `CoinPill` (SVG coin, not 🪙), `TopBar` (RTL: back on the **right**, `row-reverse`), `RoundButton`, `ProgressBar` (fill from the right)
-- `PrimaryButton` `variant="solid" | "soft"` + optional `icon`
+- `PrimaryButton` `variant="solid" | "soft"` + optional `icon`; `big` is the home play button
 - `Mascot` = gnome girl; shirt color `body` (default / theme primary). Default avatar `avatar_base_kid` **is** this mascot
-- `Icon` names: `bag`, `backpack`, `trophy`, `user`, `back`, `skip`, `lock`, `check`, `x`, `replay`, `logout`, …
+- `Icon` names: `bag`, `backpack`, `trophy`, `user`, `gear`, `help`, `back`, `skip`, `lock`, `check`, `x`, `replay`, `logout`, …
+- Forest chrome: `SkyScene` backdrop, `WoodSign` titles, wooden `ForestStage` for the avatar. `ForestScreen` wraps login, name, shop, profile, leaderboard, village, and play
 - New chrome copy is often **plain Hebrew**; icons carry the meaning (`navShop`, `backLabel`, …)
 - No GhostButton — use TopBar / RoundButton / `variant="soft"`
 
 Screens:
 
-- **Login**: mascot in a primary circle + stars; own SafeArea (not `Screen`)
-- **Home**: hello (avatar + name + CoinPill) → colored **hero** + mascot → 2×2 subjects + science wide → **dock** (shop, gear, leaderboard, profile)
-- **Difficulty / stages**: TopBar + category chip + CoinPill; stages green = `הכל נכון`, yellow = `יש טעויות` + retry
-- **Play**: no coins/streak in the header; math `{expr} = ?`; skip icon; progress under answers
-- **Complete**: mascot + result dots + `Coin +N` + streak; **🤔 איפה טעיתי?** report; tap row → `MathErrorCard` (math)
+- **Login / name**: `ForestScreen` + wooden signs, not a flat card on `Screen`
+- **Home**: sky village. HUD is avatar (profile), coin pill (village status), profile button. Center is the building being bought, a level ribbon, and **לבנות!**. Side widgets: coin pot (build progress), `?` (how to play), next unlock, chest (village). Big green **לשחק!** opens the subject list
+- **Dock** (RTL, first item on the right): mushroom map → `/village`, avatar, home (center), trophy, shop. Avatar and shop unlock at village level 5, leaderboard at 10 (`FEATURE_UNLOCK`). Locked tap fades a banner; the lock badge stays
+- **Subjects**: lesson packs stay locked except language until village level 5 / 10 / 15 / 20 / 25
+- **Difficulty**: wood sign + cards that show the coin payout, including perfect ×2
+- **Stages**: `StageMap`, a path from stage 1 at the bottom up to 10 and the building. Locked nodes do not open
+- **Play**: `ForestScreen`; no coins/streak in the header; math `{expr} = ?`; skip icon; progress under answers
+- **Complete**: reward on the forest screen; mistakes stay for **🤔 איפה טעיתי?**; tap a math row → `MathErrorCard`
+- **Build**: success opens `BuiltPopup` (what was built and the per-stage coins). If that village level unlocks a lesson or feature, a second step lists it
 
-Do **not** restore dark navy, Heebo, LinearGradient shells, or emoji-only nav as the main chrome.
+Do **not** restore the old flat home (hello bar, subject grid on the first screen, 3-icon dock), dark navy, Heebo, or emoji-only nav. `SkyScene` may use an SVG gradient; the `Screen` component stays a solid ground.
 
 ## Game rules
 

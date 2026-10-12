@@ -8,7 +8,7 @@ import {
 } from "react-native";
 import { MathErrorCard, FadeIn } from "../src/components/MathErrorCard";
 import { PrimaryButton } from "../src/components/PrimaryButton";
-import { Screen } from "../src/components/Screen";
+import { ForestScreen, NIGHT, WOOD_LIP, WoodSign } from "../src/components/Forest";
 import { Pic, PicText } from "../src/components/Pic";
 import { useProgress } from "../src/context/ProgressContext";
 import { CONFIG, parseCategory, parseDifficulty, parseStage, type Category, type Difficulty } from "../src/game/config";
@@ -30,10 +30,10 @@ import {
 } from "../src/game/session";
 import { he } from "../src/i18n/he";
 import { BAD, CATEGORY_COLORS, GOLD, OK, TILE_SWATCHES, font } from "../src/theme/colors";
-import { Coin, Icon } from "../src/components/Art";
-import { buildingThe } from "../src/components/VillageArt";
+import { Coin, Icon, Star } from "../src/components/Art";
+import { BuiltPopup } from "../src/components/BuiltPopup";
 import { Buddy, Card, RoundButton, useColors } from "../src/components/ui";
-import { buildingCoinBonus, currentBuild, ownedLevel, runStars } from "../src/game/village";
+import { buildingCoinBonus, currentBuild, ownedLevel, runStars, villageLevel } from "../src/game/village";
 
 const LEVEL_LABEL: Record<Difficulty, string> = {
   easy: he.easy,
@@ -78,7 +78,8 @@ function GameRun() {
     bonus: number;
     perfect: boolean;
   } | null>(null);
-  const [upgradeNote, setUpgradeNote] = useState<string | null>(null);
+  const [built, setBuilt] = useState<{ category: Category; level: number; gift: number; village: number } | null>(null);
+  const [builtOpen, setBuiltOpen] = useState(false);
 
   const backToStages = () => {
     router.replace({ pathname: "/", params: { category: cat, level: difficulty } });
@@ -152,19 +153,21 @@ function GameRun() {
 
   if (state.phase === "timeout") {
     return (
-      <Screen>
+      <ForestScreen>
         <Buddy size={120} body={c.primary} />
         <Text style={[styles.timeout, { color: c.ink }]}>{he.timeout}</Text>
-      </Screen>
+      </ForestScreen>
     );
   }
 
   if (state.phase === "complete") {
     if (showReport) {
       return (
-        <Screen>
-          <Text style={[styles.reportTitle, { color: c.ink }]}>{he.mistakeReportTitle}</Text>
-          <Text style={[styles.crumb, { color: c.soft, marginBottom: 14 }]}>{crumb}</Text>
+        <ForestScreen>
+          <View style={styles.signRow}>
+            <WoodSign text={he.mistakeReportTitle} big />
+          </View>
+          <CrumbPill text={crumb} />
           {state.mistakes.map((m, i) => {
             const open = openMistake === i;
             return (
@@ -232,7 +235,7 @@ function GameRun() {
             <PrimaryButton label={he.backToStages} onPress={backToStages} />
             <PrimaryButton label={he.backToHome} icon="home" variant="soft" onPress={backToHome} />
           </View>
-        </Screen>
+        </ForestScreen>
       );
     }
     const perfect = stageIsPerfect(state);
@@ -240,15 +243,41 @@ function GameRun() {
     const build = currentBuild(progress.active);
     const nextBonus = build ? buildingCoinBonus(ownedLevel(progress.active, build.category) + 1) : 0;
     const coinsNow = progress.active.coins;
-    const canUpgrade = !!build && !upgradeNote && coinsNow >= build.cost;
+    const canUpgrade = !!build && !built && coinsNow >= build.cost;
+    const earnedStars = runStars(state);
     return (
-      <Screen>
+      <ForestScreen
+        overlay={
+          built && builtOpen ? (
+            <BuiltPopup
+              category={built.category}
+              level={built.level}
+              gift={built.gift}
+              villageLevel={built.village}
+              onClose={() => setBuiltOpen(false)}
+            />
+          ) : null
+        }
+      >
         <Confetti />
-        <View style={[styles.completeBadge, { backgroundColor: GOLD.tint }]}>
+        <View style={styles.runStars}>
+          {[1, 2, 3].map((n) => (
+            <View key={n} style={n === 2 ? styles.runStarMid : undefined}>
+              {n <= earnedStars ? (
+                <Star size={n === 2 ? 64 : 48} />
+              ) : (
+                <Star size={n === 2 ? 64 : 48} fill="#E3EAF3" stroke="#B9C6D8" />
+              )}
+            </View>
+          ))}
+        </View>
+        <View style={styles.completeBadge}>
           <Buddy size={118} body={OK.base} />
         </View>
-        <Text style={[styles.completeTitle, { color: c.ink }]}>{he.stageCompleteTitle}</Text>
-        <Text style={[styles.crumb, { color: c.soft }]}>{crumb}</Text>
+        <View style={styles.completeSign}>
+          <WoodSign text={he.stageCompleteTitle} big />
+        </View>
+        <CrumbPill text={crumb} />
 
         <Card style={styles.resultCard}>
           <View style={styles.resultDots}>
@@ -286,17 +315,12 @@ function GameRun() {
           </View>
         </Card>
 
-        {upgradeNote ? (
-          <Text style={[styles.upgradeDone, { color: OK.deep }]}>{upgradeNote}</Text>
-        ) : build ? (
-          <View style={[styles.upgradeHint, { backgroundColor: GOLD.tint, borderBottomColor: GOLD.lip }]}>
-            <Text style={[styles.upgradeHintTitle, { color: GOLD.deep }]}>
-              {canUpgrade ? he.upgradeReady : he.upgradeHelpsTitle}
-            </Text>
-            <Text style={[styles.upgradeHintBody, { color: c.ink }]}>{he.upgradeHelpsBody(nextBonus)}</Text>
-            {canUpgrade ? null : (
-              <Text style={[styles.upgradeHintNeed, { color: GOLD.deep }]}>{he.upgradeShort(build.cost - coinsNow)}</Text>
-            )}
+        {built ? null : build && !canUpgrade ? (
+          <View style={styles.upgradeHint}>
+            <Text style={[styles.upgradeHintTitle, { color: GOLD.deep }]}>{he.upgradeShort(build.cost - coinsNow)}</Text>
+            <View style={styles.upgradeTrack}>
+              <View style={[styles.upgradeFill, { width: `${Math.max(6, Math.min(100, (coinsNow / build.cost) * 100))}%` }]} />
+            </View>
           </View>
         ) : null}
 
@@ -306,14 +330,18 @@ function GameRun() {
           ) : null}
           {canUpgrade && build ? (
             <PrimaryButton
-              label={he.upgradeName(buildingThe(build.category))}
-              levelPlus={he.levelPlus}
+              label={he.buildNow}
+              color={GOLD.base}
               coins={{ amount: build.cost, mode: "pay" }}
               onPress={() => {
-                const name = buildingThe(build.category);
+                const cat = build.category;
+                const level = ownedLevel(progress.active, cat) + 1;
                 const gift = nextBonus;
                 void (async () => {
-                  if (await progress.upgradeVillage()) setUpgradeNote(he.builtNote(name, gift));
+                  if (await progress.upgradeVillage()) {
+                    setBuilt({ category: cat, level, gift, village: villageLevel(progress.active) + 1 });
+                    setBuiltOpen(true);
+                  }
                 })();
               }}
             />
@@ -322,35 +350,40 @@ function GameRun() {
             label={canUpgrade ? he.playMore : he.keepGoing}
             icon={canUpgrade ? undefined : "home"}
             variant={canUpgrade ? "soft" : "solid"}
+            color={canUpgrade ? undefined : OK.base}
             onPress={canUpgrade ? backToStages : backToHome}
           />
         </View>
-      </Screen>
+      </ForestScreen>
     );
   }
 
   const won = state.phase === "win";
   const wrong = state.shaking && !won;
   const hebrewRow = state.category === "english" ? "row" : "row-reverse";
+  const cs = CATEGORY_COLORS[state.category];
 
   return (
-    <Screen>
+    <ForestScreen>
       <View style={styles.header}>
         <RoundButton icon="close" onPress={backToStages} label={he.exitLabel} />
         <View
-          style={styles.segments}
+          style={styles.segTrack}
           accessibilityLabel={he.questionProgress(state.wordIndex + 1, state.wordList.length)}
         >
           {state.wordList.map((_, i) => {
             const mark = state.questionMarks[i];
             const current = i === state.wordIndex && !mark;
-            const bg = mark === "ok" ? OK.base : mark === "bad" ? BAD.base : current ? c.primary : c.line;
+            const bg = mark === "ok" ? OK.base : mark === "bad" ? BAD.base : current ? GOLD.base : "rgba(255,255,255,0.22)";
             return <View key={i} style={[styles.segment, { backgroundColor: bg }, current && styles.segmentNow]} />;
           })}
         </View>
       </View>
-      <Text style={[styles.crumb, { color: c.soft }]}>{crumb}</Text>
+      <View style={styles.signRow}>
+        <WoodSign text={crumb} />
+      </View>
 
+      <View style={[styles.promptFrame, { backgroundColor: cs.base, borderBottomColor: cs.lip }]}>
       <Card style={styles.promptCard}>
         {state.category === "math" ? (
           <View style={styles.exprRow}>
@@ -401,6 +434,7 @@ function GameRun() {
           </Text>
         ) : null}
       </Card>
+      </View>
 
       {wrong && state.category === "math" ? (
         <MathErrorCard expr={state.currentEmoji} guess={state.lastWrongPick} answer={state.currentWord} />
@@ -436,9 +470,9 @@ function GameRun() {
                   {
                     backgroundColor: sw ? sw.tint : c.surface,
                     borderColor: sw ? sw.base : "transparent",
-                    borderBottomColor: sw ? sw.lip : c.line,
-                    borderBottomWidth: pressed ? 2 : 5,
-                    marginTop: pressed ? 3 : 0,
+                    borderBottomColor: sw ? sw.lip : cs.base + "66",
+                    borderBottomWidth: pressed ? 2 : 6,
+                    marginTop: pressed ? 4 : 0,
                     opacity: (won || state.shaking) && !sw ? 0.55 : 1,
                   },
                 ]}
@@ -542,8 +576,8 @@ function GameRun() {
                   style={[
                     styles.blank,
                     {
-                      backgroundColor: sw ? sw.tint : p ? c.surface : "transparent",
-                      borderColor: sw ? sw.base : p ? c.primary : c.line,
+                      backgroundColor: sw ? sw.tint : p ? c.surface : "rgba(255,255,255,0.55)",
+                      borderColor: sw ? sw.base : p ? c.primary : "#fff",
                       borderStyle: p || sw ? "solid" : "dashed",
                     },
                   ]}
@@ -636,20 +670,31 @@ function GameRun() {
           style={({ pressed }) => [
             styles.skip,
             {
-              backgroundColor: c.surface,
-              borderBottomColor: c.line,
+              backgroundColor: NIGHT,
+              borderBottomColor: "#1F2A44",
               borderBottomWidth: pressed ? 2 : 5,
               marginTop: pressed ? 21 : 18,
             },
           ]}
         >
-          <View style={[styles.skipIcon, { backgroundColor: c.primaryTint }]}>
-            <Icon name="skip" size={18} color={c.primary} weight={2.8} />
+          <View style={[styles.skipIcon, { backgroundColor: "rgba(255,255,255,0.18)" }]}>
+            <Icon name="skip" size={18} color="#fff" weight={2.8} />
           </View>
-          <Text style={[styles.skipText, { color: c.ink }]}>{he.skipThis}</Text>
+          <Text style={[styles.skipText, { color: "#fff" }]}>{he.skipThis}</Text>
         </Pressable>
       ) : null}
-    </Screen>
+    </ForestScreen>
+  );
+}
+
+/** Small dark pill with the "subject · level · stage" crumb. */
+function CrumbPill({ text }: { text: string }) {
+  return (
+    <View style={styles.crumbPill}>
+      <Text style={styles.crumbPillText} numberOfLines={1}>
+        {text}
+      </Text>
+    </View>
   );
 }
 
@@ -740,11 +785,34 @@ function isQuiz(cat: Category) {
 
 const styles = StyleSheet.create({
   header: { flexDirection: "row-reverse", width: "100%", alignItems: "center", gap: 12 },
-  segments: { flex: 1, flexDirection: "row-reverse", alignItems: "center", gap: 5 },
+  segTrack: {
+    flex: 1,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: NIGHT,
+    borderWidth: 3,
+    borderColor: "#fff",
+    borderRadius: 999,
+    paddingHorizontal: 6,
+    height: 30,
+  },
   segment: { flex: 1, height: 12, borderRadius: 6 },
   segmentNow: { height: 16, borderRadius: 8 },
+  signRow: { alignItems: "center", marginTop: 12, marginBottom: 14, maxWidth: "100%" },
+  crumbPill: {
+    backgroundColor: NIGHT,
+    borderWidth: 2,
+    borderColor: "#fff",
+    borderRadius: 999,
+    paddingVertical: 5,
+    paddingHorizontal: 14,
+    marginBottom: 14,
+  },
+  crumbPillText: { fontFamily: font.bold, fontSize: 14, color: "#fff", textAlign: "center" },
+  promptFrame: { width: "100%", borderRadius: 30, borderBottomWidth: 7, padding: 7, marginBottom: 16 },
   crumb: { fontFamily: font.bold, fontSize: 14, textAlign: "center", marginTop: 10, marginBottom: 12 },
-  promptCard: { alignItems: "center", paddingVertical: 22, marginBottom: 14 },
+  promptCard: { alignItems: "center", paddingVertical: 22, borderRadius: 24, borderBottomWidth: 0 },
   pic: { marginVertical: 2 },
   storyHead: { flexDirection: "row-reverse", alignItems: "center", gap: 10, alignSelf: "stretch", justifyContent: "center" },
   storyBox: {
@@ -921,8 +989,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "flex-end",
     overflow: "hidden",
-    marginTop: 24,
+    marginTop: 10,
+    backgroundColor: "rgba(255,255,255,0.7)",
+    borderWidth: 5,
+    borderColor: "#fff",
   },
+  completeSign: { marginTop: -10, marginBottom: 10, maxWidth: "100%" },
   completeTitle: { fontFamily: font.black, fontSize: 32, textAlign: "center", marginTop: 16 },
   resultCard: { alignItems: "center", marginTop: 4 },
   resultDots: { flexDirection: "row-reverse", flexWrap: "wrap", justifyContent: "center", gap: 8 },
@@ -935,23 +1007,36 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   resultLine: { fontFamily: font.heavy, fontSize: 17, marginTop: 12, textAlign: "center" },
-  runStars: { flexDirection: "row-reverse", alignItems: "flex-end", gap: 6, marginTop: 14 },
-  runStarMid: { marginBottom: 6 },
+  runStars: { flexDirection: "row-reverse", alignItems: "flex-end", gap: 6, marginTop: 8 },
+  runStarMid: { marginBottom: 14 },
   starsLine: { fontFamily: font.heavy, fontSize: 15, marginTop: 6, textAlign: "center" },
   upgradeHint: {
     alignSelf: "stretch",
+    backgroundColor: "#FFF6E6",
+    borderBottomColor: WOOD_LIP,
+    borderWidth: 3,
+    borderColor: "#F1D9B3",
     borderRadius: 22,
-    borderBottomWidth: 4,
+    borderBottomWidth: 6,
     paddingVertical: 12,
     paddingHorizontal: 14,
     marginTop: 14,
     alignItems: "center",
     gap: 4,
   },
+  upgradeTrack: {
+    alignSelf: "stretch",
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#F1D9B3",
+    overflow: "hidden",
+    flexDirection: "row-reverse",
+    marginTop: 4,
+  },
+  upgradeFill: { height: 10, borderRadius: 5, backgroundColor: GOLD.base },
   upgradeHintTitle: { fontFamily: font.heavy, fontSize: 17, textAlign: "center" },
   upgradeHintBody: { fontFamily: font.bold, fontSize: 15, textAlign: "center" },
   upgradeHintNeed: { fontFamily: font.heavy, fontSize: 14, textAlign: "center" },
-  upgradeDone: { fontFamily: font.heavy, fontSize: 16, textAlign: "center", marginTop: 14 },
   upgrade: {
     width: "100%",
     flexDirection: "row-reverse",

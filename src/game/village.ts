@@ -206,6 +206,24 @@ export function lessonUnlockLevel(category: Category): number {
   return i * 5;
 }
 
+/** Village level that opens each home feature. */
+export const FEATURE_UNLOCK = { avatar: 5, shop: 5, scores: 10 } as const;
+export type Feature = keyof typeof FEATURE_UNLOCK;
+
+export type Unlock = { kind: "lesson"; category: Category } | { kind: "feature"; feature: Feature };
+
+/** Everything that opens exactly at this village level. */
+export function unlocksAt(level: number): Unlock[] {
+  const out: Unlock[] = [];
+  for (const cat of LESSON_PACKS) {
+    if (cat !== LESSON_PACKS[0] && lessonUnlockLevel(cat) === level) out.push({ kind: "lesson", category: cat });
+  }
+  for (const feature of Object.keys(FEATURE_UNLOCK) as Feature[]) {
+    if (FEATURE_UNLOCK[feature] === level) out.push({ kind: "feature", feature });
+  }
+  return out;
+}
+
 export function isLessonUnlocked(level: number, category: Category): boolean {
   return level >= lessonUnlockLevel(category);
 }
