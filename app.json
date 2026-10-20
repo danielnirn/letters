@@ -25,6 +25,9 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "experiments": {
+      "baseUrl": "/letters"
+    },
     "plugins": [
       "expo-router",
       "expo-font",
