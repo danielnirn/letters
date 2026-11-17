@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { GOLD, OK, colorsFor, font } from "../theme/colors";
-import { Coin, Icon, type IconName } from "./Art";
+import { Coin, Icon, Star, type IconName } from "./Art";
 
 /** Darken a #rrggbb color by `amount` (0–1). */
 export function shade(hex: string, amount = 0.22) {
@@ -35,7 +35,7 @@ export function PrimaryButton({
   variant?: "solid" | "soft";
   icon?: IconName;
   /** `pay` is a price. `earn` is coins the player receives. */
-  coins?: { amount?: number; mode: "pay" | "earn" };
+  coins?: { amount?: number; mode: "pay" | "earn"; currency?: "coin" | "star" };
   /** Shown when this action raises the village level. */
   levelPlus?: string;
   /** Hero call-to-action: taller, bigger label. */
@@ -74,7 +74,7 @@ export function PrimaryButton({
         ) : null}
         {coins ? (
           <View style={[styles.coinChip, { backgroundColor: soft ? GOLD.tint : "#fff" }]}>
-            <Coin size={18} />
+            {coins.currency === "star" ? <Star size={18} /> : <Coin size={18} />}
             <Text style={[styles.coinText, { color: coins.mode === "pay" ? GOLD.deep : OK.deep }]}>
               {coins.mode === "pay" ? `−${coins.amount ?? 0}` : coins.amount != null ? `+${coins.amount}` : "+"}
             </Text>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ComponentRef, type ReactNode } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle, Ellipse, G, Path, Rect } from "react-native-svg";
@@ -293,7 +293,7 @@ export function StageMap({
   const mapH = VB_H * k;
   const nodeW = NODE_W * k;
   const nodeH = (nodeW * 70) / 80;
-  const scroller = useRef<ScrollView>(null);
+  const scroller = useRef<ComponentRef<typeof ScrollView>>(null);
   const scrolled = useRef(false);
   const currentIdx = stages.findIndex((s) => s.state === "current");
   const bounce = useBounce(currentIdx >= 0);

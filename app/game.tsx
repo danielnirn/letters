@@ -7,8 +7,7 @@ import {
   View,
 } from "react-native";
 import { MathErrorCard, FadeIn } from "../src/components/MathErrorCard";
-import { PrimaryButton } from "../src/components/PrimaryButton";
-import { ForestScreen, NIGHT, WOOD_LIP, WoodSign } from "../src/components/Forest";
+import { NIGHT, WOOD_LIP } from "../src/components/Forest";
 import { Pic, PicText } from "../src/components/Pic";
 import { useProgress } from "../src/context/ProgressContext";
 import { CONFIG, parseCategory, parseDifficulty, parseStage, type Category, type Difficulty } from "../src/game/config";
@@ -21,7 +20,6 @@ import {
   placeTile,
   skipWord,
   startGame,
-  stageCoinReward,
   stageIsPerfect,
   submitTyped,
   typeDigit,
@@ -29,11 +27,25 @@ import {
   type GameState,
 } from "../src/game/session";
 import { he } from "../src/i18n/he";
-import { BAD, CATEGORY_COLORS, GOLD, OK, TILE_SWATCHES, font } from "../src/theme/colors";
+import { BAD, CATEGORY_COLORS, GOLD, KIT, OK, TILE_SWATCHES, font } from "../src/theme/colors";
 import { Coin, Icon, Star } from "../src/components/Art";
-import { BuiltPopup } from "../src/components/BuiltPopup";
-import { Buddy, Card, RoundButton, useColors } from "../src/components/ui";
-import { buildingCoinBonus, currentBuild, ownedLevel, pendingLessonPick, runStars, villageLevel } from "../src/game/village";
+import { Buddy, Card, useColors } from "../src/components/ui";
+import { runStars } from "../src/game/village";
+import { coinsFor, nextElement, starsFor } from "../src/game/economy";
+import {
+  Island,
+  KitBack,
+  KitButton,
+  KitCard,
+  KitChip,
+  KitMeter,
+  KitTitle,
+  OutlinedText,
+  ResourceCounter,
+  SeaScreen,
+  StarRating,
+} from "../src/components/GameKit";
+import { buildingName } from "../src/components/VillageArt";
 
 const LEVEL_LABEL: Record<Difficulty, string> = {
   easy: he.easy,
@@ -60,8 +72,6 @@ function GameRun() {
   const progress = useProgress();
   const completeStageRef = useRef(progress.completeStage);
   const saveScoreRef = useRef(progress.saveScore);
-  const activeRef = useRef(progress.active);
-  activeRef.current = progress.active;
   completeStageRef.current = progress.completeStage;
   saveScoreRef.current = progress.saveScore;
   const c = useColors();
@@ -73,13 +83,6 @@ function GameRun() {
   const skipAdvance = useRef(false);
   const [showReport, setShowReport] = useState(false);
   const [openMistake, setOpenMistake] = useState<number | null>(null);
-  const [village, setVillage] = useState<{
-    coins: number;
-    bonus: number;
-    perfect: boolean;
-  } | null>(null);
-  const [built, setBuilt] = useState<{ category: Category; level: number; gift: number; village: number } | null>(null);
-  const [builtOpen, setBuiltOpen] = useState(false);
 
   const backToStages = () => {
     router.replace({ pathname: "/", params: { category: cat, level: difficulty } });
@@ -112,14 +115,11 @@ function GameRun() {
     if (state.phase !== "complete") return;
     if (settled.current) return;
     settled.current = true;
-    const bonus = buildingCoinBonus(ownedLevel(activeRef.current, state.category));
     const perfect = stageIsPerfect(state);
-    const coins = stageCoinReward(state) + bonus;
-    const earned = runStars(state);
-    setVillage({ coins, bonus, perfect });
+    const stars = starsFor(state.level, perfect);
     void (async () => {
-      await completeStageRef.current(state.category, state.level, state.stage, coins, perfect, earned);
-      await saveScoreRef.current(coins, `${state.category}:${state.level}:${state.stage}`);
+      await completeStageRef.current(state.category, state.level, state.stage, perfect, runStars(state));
+      await saveScoreRef.current(stars, `${state.category}:${state.level}:${state.stage}`);
     })();
     return undefined;
   }, [state.phase, state.score, state.lastStreakBonus, state.category, state.level, state.stage]);
@@ -153,28 +153,32 @@ function GameRun() {
 
   if (state.phase === "timeout") {
     return (
-      <ForestScreen>
-        <Buddy size={120} body={c.primary} />
-        <Text style={[styles.timeout, { color: c.ink }]}>{he.timeout}</Text>
-      </ForestScreen>
+      <SeaScreen>
+        <Island width={220}>
+          <Buddy size={96} body={c.primary} />
+        </Island>
+        <KitTitle text={he.timeout} big />
+      </SeaScreen>
     );
   }
 
   if (state.phase === "complete") {
     if (showReport) {
       return (
-        <ForestScreen>
+        <SeaScreen>
           <View style={styles.signRow}>
-            <WoodSign text={he.mistakeReportTitle} big />
+            <KitTitle text={he.mistakeReportTitle} big />
           </View>
-          <CrumbPill text={crumb} />
+          <View style={styles.kitCrumb}>
+            <KitChip text={crumb} dark />
+          </View>
           {state.mistakes.map((m, i) => {
             const open = openMistake === i;
             return (
               <Pressable
                 key={`${m.index}-${m.answer}-${i}`}
                 onPress={() => setOpenMistake(open ? null : i)}
-                style={[styles.reportCard, { backgroundColor: c.surface, borderBottomColor: c.line }]}
+                style={styles.reportCard}
               >
                 <View style={styles.reportHead}>
                   <View style={[styles.reportNum, { backgroundColor: BAD.tint }]}>
@@ -202,7 +206,7 @@ function GameRun() {
                     </Text>
                   </View>
                 </View>
-                {!open ? <Text style={[styles.reportTap, { color: c.primary }]}>{he.tapForWhy}</Text> : null}
+                {!open ? <Text style={[styles.reportTap, { color: KIT.orangeLip }]}>{he.tapForWhy}</Text> : null}
                 {open ? (
                   state.category === "math" ? (
                     <View style={{ width: "100%", marginTop: 12 }}>
@@ -224,63 +228,43 @@ function GameRun() {
             );
           })}
           <View style={styles.stackButtons}>
-            <PrimaryButton
+            <KitButton label={he.backToStages} icon="next" onPress={backToStages} />
+            <KitButton
               label={he.closeReport}
-              variant="soft"
+              tone="cream"
               onPress={() => {
                 setShowReport(false);
                 setOpenMistake(null);
               }}
             />
-            <PrimaryButton label={he.backToStages} onPress={backToStages} />
-            <PrimaryButton label={he.backToHome} icon="home" variant="soft" onPress={backToHome} />
+            <KitButton label={he.backToHome} icon="home" tone="cream" onPress={backToHome} />
           </View>
-        </ForestScreen>
+        </SeaScreen>
       );
     }
     const perfect = stageIsPerfect(state);
     const okCount = state.questionMarks.filter((m) => m === "ok").length;
-    const build = currentBuild(progress.active);
-    const nextBonus = build ? buildingCoinBonus(ownedLevel(progress.active, build.category) + 1) : 0;
-    const coinsNow = progress.active.coins;
-    const canUpgrade = !!build && !built && coinsNow >= build.cost;
+    const element = nextElement(progress.active);
+    const starsNow = progress.active.stars;
+    const canBuild = starsNow >= element.cost;
     const earnedStars = runStars(state);
+    const winStars = starsFor(state.level, perfect);
+    const winCoins = coinsFor(state.level, perfect);
     return (
-      <ForestScreen
-        overlay={
-          built && builtOpen ? (
-            <BuiltPopup
-              category={built.category}
-              level={built.level}
-              gift={built.gift}
-              villageLevel={built.village}
-              lessonPick={pendingLessonPick(progress.active, built.village)}
-              onClose={() => setBuiltOpen(false)}
-            />
-          ) : null
-        }
-      >
+      <SeaScreen>
         <Confetti />
-        <View style={styles.runStars}>
-          {[1, 2, 3].map((n) => (
-            <View key={n} style={n === 2 ? styles.runStarMid : undefined}>
-              {n <= earnedStars ? (
-                <Star size={n === 2 ? 64 : 48} />
-              ) : (
-                <Star size={n === 2 ? 64 : 48} fill="#E3EAF3" stroke="#B9C6D8" />
-              )}
-            </View>
-          ))}
+        <View style={styles.kitRating}>
+          <StarRating value={earnedStars} size={54} />
         </View>
-        <View style={styles.completeBadge}>
-          <Buddy size={118} body={OK.base} />
+        <KitTitle text={he.stageCompleteTitle} big />
+        <View style={styles.kitCrumb}>
+          <KitChip text={crumb} dark />
         </View>
-        <View style={styles.completeSign}>
-          <WoodSign text={he.stageCompleteTitle} big />
-        </View>
-        <CrumbPill text={crumb} />
+        <Island width={220}>
+          <Buddy size={96} body={perfect ? OK.base : GOLD.base} />
+        </Island>
 
-        <Card style={styles.resultCard}>
+        <KitCard style={styles.kitResult}>
           <View style={styles.resultDots}>
             {state.wordList.map((_, i) => {
               const mark = state.questionMarks[i];
@@ -292,70 +276,42 @@ function GameRun() {
               );
             })}
           </View>
-          <Text style={[styles.resultLine, { color: perfect ? OK.deep : GOLD.deep }]}>
+          <Text style={[styles.kitResultLine, { color: perfect ? OK.deep : KIT.creamInk }]}>
             {perfect ? he.stagePerfect : he.stageHadMistakes} · {he.correctOf(okCount, state.wordList.length)}
           </Text>
-          {perfect ? <Text style={[styles.starsLine, { color: OK.deep }]}>{he.perfectPay}</Text> : null}
-          <View style={[styles.statsRow, { borderTopColor: c.line }]}>
-            <View style={styles.stat}>
-              <View style={styles.statValueRow}>
-                <Coin size={28} />
-                <Text style={[styles.statValue, { color: c.ink }]}>+{village?.coins ?? stageCoinReward(state)}</Text>
-              </View>
-              <Text style={[styles.statLabel, { color: c.soft }]}>
-                {village && village.bonus > 0 ? he.coinsWithVillage(village.bonus) : he.coinsLabel}
-              </Text>
-            </View>
-            <View style={[styles.statDivider, { backgroundColor: c.line }]} />
-            <View style={styles.stat}>
-              <Text style={[styles.statValue, { color: c.ink }]}>
-                🔥 {state.streak}/{CONFIG.streakEvery}
-              </Text>
-              <Text style={[styles.statLabel, { color: c.soft }]}>{he.streakLabel}</Text>
-            </View>
+          <View style={styles.kitRewards}>
+            <ResourceCounter kind="star" value={winStars} />
+            {winCoins > 0 ? <ResourceCounter kind="coin" value={winCoins} /> : null}
           </View>
-        </Card>
-
-        {built ? null : build && !canUpgrade ? (
-          <View style={styles.upgradeHint}>
-            <Text style={[styles.upgradeHintTitle, { color: GOLD.deep }]}>{he.upgradeShort(build.cost - coinsNow)}</Text>
-            <View style={styles.upgradeTrack}>
-              <View style={[styles.upgradeFill, { width: `${Math.max(6, Math.min(100, (coinsNow / build.cost) * 100))}%` }]} />
-            </View>
+          {perfect ? <Text style={[styles.kitNote, { color: OK.deep }]}>{he.perfectRefund}</Text> : null}
+          <View style={styles.kitBuild}>
+            <Text style={styles.kitNote}>
+              {canBuild ? `${he.buildNow} ${buildingName(element.category)}` : he.needStars(element.cost - starsNow)}
+            </Text>
+            <KitMeter value={Math.min(starsNow, element.cost)} total={element.cost} color={canBuild ? KIT.green : KIT.orange} />
           </View>
-        ) : null}
+        </KitCard>
 
         <View style={styles.stackButtons}>
-          {state.mistakes.length > 0 ? (
-            <PrimaryButton label={he.viewMistakes} variant="soft" onPress={() => setShowReport(true)} />
-          ) : null}
-          {canUpgrade && build ? (
-            <PrimaryButton
+          {canBuild ? (
+            <KitButton
               label={he.buildNow}
-              color={GOLD.base}
-              coins={{ amount: build.cost, mode: "pay" }}
-              onPress={() => {
-                const cat = build.category;
-                const level = ownedLevel(progress.active, cat) + 1;
-                const gift = nextBonus;
-                void (async () => {
-                  if (await progress.upgradeVillage()) {
-                    setBuilt({ category: cat, level, gift, village: villageLevel(progress.active) + 1 });
-                    setBuiltOpen(true);
-                  }
-                })();
-              }}
+              tone="orange"
+              onPress={backToHome}
+              trailing={<KitChip icon={<Star size={16} />} text={`−${element.cost}`} />}
             />
           ) : null}
-          <PrimaryButton
-            label={canUpgrade ? he.playMore : he.keepGoing}
-            icon={canUpgrade ? undefined : "home"}
-            variant={canUpgrade ? "soft" : "solid"}
-            color={canUpgrade ? undefined : OK.base}
-            onPress={canUpgrade ? backToStages : backToHome}
+          <KitButton
+            label={canBuild ? he.playMore : he.keepGoing}
+            tone={canBuild ? "cream" : "green"}
+            icon={canBuild ? undefined : "next"}
+            onPress={backToStages}
           />
+          {state.mistakes.length > 0 ? (
+            <KitButton label={he.viewMistakes} tone="cream" onPress={() => setShowReport(true)} />
+          ) : null}
         </View>
-      </ForestScreen>
+      </SeaScreen>
     );
   }
 
@@ -365,9 +321,9 @@ function GameRun() {
   const cs = CATEGORY_COLORS[state.category];
 
   return (
-    <ForestScreen>
+    <SeaScreen>
       <View style={styles.header}>
-        <RoundButton icon="close" onPress={backToStages} label={he.exitLabel} />
+        <KitBack icon="close" onPress={backToStages} label={he.exitLabel} />
         <View
           style={styles.segTrack}
           accessibilityLabel={he.questionProgress(state.wordIndex + 1, state.wordList.length)}
@@ -375,29 +331,29 @@ function GameRun() {
           {state.wordList.map((_, i) => {
             const mark = state.questionMarks[i];
             const current = i === state.wordIndex && !mark;
-            const bg = mark === "ok" ? OK.base : mark === "bad" ? BAD.base : current ? GOLD.base : "rgba(255,255,255,0.22)";
+            const bg = mark === "ok" ? KIT.green : mark === "bad" ? KIT.red : current ? GOLD.base : "rgba(255,255,255,0.16)";
             return <View key={i} style={[styles.segment, { backgroundColor: bg }, current && styles.segmentNow]} />;
           })}
         </View>
       </View>
       <View style={styles.signRow}>
-        <WoodSign text={crumb} />
+        <KitTitle text={crumb} />
       </View>
 
       <View style={[styles.promptFrame, { backgroundColor: cs.base, borderBottomColor: cs.lip }]}>
-      <Card style={styles.promptCard}>
+      <Card style={[styles.promptCard, { backgroundColor: KIT.cream }]}>
         {state.category === "math" ? (
           <View style={styles.exprRow}>
-            <Text style={[styles.exprText, { color: c.ink }]}>{state.currentEmoji} =</Text>
+            <Text style={[styles.exprText, { color: KIT.creamInk }]}>{state.currentEmoji} =</Text>
             <View
               style={[
                 styles.exprBox,
                 won
                   ? { backgroundColor: OK.tint, borderColor: OK.base, borderStyle: "solid" }
-                  : { backgroundColor: c.primaryTint, borderColor: c.primary },
+                  : { backgroundColor: "#fff", borderColor: KIT.orange },
               ]}
             >
-              <Text style={[styles.exprText, { color: won ? OK.deep : c.primary }]}>
+              <Text style={[styles.exprText, { color: won ? OK.deep : KIT.orange }]}>
                 {won ? state.currentWord : "?"}
               </Text>
             </View>
@@ -428,9 +384,9 @@ function GameRun() {
             )}
           </View>
         )}
-        {state.currentHint ? <Text style={[styles.hintHe, { color: c.ink }]}>{state.currentHint}</Text> : null}
+        {state.currentHint ? <Text style={[styles.hintHe, { color: KIT.creamInk }]}>{state.currentHint}</Text> : null}
         {state.questionType !== "spell" && state.category !== "math" && state.category !== "reading" ? (
-          <Text style={[styles.prompt, { color: c.soft }]}>
+          <Text style={[styles.prompt, { color: KIT.creamInk }]}>
             {state.questionType === "type" ? he.promptType : choicePrompt(state.category, state.currentWord)}
           </Text>
         ) : null}
@@ -441,7 +397,7 @@ function GameRun() {
         <MathErrorCard expr={state.currentEmoji} guess={state.lastWrongPick} answer={state.currentWord} />
       ) : wrong ? (
         <FadeIn resetKey={`${state.wordIndex}-${state.lastWrongPick}-${state.missedThisWord}`}>
-          <View style={[styles.feedback, { backgroundColor: c.surface, borderColor: BAD.tint, borderBottomColor: BAD.lip }]}>
+          <View style={styles.feedback}>
             <View style={[styles.feedbackIcon, { backgroundColor: BAD.base }]}>
               <Icon name="x" size={22} color="#fff" weight={3.2} />
             </View>
@@ -469,9 +425,9 @@ function GameRun() {
                   styles.choice,
                   state.choiceWords.length >= 4 ? styles.choiceHalf : styles.choiceFull,
                   {
-                    backgroundColor: sw ? sw.tint : c.surface,
-                    borderColor: sw ? sw.base : "transparent",
-                    borderBottomColor: sw ? sw.lip : cs.base + "66",
+                    backgroundColor: sw ? sw.tint : KIT.cream,
+                    borderColor: sw ? sw.lip : KIT.woodEdge,
+                    borderBottomColor: sw ? sw.lip : KIT.woodEdge,
                     borderBottomWidth: pressed ? 2 : 6,
                     marginTop: pressed ? 4 : 0,
                     opacity: (won || state.shaking) && !sw ? 0.55 : 1,
@@ -487,7 +443,7 @@ function GameRun() {
                   style={[
                     styles.choiceText,
                     state.category === "reading" && styles.choiceTextSmall,
-                    { color: sw ? sw.deep : c.ink },
+                    { color: sw ? sw.deep : KIT.creamInk },
                   ]}
                 >
                   {w}
@@ -512,7 +468,7 @@ function GameRun() {
           <View
             style={[
               styles.typeBox,
-              { backgroundColor: c.surface, borderColor: c.primary },
+              { backgroundColor: KIT.cream, borderColor: KIT.woodEdge },
               wrong && { borderColor: BAD.base, backgroundColor: BAD.tint },
               won && { borderColor: OK.base, backgroundColor: OK.tint },
             ]}
@@ -537,8 +493,9 @@ function GameRun() {
                       style={({ pressed }) => [
                         styles.key,
                         {
-                          backgroundColor: isOk ? OK.base : c.surface,
-                          borderBottomColor: isOk ? OK.lip : c.line,
+                          backgroundColor: isOk ? KIT.green : KIT.cream,
+                          borderColor: isOk ? KIT.greenLip : KIT.woodEdge,
+                          borderBottomColor: isOk ? KIT.greenLip : KIT.woodEdge,
                           borderBottomWidth: pressed ? 2 : 5,
                           marginTop: pressed ? 7 : 4,
                           opacity: disabled ? 0.45 : 1,
@@ -577,8 +534,8 @@ function GameRun() {
                   style={[
                     styles.blank,
                     {
-                      backgroundColor: sw ? sw.tint : p ? c.surface : "rgba(255,255,255,0.55)",
-                      borderColor: sw ? sw.base : p ? c.primary : "#fff",
+                      backgroundColor: sw ? sw.tint : p ? KIT.cream : "rgba(255,255,255,0.25)",
+                      borderColor: sw ? sw.base : p ? KIT.woodEdge : KIT.cream,
                       borderStyle: p || sw ? "solid" : "dashed",
                     },
                   ]}
@@ -610,15 +567,18 @@ function GameRun() {
                       style={({ pressed }) => [
                         styles.tile,
                         {
-                          backgroundColor: sw.tint,
-                          borderBottomColor: sw.base,
+                          backgroundColor: sw.base,
+                          borderColor: KIT.woodEdge,
+                          borderBottomColor: KIT.woodEdge,
                           borderBottomWidth: pressed ? 2 : 5,
                           marginTop: pressed ? 8 : 5,
                           opacity: t.used ? 0.25 : 1,
                         },
                       ]}
                     >
-                      <Text style={[styles.tileText, { color: c.ink }]}>{t.letter}</Text>
+                      <OutlinedText size={30} outline={sw.lip}>
+                        {t.letter}
+                      </OutlinedText>
                     </Pressable>
                   );
                 })}
@@ -629,7 +589,7 @@ function GameRun() {
       )}
 
       {won ? (
-        <View style={[styles.correct, { backgroundColor: c.surface, borderColor: OK.tint, borderBottomColor: OK.lip }]}>
+        <View style={styles.correct}>
           <View style={styles.correctHead}>
             <View style={[styles.feedbackIcon, { backgroundColor: OK.base }]}>
               <Icon name="check" size={22} color="#fff" weight={3.2} />
@@ -650,13 +610,12 @@ function GameRun() {
               ) : null}
             </View>
           ) : null}
-          <View style={[styles.advanceTrack, { backgroundColor: OK.tint }]}>
-            <View style={[styles.advanceFill, { width: `${advancePct}%`, backgroundColor: OK.base }]} />
+          <View style={styles.advanceTrack}>
+            <View style={[styles.advanceFill, { width: `${advancePct}%` }]} />
           </View>
-          <PrimaryButton
+          <KitButton
             label={isQuiz(state.category) ? he.nextQuestion : he.nextWord}
             onPress={goNextNow}
-            color={OK.base}
             icon="next"
             style={{ alignSelf: "stretch" }}
           />
@@ -671,9 +630,7 @@ function GameRun() {
           style={({ pressed }) => [
             styles.skip,
             {
-              backgroundColor: NIGHT,
-              borderBottomColor: "#1F2A44",
-              borderBottomWidth: pressed ? 2 : 5,
+              borderBottomWidth: pressed ? 2 : 6,
               marginTop: pressed ? 21 : 18,
             },
           ]}
@@ -684,18 +641,7 @@ function GameRun() {
           <Text style={[styles.skipText, { color: "#fff" }]}>{he.skipThis}</Text>
         </Pressable>
       ) : null}
-    </ForestScreen>
-  );
-}
-
-/** Small dark pill with the "subject · level · stage" crumb. */
-function CrumbPill({ text }: { text: string }) {
-  return (
-    <View style={styles.crumbPill}>
-      <Text style={styles.crumbPillText} numberOfLines={1}>
-        {text}
-      </Text>
-    </View>
+    </SeaScreen>
   );
 }
 
@@ -718,16 +664,14 @@ function SoftAction({
       style={({ pressed }) => [
         styles.softAction,
         {
-          backgroundColor: c.surface,
-          borderBottomColor: c.line,
-          borderBottomWidth: pressed ? 1 : 4,
+          borderBottomWidth: pressed ? 2 : 5,
           marginTop: pressed ? 3 : 0,
           opacity: disabled ? 0.45 : 1,
         },
       ]}
     >
-      <Icon name={icon} size={20} color={icon === "bulb" ? GOLD.lip : c.ink} />
-      <Text style={[styles.softActionText, { color: c.ink }]}>{label}</Text>
+      <Icon name={icon} size={20} color={icon === "bulb" ? GOLD.lip : KIT.creamInk} />
+      <Text style={[styles.softActionText, { color: KIT.creamInk }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -785,19 +729,15 @@ function isQuiz(cat: Category) {
 }
 
 const styles = StyleSheet.create({
+  kitRating: { marginTop: 6, marginBottom: 6 },
+  kitCrumb: { marginTop: 10, marginBottom: 18 },
+  kitResult: { width: "100%", alignItems: "center", gap: 10, marginTop: 4 },
+  kitResultLine: { fontFamily: font.black, fontSize: 18, textAlign: "center" },
+  kitRewards: { flexDirection: "row-reverse", justifyContent: "center", gap: 14 },
+  kitNote: { fontFamily: font.heavy, fontSize: 15, textAlign: "center", color: KIT.creamInk },
+  kitBuild: { alignSelf: "stretch", gap: 6, marginTop: 2 },
   header: { flexDirection: "row-reverse", width: "100%", alignItems: "center", gap: 12 },
-  segTrack: {
-    flex: 1,
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: NIGHT,
-    borderWidth: 3,
-    borderColor: "#fff",
-    borderRadius: 999,
-    paddingHorizontal: 6,
-    height: 30,
-  },
+  segTrack: { flex: 1, flexDirection: "row-reverse", alignItems: "center", gap: 4, backgroundColor: KIT.track, borderWidth: 3, borderColor: KIT.woodEdge, borderBottomWidth: 5, borderRadius: 999, paddingHorizontal: 6, height: 32 },
   segment: { flex: 1, height: 12, borderRadius: 6 },
   segmentNow: { height: 16, borderRadius: 8 },
   signRow: { alignItems: "center", marginTop: 12, marginBottom: 14, maxWidth: "100%" },
@@ -811,7 +751,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   crumbPillText: { fontFamily: font.bold, fontSize: 14, color: "#fff", textAlign: "center" },
-  promptFrame: { width: "100%", borderRadius: 30, borderBottomWidth: 7, padding: 7, marginBottom: 16 },
+  promptFrame: { width: "100%", borderRadius: 30, borderWidth: 3, borderColor: KIT.woodEdge, borderBottomWidth: 8, padding: 7, marginBottom: 16 },
   crumb: { fontFamily: font.bold, fontSize: 14, textAlign: "center", marginTop: 10, marginBottom: 12 },
   promptCard: { alignItems: "center", paddingVertical: 22, borderRadius: 24, borderBottomWidth: 0 },
   pic: { marginVertical: 2 },
@@ -842,17 +782,7 @@ const styles = StyleSheet.create({
   logicPrompt: { fontFamily: font.black, fontSize: 34, textAlign: "center", lineHeight: 46 },
   hintHe: { fontSize: 22, fontFamily: font.heavy, marginTop: 8, textAlign: "center" },
   prompt: { fontFamily: font.bold, fontSize: 16, marginTop: 8, textAlign: "center" },
-  feedback: {
-    width: "100%",
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 12,
-    borderRadius: 22,
-    borderWidth: 2,
-    borderBottomWidth: 5,
-    padding: 14,
-    marginBottom: 14,
-  },
+  feedback: { width: "100%", flexDirection: "row-reverse", alignItems: "center", gap: 12, borderRadius: 22, borderWidth: 3, borderColor: KIT.woodEdge, borderBottomWidth: 7, backgroundColor: KIT.cream, padding: 14, marginBottom: 14 },
   feedbackIcon: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   feedbackTitle: { fontFamily: font.black, fontSize: 19 },
   feedbackSub: { fontFamily: font.medium, fontSize: 14, marginTop: 2 },
@@ -863,16 +793,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     width: "100%",
   },
-  choice: {
-    minHeight: 76,
-    paddingVertical: 14,
-    paddingHorizontal: 10,
-    borderRadius: 22,
-    borderWidth: 2,
-    marginBottom: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  choice: { minHeight: 76, paddingVertical: 14, paddingHorizontal: 10, borderRadius: 22, borderWidth: 3, marginBottom: 12, alignItems: "center", justifyContent: "center" },
   choiceHalf: { width: "48%" },
   choiceFull: { width: "100%" },
   choiceMark: {
@@ -901,16 +822,8 @@ const styles = StyleSheet.create({
   },
   typeValue: { fontSize: 40, fontFamily: font.black, textAlign: "center" },
   keypad: { flexDirection: "row", flexWrap: "wrap", width: 270, justifyContent: "center", marginBottom: 12 },
-  key: {
-    width: 80,
-    height: 60,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    marginHorizontal: 5,
-    marginBottom: 4,
-  },
-  keyText: { fontSize: 26, fontFamily: font.black },
+  key: { width: 80, height: 60, borderRadius: 18, borderWidth: 3, alignItems: "center", justifyContent: "center", marginHorizontal: 5, marginBottom: 4 },
+  keyText: { fontSize: 26, fontFamily: font.black, color: KIT.creamInk },
   blanks: { flexWrap: "wrap", justifyContent: "center", marginBottom: 4 },
   blank: {
     width: 50,
@@ -923,60 +836,20 @@ const styles = StyleSheet.create({
   },
   blankLetter: { fontSize: 28, fontFamily: font.black },
   actions: { flexDirection: "row-reverse", justifyContent: "center", gap: 10, marginVertical: 14 },
-  softAction: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 6,
-    minHeight: 44,
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 999,
-  },
+  softAction: { flexDirection: "row-reverse", alignItems: "center", gap: 6, minHeight: 44, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 999, backgroundColor: KIT.cream, borderWidth: 2.5, borderColor: KIT.woodEdge, borderBottomColor: KIT.woodEdge },
   softActionText: { fontFamily: font.bold, fontSize: 15 },
   tiles: { flexWrap: "wrap", justifyContent: "center" },
-  tile: {
-    width: 58,
-    height: 62,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    marginHorizontal: 5,
-    marginBottom: 5,
-  },
+  tile: { width: 58, height: 62, borderRadius: 16, borderWidth: 3, alignItems: "center", justifyContent: "center", marginHorizontal: 5, marginBottom: 5 },
   tileText: { fontSize: 30, fontFamily: font.black },
-  correct: {
-    width: "100%",
-    alignItems: "center",
-    borderRadius: 24,
-    borderWidth: 2,
-    borderBottomWidth: 5,
-    padding: 16,
-    marginTop: 14,
-  },
+  correct: { width: "100%", alignItems: "center", borderRadius: 24, borderWidth: 3, borderColor: KIT.woodEdge, borderBottomWidth: 7, backgroundColor: KIT.cream, padding: 16, marginTop: 14 },
   correctHead: { flexDirection: "row-reverse", alignItems: "center", gap: 10 },
   correctTitle: { fontFamily: font.black, fontSize: 26 },
   correctTags: { flexDirection: "row-reverse", flexWrap: "wrap", justifyContent: "center", gap: 8, marginTop: 10 },
   tag: { borderRadius: 999, paddingVertical: 6, paddingHorizontal: 12 },
   tagText: { fontFamily: font.bold, fontSize: 14 },
-  advanceTrack: {
-    alignSelf: "stretch",
-    height: 8,
-    borderRadius: 8,
-    marginVertical: 14,
-    overflow: "hidden",
-    flexDirection: "row-reverse",
-  },
-  advanceFill: { height: 8, borderRadius: 8 },
-  skip: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 10,
-    minHeight: 52,
-    paddingVertical: 8,
-    paddingRight: 8,
-    paddingLeft: 20,
-    borderRadius: 999,
-  },
+  advanceTrack: { alignSelf: "stretch", height: 12, borderRadius: 999, marginVertical: 14, overflow: "hidden", flexDirection: "row-reverse", backgroundColor: KIT.track },
+  advanceFill: { height: 12, borderRadius: 999, backgroundColor: KIT.green },
+  skip: { flexDirection: "row-reverse", alignItems: "center", gap: 10, minHeight: 52, paddingVertical: 8, paddingRight: 8, paddingLeft: 20, borderRadius: 999, backgroundColor: KIT.wood, borderWidth: 3, borderColor: KIT.woodEdge, borderBottomColor: KIT.woodEdge },
   skipIcon: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   skipText: { fontFamily: font.heavy, fontSize: 16 },
   timeout: { fontSize: 30, fontFamily: font.black, marginTop: 20, textAlign: "center" },
@@ -1068,7 +941,7 @@ const styles = StyleSheet.create({
   statDivider: { width: 2, height: 44, borderRadius: 1 },
   stackButtons: { width: "100%", gap: 12, marginTop: 18 },
   reportTitle: { fontFamily: font.black, fontSize: 28, textAlign: "center", marginTop: 8 },
-  reportCard: { width: "100%", borderRadius: 22, borderBottomWidth: 5, padding: 14, marginBottom: 12 },
+  reportCard: { width: "100%", borderRadius: 22, borderWidth: 3, borderColor: KIT.woodEdge, borderBottomWidth: 7, backgroundColor: KIT.cream, padding: 14, marginBottom: 12 },
   reportHead: { flexDirection: "row-reverse", alignItems: "center", gap: 10 },
   reportNum: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   reportNumText: { fontFamily: font.black, fontSize: 16 },

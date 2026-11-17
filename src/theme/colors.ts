@@ -69,3 +69,29 @@ export const font = {
   heavy: "Rubik_800ExtraBold",
   black: "Rubik_900Black",
 } as const;
+
+/** Game kit (home HUD, chest bar, badges, dock): carved wood, cream counters, sea backdrop. */
+export const KIT = {
+  woodEdge: "#5A3418",
+  woodDark: "#7A4A26",
+  wood: "#A0632F",
+  woodLight: "#C98A4B",
+  track: "#3E2210",
+  cream: "#F7E3BC",
+  creamLip: "#D6AE72",
+  creamInk: "#6B3F1D",
+  sea: "#3E95E6",
+  seaDeep: "#2569C4",
+  seaFoam: "#7EC0F5",
+  green: "#52C93F",
+  greenLip: "#2E8F22",
+  greenGloss: "#8DE878",
+  purple: "#7B46E0",
+  purpleLip: "#4E25A6",
+  red: "#E8434B",
+  redLip: "#A82029",
+  orange: "#F2992E",
+  orangeLip: "#B8641A",
+  notify: "#3FB536",
+  outline: "#3A2210",
+} as const;

@@ -29,9 +29,18 @@ export type ProfileDoc = {
   nameChosen: boolean;
   /** Which mascot the child plays as. `null` until chosen. */
   gender: Gender | null;
+  /** Pays to enter a level. */
   coins: number;
-  purchases: string[];
-  inventory: Record<string, number>;
+  /** Earned by winning a level; pays for scene elements. */
+  stars: number;
+  /** Current scene, from 0. */
+  sceneIndex: number;
+  /** Elements built in the current scene. */
+  sceneBuilt: number;
+  /** The current scene's milestone coins were paid. */
+  milestonePaid: boolean;
+  /** `YYYY-MM-DD` of the last daily gift. */
+  lastDailyGift: string | null;
   avatar: AvatarLoadout;
   /** Highest mini-level cleared per `${category}:${difficulty}`. */
   stageClears: Record<string, number>;
@@ -39,19 +48,8 @@ export type ProfileDoc = {
   stageCoins: Record<string, number>;
   /** Perfect clears per `${category}:${difficulty}:${stage}`. */
   stagePerfect: Record<string, boolean>;
-  /** Best stars (1–3) per `${category}:${difficulty}:${stage}`. Kept for the avatar, not the village. */
+  /** Best stars (1–3) per `${category}:${difficulty}:${stage}`, shown on the stage map. */
   stageStars: Record<string, number>;
-  /** Building level (0–4) bought with coins, per subject. */
-  villageBuilt?: Partial<Record<Category, number>>;
-  /** First lesson pack. Kept so older profiles still have a start. */
-  startLesson?: Category | null;
-  /** Lesson packs the player chose to open. */
-  openedLessons?: Category[];
-  /** Flowers planted by finishing the daily building wish. */
-  villageBlooms: number;
-  /** `YYYY-MM-DD` of the last fulfilled wish. */
-  wishDay: string | null;
-  wishDone: boolean;
   updatedAt: number;
 };
 

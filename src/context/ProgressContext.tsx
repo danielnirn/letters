@@ -8,11 +8,9 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { type ShopItem } from "../game/shop";
-import { defaultAvatar, withEquipped } from "../game/avatar";
+import { defaultAvatar } from "../game/avatar";
 import {
   addScoreRemote,
-  appendPurchaseRemote,
   clearScoresRemote,
   defaultProfile,
   ensureAccount,
@@ -23,11 +21,21 @@ import {
   watchGlobalLeaderboard,
   watchProfile,
 } from "../firebase/repository";
-import type { CachedProgress, Gender, ProfileDoc, ScoreEntry, AvatarSlot } from "../types/models";
+import type { CachedProgress, Gender, ProfileDoc, ScoreEntry } from "../types/models";
 import { isFirebaseConfigured } from "../firebase/app";
 import { useAuth } from "./AuthContext";
 import { stageProgressKey, stageCoinsKey, type Category, type Difficulty } from "../game/config";
-import { currentBuild, lessonSlots, openedLessons, ownedLevel, totalStars, villageLevel, villageLevels } from "../game/village";
+import { totalStars } from "../game/village";
+import {
+  applyBuild,
+  applyDailyGift,
+  applyEntry,
+  applyStageWin,
+  ECONOMY,
+  sceneLevels,
+  todayKey,
+  type BuildResult,
+} from "../game/economy";
 
 type ProgressValue = {
   loading: boolean;
@@ -37,22 +45,22 @@ type ProgressValue = {
   topScores: ScoreEntry[];
   setActiveName: (name: string) => Promise<void>;
   setGender: (gender: Gender) => Promise<void>;
-  openLesson: (category: Category) => Promise<void>;
-  addCoins: (amount: number) => Promise<void>;
-  spendCoins: (amount: number) => Promise<boolean>;
-  upgradeVillage: () => Promise<boolean>;
-  buyItem: (item: ShopItem) => Promise<"ok" | "funds" | "fail">;
-  equipAvatar: (slot: AvatarSlot, itemId: string | null) => Promise<void>;
-  useInventory: (itemId: string) => Promise<boolean>;
+  /** Pays the entry fee. `false` when the player has too few coins. */
+  enterStage: (difficulty: Difficulty) => Promise<boolean>;
+  /** Builds the next scene element with stars. `null` when the player has too few stars. */
+  buildNext: () => Promise<BuildResult | null>;
+  /** Coins from today's daily gift, until the home screen shows it. */
+  dailyGift: number | null;
+  clearDailyGift: () => void;
   saveScore: (score: number, level: string) => Promise<void>;
+  /** Pays stars (and coins on a perfect win). `rating` is the 1–3 stage map rating. */
   completeStage: (
     category: Category,
     difficulty: Difficulty,
     stage: number,
-    coins: number,
     perfect: boolean,
-    stars: number,
-  ) => Promise<void>;
+    rating: number,
+  ) => Promise<{ stars: number; coins: number }>;
   clearScores: () => Promise<void>;
   cloudError: boolean;
 };
@@ -67,6 +75,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [cloudError, setCloudError] = useState<string | null>(null);
   const [globalScores, setGlobalScores] = useState<ScoreEntry[]>([]);
+  const [dailyGift, setDailyGift] = useState<number | null>(null);
 
   const persist = useCallback(
     async (next: CachedProgress) => {
@@ -204,13 +213,26 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
         name: profile.displayName,
         avatar: profile.avatar ?? defaultAvatar(),
         gender: profile.gender,
-        village: villageLevels(profile),
+        village: sceneLevels(profile),
         stars: totalStars(profile),
       });
     } catch {
       setCloudError("cloud");
     }
   }, [uid, isLocal]);
+
+  const giftChecked = useRef<string | null>(null);
+  useEffect(() => {
+    if (loading || !data) return;
+    const key = `${data.user.activeProfileId}:${todayKey()}`;
+    if (giftChecked.current === key) return;
+    giftChecked.current = key;
+    const profile = data.profiles.find((p) => p.id === data.user.activeProfileId) ?? data.profiles[0];
+    if (!profile || !applyDailyGift(profile)) return;
+    void patchActive((p) => applyDailyGift(p) ?? p).then((saved) => {
+      if (saved) setDailyGift(ECONOMY.dailyGiftCoins);
+    });
+  }, [loading, data]);
 
   const value = useMemo<ProgressValue>(() => {
     const loadingVal = loading || !data;
@@ -231,124 +253,45 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
         const next = await patchActive((p) => ({ ...p, gender }));
         if (next) await publishLook(next);
       },
-      openLesson: async (category) => {
+      enterStage: async (difficulty) => {
+        let paid = false;
         await patchActive((p) => {
-          const open = openedLessons(p);
-          if (open.includes(category)) return p;
-          if (open.length >= lessonSlots(villageLevel(p))) return p;
-          return { ...p, startLesson: p.startLesson ?? category, openedLessons: [...open, category] };
+          const next = applyEntry(p, difficulty);
+          paid = next !== null;
+          return next ?? p;
         });
+        return paid;
       },
-      addCoins: async (amount: number) => {
-        await patchActive((p) => ({ ...p, coins: p.coins + amount }));
-      },
-      spendCoins: async (amount: number) => {
-        const current = dataRef.current;
-        if (!current) return false;
-        const p =
-          current.profiles.find((x) => x.id === current.user.activeProfileId) ??
-          current.profiles[0];
-        if (p.coins < amount) return false;
-        await patchActive((prev) => ({ ...prev, coins: prev.coins - amount }));
-        return true;
-      },
-      upgradeVillage: async () => {
-        const current = dataRef.current;
-        if (!current) return false;
-        const p =
-          current.profiles.find((x) => x.id === current.user.activeProfileId) ??
-          current.profiles[0];
-        const build = currentBuild(p);
-        if (!build || p.coins < build.cost) return false;
-        await patchActive((prev) => {
-          const again = currentBuild(prev);
-          if (!again || again.category !== build.category || prev.coins < again.cost) return prev;
-          return {
-            ...prev,
-            coins: prev.coins - again.cost,
-            villageBuilt: { ...prev.villageBuilt, [again.category]: ownedLevel(prev, again.category) + 1 },
-          };
+      buildNext: async () => {
+        const out: { result: BuildResult | null } = { result: null };
+        const saved = await patchActive((p) => {
+          out.result = applyBuild(p);
+          return out.result?.profile ?? p;
         });
-        return true;
+        if (!saved) return null;
+        if (out.result) await publishLook(saved);
+        return out.result;
       },
-      buyItem: async (item: ShopItem) => {
-        const current = dataRef.current;
-        if (!current) return "fail";
-        const p =
-          current.profiles.find((x) => x.id === current.user.activeProfileId) ??
-          current.profiles[0];
-        if (p.coins < item.cost) return "funds";
-        const saved = await patchActive((prev) => {
-          const coins = prev.coins - item.cost;
-          const purchases = prev.purchases.includes(item.id)
-            ? prev.purchases
-            : [...prev.purchases, item.id];
-          const avatar = withEquipped(prev.avatar ?? defaultAvatar(), item.slot, item.id);
-          return { ...prev, coins, purchases, avatar };
-        });
-        if (!isLocal && uid) {
-          try {
-            await appendPurchaseRemote(uid, p.id, {
-              itemId: item.id,
-              cost: item.cost,
-              consumable: false,
-            });
-          } catch {
-            setCloudError("cloud");
-          }
-        }
-        if (!isLocal && !saved) return "fail";
-        if (saved) await publishLook(saved);
-        return "ok";
-      },
-      equipAvatar: async (slot, itemId) => {
-        const next = await patchActive((p) => {
-          if (itemId && itemId !== "avatar_base_kid" && !p.purchases.includes(itemId)) {
-            return p;
-          }
-          return {
-            ...p,
-            avatar: withEquipped(p.avatar ?? defaultAvatar(), slot, itemId),
-          };
-        });
-        if (next) await publishLook(next);
-      },
-      useInventory: async (itemId: string) => {
-        const current = dataRef.current;
-        if (!current) return false;
-        const p =
-          current.profiles.find((x) => x.id === current.user.activeProfileId) ??
-          current.profiles[0];
-        const count = p.inventory[itemId] || 0;
-        if (count <= 0) return false;
-        await patchActive((prev) => ({
-          ...prev,
-          inventory: {
-            ...prev.inventory,
-            [itemId]: Math.max(0, (prev.inventory[itemId] || 0) - 1),
-          },
-        }));
-        return true;
-      },
-      completeStage: async (category, difficulty, stage, coins, perfect, stars) => {
+      dailyGift,
+      clearDailyGift: () => setDailyGift(null),
+      completeStage: async (category, difficulty, stage, perfect, rating) => {
         const key = stageProgressKey(category, difficulty);
-        const coinKey = stageCoinsKey(category, difficulty, stage);
-        const earned = Math.max(0, coins);
+        const stageKey = stageCoinsKey(category, difficulty, stage);
+        let paid = { stars: 0, coins: 0 };
         await patchActive((p) => {
+          const win = applyStageWin(p, difficulty, perfect);
+          paid = { stars: win.stars, coins: win.coins };
           const prev = p.stageClears ?? {};
-          const prevCoins = p.stageCoins ?? {};
           const prevPerfect = p.stagePerfect ?? {};
           const prevStars = p.stageStars ?? {};
-          const best = Math.max(prev[key] ?? 0, stage);
           return {
-            ...p,
-            coins: p.coins + earned,
-            stageClears: { ...prev, [key]: best },
-            stageCoins: { ...prevCoins, [coinKey]: Math.max(prevCoins[coinKey] ?? 0, earned) },
-            stagePerfect: { ...prevPerfect, [coinKey]: Boolean(prevPerfect[coinKey] || perfect) },
-            stageStars: { ...prevStars, [coinKey]: Math.max(prevStars[coinKey] ?? 0, stars) },
+            ...win.profile,
+            stageClears: { ...prev, [key]: Math.max(prev[key] ?? 0, stage) },
+            stagePerfect: { ...prevPerfect, [stageKey]: Boolean(prevPerfect[stageKey] || perfect) },
+            stageStars: { ...prevStars, [stageKey]: Math.max(prevStars[stageKey] ?? 0, rating) },
           };
         });
+        return paid;
       },
       saveScore: async (score: number, level: string) => {
         const current = dataRef.current;
@@ -364,7 +307,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
           ts: Date.now(),
           avatar: currentActive.avatar ?? defaultAvatar(),
           gender: currentActive.gender,
-          village: villageLevels(currentActive),
+          village: sceneLevels(currentActive),
           stars: totalStars(currentActive),
         };
         const scores = [...current.scores, entry].slice(-200);
@@ -389,7 +332,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
         }
       },
     };
-  }, [data, loading, active, uid, isLocal, persist, cloudError, globalScores, publishLook]);
+  }, [data, loading, active, uid, isLocal, persist, cloudError, globalScores, publishLook, dailyGift]);
 
   return <ProgressContext.Provider value={value}>{children}</ProgressContext.Provider>;
 }

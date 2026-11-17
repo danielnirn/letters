@@ -16,6 +16,7 @@ import type { Firestore } from "firebase/firestore";
 import type { CachedProgress, LeaderboardLook, ProfileDoc, ScoreEntry, UserDoc } from "../types/models";
 import { CATEGORIES, type Category } from "../game/config";
 import { defaultAvatar, normalizeAvatar } from "../game/avatar";
+import { ECONOMY, todayKey } from "../game/economy";
 import { getFirebase } from "./app";
 
 const emptyUser = (email: string | null, profileId: string): UserDoc => ({
@@ -31,43 +32,20 @@ export function defaultProfile(id: string, displayName = ""): ProfileDoc {
     displayName,
     nameChosen: false,
     gender: null,
-    coins: 0,
-    purchases: [],
-    inventory: {},
+    coins: ECONOMY.startingPack.coins,
+    stars: ECONOMY.startingPack.stars,
+    sceneIndex: 0,
+    sceneBuilt: 0,
+    milestonePaid: false,
+    // The starting pack covers day one; the daily gift starts tomorrow.
+    lastDailyGift: todayKey(),
     avatar: defaultAvatar(),
     stageClears: {},
     stageCoins: {},
     stagePerfect: {},
     stageStars: {},
-    villageBuilt: {},
-    startLesson: null,
-    openedLessons: [],
-    villageBlooms: 0,
-    wishDay: null,
-    wishDone: false,
     updatedAt: Date.now(),
   };
-}
-
-function openedLessonsFrom(value: unknown): Category[] {
-  if (!Array.isArray(value)) return [];
-  const out: Category[] = [];
-  for (const item of value) {
-    if (typeof item === "string" && CATEGORIES.includes(item as Category) && !out.includes(item as Category)) {
-      out.push(item as Category);
-    }
-  }
-  return out;
-}
-
-function villageBuiltFrom(value: unknown): Partial<Record<Category, number>> {
-  if (!value || typeof value !== "object") return {};
-  const out: Partial<Record<Category, number>> = {};
-  for (const cat of CATEGORIES) {
-    const n = (value as Record<string, unknown>)[cat];
-    if (typeof n === "number" && n > 0) out[cat] = Math.min(4, Math.floor(n));
-  }
-  return out;
 }
 
 function profileFromData(id: string, data: Record<string, unknown>): ProfileDoc {
@@ -77,8 +55,11 @@ function profileFromData(id: string, data: Record<string, unknown>): ProfileDoc 
     nameChosen: data.nameChosen === true,
     gender: data.gender === "girl" || data.gender === "boy" ? data.gender : null,
     coins: typeof data.coins === "number" ? data.coins : 0,
-    purchases: Array.isArray(data.purchases) ? (data.purchases as string[]) : [],
-    inventory: (data.inventory as Record<string, number>) ?? {},
+    stars: typeof data.stars === "number" ? data.stars : 0,
+    sceneIndex: typeof data.sceneIndex === "number" ? data.sceneIndex : 0,
+    sceneBuilt: typeof data.sceneBuilt === "number" ? data.sceneBuilt : 0,
+    milestonePaid: data.milestonePaid === true,
+    lastDailyGift: typeof data.lastDailyGift === "string" ? data.lastDailyGift : null,
     avatar: normalizeAvatar(data.avatar),
     stageClears:
       data.stageClears && typeof data.stageClears === "object"
@@ -96,12 +77,6 @@ function profileFromData(id: string, data: Record<string, unknown>): ProfileDoc 
       data.stageStars && typeof data.stageStars === "object"
         ? (data.stageStars as Record<string, number>)
         : {},
-    villageBuilt: villageBuiltFrom(data.villageBuilt),
-    startLesson: CATEGORIES.includes(data.startLesson as Category) ? (data.startLesson as Category) : null,
-    openedLessons: openedLessonsFrom(data.openedLessons),
-    villageBlooms: typeof data.villageBlooms === "number" ? data.villageBlooms : 0,
-    wishDay: typeof data.wishDay === "string" ? data.wishDay : null,
-    wishDone: data.wishDone === true,
     updatedAt: typeof data.updatedAt === "number" ? data.updatedAt : 0,
   };
 }
@@ -232,39 +207,20 @@ export async function persistProfile(uid: string, profile: ProfileDoc): Promise<
       nameChosen: profile.nameChosen,
       gender: profile.gender ?? null,
       coins: profile.coins,
-      purchases: profile.purchases,
-      inventory: profile.inventory,
+      stars: profile.stars,
+      sceneIndex: profile.sceneIndex,
+      sceneBuilt: profile.sceneBuilt,
+      milestonePaid: profile.milestonePaid,
+      lastDailyGift: profile.lastDailyGift ?? null,
       avatar: profile.avatar,
       stageClears: profile.stageClears ?? {},
       stageCoins: profile.stageCoins ?? {},
       stagePerfect: profile.stagePerfect ?? {},
       stageStars: profile.stageStars ?? {},
-      villageBuilt: profile.villageBuilt ?? {},
-      startLesson: profile.startLesson ?? null,
-      openedLessons: profile.openedLessons ?? [],
-      villageBlooms: profile.villageBlooms ?? 0,
-      wishDay: profile.wishDay ?? null,
-      wishDone: profile.wishDone === true,
       updatedAt: profile.updatedAt,
     },
     { merge: true },
   );
-}
-
-export async function appendPurchaseRemote(
-  uid: string,
-  profileId: string,
-  item: { itemId: string; cost: number; consumable: boolean },
-): Promise<void> {
-  const fb = getFirebase();
-  if (!fb) return;
-  const id = `${Date.now()}_${item.itemId}`;
-  await setDoc(doc(fb.db, "users", uid, "profiles", profileId, "purchases", id), {
-    itemId: item.itemId,
-    cost: item.cost,
-    consumable: item.consumable,
-    ts: Date.now(),
-  });
 }
 
 export function watchProfile(

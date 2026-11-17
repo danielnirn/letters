@@ -14,6 +14,7 @@ import { I18nManager, Platform, View } from "react-native";
 import { AuthProvider, useAuth } from "../src/context/AuthContext";
 import { ProgressProvider, useProgress } from "../src/context/ProgressContext";
 import { defaultTheme } from "../src/theme/colors";
+import { needsNameSetup } from "../src/game/economy";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -31,6 +32,8 @@ function Gate({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!ready) return;
     const route = segments[0];
+    // The kit preview needs no account.
+    if (route === "atlas") return;
     const onLogin = route === "login";
     const onName = route === "name";
     if (!uid) {
@@ -38,7 +41,8 @@ function Gate({ children }: { children: ReactNode }) {
       return;
     }
     if (progress.loading) return;
-    const needsName = !progress.active.nameChosen || !progress.active.gender;
+    // Asked after the first scene, not at login. Checked on navigation so the build popup can finish first.
+    const needsName = needsNameSetup(progress.active);
     if (onLogin || (needsName && !onName)) {
       router.replace(needsName ? "/name" : "/");
       return;

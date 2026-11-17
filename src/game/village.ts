@@ -1,156 +1,31 @@
 import type { ProfileDoc } from "../types/models";
 import {
-  BUILDING_COIN_BONUS,
   CATEGORIES,
-  CLEAR_PAY,
   CONFIG,
-  UPGRADE_COST,
   clearedStages,
   isStagePerfectClear,
   stageCoinsKey,
   type Category,
   type Difficulty,
 } from "./config";
+import { SCENE_ORDER } from "./economy";
 import type { GameState } from "./session";
 
 const DIFFICULTIES: Difficulty[] = ["easy", "mid", "hard"];
 
-/** Each subject builds one house in the village. */
-export const VILLAGE_ORDER: Category[] = ["reading", "science", "math", "language", "logic", "english"];
+/** Each subject has one building in the village picture. */
+export const VILLAGE_ORDER: Category[] = SCENE_ORDER;
 
-/** Stars for the four buildings (tent, hut, house, fancy). Max per subject is 90. */
-export const LEVEL_STARS = [3, 15, 35, 65] as const;
-export const MAX_BUILDING_LEVEL = LEVEL_STARS.length;
-export const STARS_PER_STAGE = 3;
-
-export type MilestoneId =
-  | "tent"
-  | "lantern"
-  | "fence"
-  | "hut"
-  | "flowers"
-  | "chimney"
-  | "house"
-  | "tree"
-  | "path"
-  | "fancy";
-
-/** A small help in that subject's stages. Coins and stars stay capped and tiny. */
-export type MilestoneBonus = "coins2" | "coins4" | "hint" | "star" | "easier";
-
-/** A visible change. `level` is the building; `detail` adds a small piece on it. */
-export type Milestone = {
-  stars: number;
-  level: number;
-  detail: number;
-  id: MilestoneId;
-  bonus: MilestoneBonus;
-};
-
-export const MILESTONES: readonly Milestone[] = [
-  { stars: 3, level: 1, detail: 0, id: "tent", bonus: "coins2" },
-  { stars: 6, level: 1, detail: 1, id: "lantern", bonus: "hint" },
-  { stars: 10, level: 1, detail: 2, id: "fence", bonus: "easier" },
-  { stars: 15, level: 2, detail: 0, id: "hut", bonus: "star" },
-  { stars: 21, level: 2, detail: 1, id: "flowers", bonus: "coins2" },
-  { stars: 28, level: 2, detail: 2, id: "chimney", bonus: "hint" },
-  { stars: 35, level: 3, detail: 0, id: "house", bonus: "easier" },
-  { stars: 44, level: 3, detail: 1, id: "tree", bonus: "coins2" },
-  { stars: 54, level: 3, detail: 2, id: "path", bonus: "coins2" },
-  { stars: 65, level: 4, detail: 0, id: "fancy", bonus: "coins4" },
-];
-
-/** Help from the pieces already built in one subject. */
-export type SubjectPerks = {
-  hints: number;
-  stars: number;
-  coins: number;
-  /** Share of correct answers that earns 2 stars. Starts at 0.7. */
-  twoStarAt: number;
-};
-
-export function perksFor(stars: number): SubjectPerks {
-  let hints = 0;
-  let starBonus = 0;
-  let coins = 0;
-  let easier = 0;
-  for (const m of MILESTONES) {
-    if (stars < m.stars) break;
-    if (m.bonus === "hint") hints += 1;
-    else if (m.bonus === "star") starBonus += 1;
-    else if (m.bonus === "coins2") coins += 2;
-    else if (m.bonus === "coins4") coins += 4;
-    else easier += 1;
-  }
-  return {
-    hints,
-    stars: starBonus,
-    coins,
-    twoStarAt: Math.max(0.5, 0.7 - easier * 0.1),
-  };
-}
-
-export type BuildingLook = { level: number; detail: number };
-
-export function lookFor(stars: number): BuildingLook {
-  let look: BuildingLook = { level: 0, detail: 0 };
-  for (const m of MILESTONES) {
-    if (stars < m.stars) break;
-    look = { level: m.level, detail: m.detail };
-  }
-  return look;
-}
-
-export function milestoneIndex(stars: number): number {
-  let i = -1;
-  for (let n = 0; n < MILESTONES.length; n++) {
-    if (stars >= MILESTONES[n].stars) i = n;
-  }
-  return i;
-}
-
-export function nextMilestone(stars: number): Milestone | null {
-  return MILESTONES.find((m) => stars < m.stars) ?? null;
-}
-
-export function prevMilestoneStars(stars: number): number {
-  const i = milestoneIndex(stars);
-  return i < 0 ? 0 : MILESTONES[i].stars;
-}
-
-export function todayKey(now = new Date()): string {
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${now.getFullYear()}-${m}-${d}`;
-}
-
-/** Same building all day for this child. A missed day simply asks again tomorrow. */
-export function wishCategory(profileId: string, day = todayKey()): Category {
-  let n = 0;
-  const s = `${profileId}:${day}`;
-  for (let i = 0; i < s.length; i++) n = (n * 33 + s.charCodeAt(i)) >>> 0;
-  return VILLAGE_ORDER[n % VILLAGE_ORDER.length];
-}
-
-export function wishDoneToday(p: ProfileDoc, day = todayKey()): boolean {
-  return p.wishDay === day && p.wishDone === true;
-}
-
-/** 3 = perfect, 2 = at least `twoStarAt` right (0.7 until the building helps), 1 = finished. */
-export function runStars(state: GameState, twoStarAt = 0.7): number {
+/** Stage map rating: 3 = perfect, 2 = at least 70% right, 1 = finished. Not the star wallet. */
+export function runStars(state: GameState): number {
   const total = state.questionMarks.length;
   const ok = state.questionMarks.filter((m) => m === "ok").length;
   if (total > 0 && ok === total) return 3;
-  if (total > 0 && ok / total >= twoStarAt) return 2;
+  if (total > 0 && ok / total >= 0.7) return 2;
   return 1;
 }
 
-/** Stars for this finish, including a building's extra star, never above 3. */
-export function awardedStars(state: GameState, perks: SubjectPerks): number {
-  return Math.min(STARS_PER_STAGE, runStars(state, perks.twoStarAt) + perks.stars);
-}
-
-/** Best stars for one stage. Stages cleared before stars existed count as 3 (perfect) or 1. */
+/** Best rating for one stage. Stages cleared before ratings existed count as 3 (perfect) or 1. */
 export function stageStars(p: ProfileDoc, category: Category, difficulty: Difficulty, stage: number): number {
   const saved = p.stageStars?.[stageCoinsKey(category, difficulty, stage)];
   if (saved) return saved;
@@ -168,149 +43,4 @@ export function categoryStars(p: ProfileDoc, category: Category): number {
 
 export function totalStars(p: ProfileDoc): number {
   return CATEGORIES.reduce((sum, cat) => sum + categoryStars(p, cat), 0);
-}
-
-export function buildingLevel(stars: number): number {
-  return LEVEL_STARS.filter((need) => stars >= need).length;
-}
-
-/** Stars needed for the next level, or null when the building is complete. */
-export function nextLevelStars(stars: number): number | null {
-  return LEVEL_STARS.find((need) => stars < need) ?? null;
-}
-
-const BUILD_IDS: readonly MilestoneId[] = ["tent", "hut", "house", "fancy"];
-
-/** Building levels the player bought with coins. Stars no longer raise this. */
-export function ownedLevel(p: ProfileDoc, cat: Category): number {
-  const n = p.villageBuilt?.[cat] ?? 0;
-  return Math.min(MAX_BUILDING_LEVEL, Math.max(0, Math.floor(n)));
-}
-
-export function buildingCoinBonus(level: number): number {
-  const i = Math.min(BUILDING_COIN_BONUS.length - 1, Math.max(0, level));
-  return BUILDING_COIN_BONUS[i] ?? 0;
-}
-
-/** Village level. A new village starts at 1. Each bought tent, hut, house, or fancy house adds 1. */
-export function villageLevel(p: ProfileDoc): number {
-  return 1 + VILLAGE_ORDER.reduce((sum, cat) => sum + ownedLevel(p, cat), 0);
-}
-
-/** Lesson packs. The player chooses which ones to open. */
-export const LESSON_PACKS: readonly Category[] = ["language", "math", "english", "logic", "science", "reading"];
-
-/** One pack at the start, then another choice every 5 village levels. */
-export function lessonSlots(level: number): number {
-  return Math.min(LESSON_PACKS.length, 1 + Math.floor(Math.max(0, level) / 5));
-}
-
-/** Packs this player has chosen. Language is assumed if they already played before the choice existed. */
-export function openedLessons(p: ProfileDoc): Category[] {
-  const saved = (p.openedLessons ?? []).filter((cat) => LESSON_PACKS.includes(cat));
-  const unique = [...new Set(saved)];
-  if (unique.length > 0) return unique;
-  if (p.startLesson && LESSON_PACKS.includes(p.startLesson)) return [p.startLesson];
-  if (Object.values(p.stageClears ?? {}).some((n) => n > 0)) return [LESSON_PACKS[0]];
-  return [];
-}
-
-/** A free slot is waiting: the first pack, or another one at level 5, 10, 15, 20, 25. */
-export function pendingLessonPick(p: ProfileDoc, level = villageLevel(p)): boolean {
-  const open = openedLessons(p).length;
-  return open < lessonSlots(level) && open < LESSON_PACKS.length;
-}
-
-/** Village level of the next choice. `null` when every pack is open. */
-export function nextLessonPickLevel(p: ProfileDoc): number | null {
-  const open = openedLessons(p).length;
-  if (open >= LESSON_PACKS.length) return null;
-  return open * 5;
-}
-
-/** Village level that opens each home feature. */
-export const FEATURE_UNLOCK = { avatar: 5, shop: 5, scores: 10 } as const;
-export type Feature = keyof typeof FEATURE_UNLOCK;
-
-export type Unlock = { kind: "lesson-pick" } | { kind: "feature"; feature: Feature };
-
-/** Features that open exactly at this village level. Lesson packs are a separate choice. */
-export function unlocksAt(level: number): Unlock[] {
-  const out: Unlock[] = [];
-  for (const feature of Object.keys(FEATURE_UNLOCK) as Feature[]) {
-    if (FEATURE_UNLOCK[feature] === level) out.push({ kind: "feature", feature });
-  }
-  return out;
-}
-
-export function isLessonUnlocked(p: ProfileDoc, category: Category): boolean {
-  return openedLessons(p).includes(category);
-}
-
-/**
- * The one building the player can buy now.
- * Houses go up together: every subject gets a tent before anyone gets a hut.
- */
-export function currentBuild(p: ProfileDoc): { category: Category; id: MilestoneId; cost: number } | null {
-  let min: number = MAX_BUILDING_LEVEL;
-  for (const cat of VILLAGE_ORDER) min = Math.min(min, ownedLevel(p, cat));
-  if (min >= MAX_BUILDING_LEVEL) return null;
-  const category = VILLAGE_ORDER.find((cat) => ownedLevel(p, cat) === min);
-  if (!category) return null;
-  return { category, id: BUILD_IDS[min], cost: UPGRADE_COST[min] };
-}
-
-/** The next new stage of the one current building. No subject to pick. */
-export function nextPlay(p: ProfileDoc): { category: Category; difficulty: Difficulty; stage: number } | null {
-  const category = currentBuild(p)?.category ?? VILLAGE_ORDER[0];
-  for (const difficulty of DIFFICULTIES) {
-    const done = clearedStages(p.stageClears, category, difficulty);
-    if (done < CONFIG.miniLevels) return { category, difficulty, stage: done + 1 };
-  }
-  return { category, difficulty: "hard", stage: CONFIG.miniLevels };
-}
-
-/** Last cleared stage, so a player who spent their coins can earn more. */
-export function replayPlay(p: ProfileDoc): { category: Category; difficulty: Difficulty; stage: number } | null {
-  const category = currentBuild(p)?.category ?? VILLAGE_ORDER[0];
-  for (let i = DIFFICULTIES.length - 1; i >= 0; i--) {
-    const difficulty = DIFFICULTIES[i];
-    const done = clearedStages(p.stageClears, category, difficulty);
-    if (done > 0) return { category, difficulty, stage: done };
-  }
-  return null;
-}
-
-/** Coin cost to start a stage. Free for now, while testing. */
-export function entryCost(_p: ProfileDoc, _category: Category, _difficulty: Difficulty, _stage: number): number {
-  return 0;
-}
-
-export function clearPay(difficulty: Difficulty): number {
-  return CLEAR_PAY[difficulty];
-}
-
-export function villageLevels(p: ProfileDoc): Record<Category, number> {
-  const out = {} as Record<Category, number>;
-  for (const cat of CATEGORIES) out[cat] = ownedLevel(p, cat);
-  return out;
-}
-
-export function villageDetails(p: ProfileDoc): Record<Category, number> {
-  const out = {} as Record<Category, number>;
-  for (const cat of CATEGORIES) out[cat] = 0;
-  return out;
-}
-
-/** The closest next picture change — a building or a small piece on it. */
-export function nextGoal(p: ProfileDoc): { category: Category; need: number; look: BuildingLook; id: MilestoneId } | null {
-  let best: { category: Category; need: number; look: BuildingLook; id: MilestoneId } | null = null;
-  for (const cat of VILLAGE_ORDER) {
-    const stars = categoryStars(p, cat);
-    const next = nextMilestone(stars);
-    if (next == null) continue;
-    const need = next.stars - stars;
-    if (!best || need < best.need) best = { category: cat, need, look: { level: next.level, detail: next.detail }, id: next.id };
-  }
-  return best;
 }
